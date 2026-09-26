@@ -6,43 +6,92 @@ package com.teamdexters.limitless.assistant
  */
 sealed class HazelIntent {
     /**
-     * Intent to navigate to one of the 5 core application routes.
-     * @param route The navigation route string (e.g., "blind-home", "deaf-home")
+     * Intent to navigate to one of the application routes.
+     * @param route The navigation route string (e.g., "blind-home", "deaf-home", "persona-select")
+     * @param description Optional human-readable description of the route
      */
-    data class NavigateTo(val route: String) : HazelIntent()
+    data class NavigateTo(
+        val route: String,
+        val description: String = ""
+    ) : HazelIntent()
+
+    /**
+     * Intent to open the accessibility scanner.
+     * @param target Optional target or location to scan
+     */
+    data class OpenScanner(
+        val target: String? = null
+    ) : HazelIntent()
+
+    /**
+     * Intent to open community reports and feedback.
+     * @param filter Optional category filter for reports
+     */
+    data class OpenCommunity(
+        val filter: String? = null
+    ) : HazelIntent()
+
+    /**
+     * Intent to open quick phrase cards for speech assist.
+     * @param category Optional phrase category
+     */
+    data class OpenPhraseCards(
+        val category: String? = null
+    ) : HazelIntent()
+
+    /**
+     * Intent to open accessible routing and navigation.
+     * @param destination Target destination name or address
+     */
+    data class OpenNavigation(
+        val destination: String? = null
+    ) : HazelIntent()
 
     /**
      * Intent for blind and low-vision accessibility features.
-     * Placeholder for OCR, object detection, color recognition features.
-     * @param action Specific action within the blind module (e.g., "ocr", "object_detection", "color")
+     * @param subAction Specific action ("READ_TEXT", "DETECT_COLOR", "DESCRIBE_SCENE", "SURROUNDINGS")
      */
-    data class BlindAssist(val action: String) : HazelIntent()
+    data class BlindAssist(
+        val subAction: String
+    ) : HazelIntent()
 
     /**
      * Intent for deaf and hard-of-hearing accessibility features.
-     * Placeholder for captions, sound alerts, translation features.
-     * @param action Specific action within the deaf module (e.g., "captions", "sound_alert", "translation")
+     * @param subAction Specific action ("CAPTIONS", "SOUND_ALERTS", "TRANSLATE")
      */
-    data class DeafAssist(val action: String) : HazelIntent()
+    data class DeafAssist(
+        val subAction: String
+    ) : HazelIntent()
 
     /**
      * Intent for speech-impaired accessibility features.
-     * Placeholder for phrase cards, text-to-speech features.
-     * @param action Specific action within the speech module (e.g., "phrase_card", "tts")
+     * @param subAction Specific action ("TYPE_TO_SPEECH", "EMOTION_CARDS", "EMERGENCY")
      */
-    data class SpeechAssist(val action: String) : HazelIntent()
+    data class SpeechAssist(
+        val subAction: String
+    ) : HazelIntent()
 
     /**
      * Intent for mobility and wheelchair accessibility features.
-     * Placeholder for routing, scanning, reporting features.
-     * @param action Specific action within the mobility module (e.g., "routing", "scanner", "report")
+     * @param subAction Specific action ("ROUTING", "SCANNER", "COMMUNITY", "INDOOR")
      */
-    data class MobilityAssist(val action: String) : HazelIntent()
+    data class MobilityAssist(
+        val subAction: String
+    ) : HazelIntent()
 
     /**
-     * Fallback intent for unrecognized queries.
-     * Can be optionally boosted with Gemini cloud AI for better understanding.
+     * Unmatched / freeform query intent handed over to Gemini in Phase 3.
+     * @param rawQuery The original spoken text that couldn't be matched locally
+     */
+    data class GeneralQuery(
+        val rawQuery: String
+    ) : HazelIntent()
+
+    /**
+     * Fallback intent for unrecognized queries (retained for backward compatibility).
      * @param rawQuery The original spoken text that couldn't be matched
      */
-    data class Unknown(val rawQuery: String) : HazelIntent()
+    data class Unknown(
+        val rawQuery: String
+    ) : HazelIntent()
 }

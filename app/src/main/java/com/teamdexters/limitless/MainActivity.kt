@@ -167,29 +167,43 @@ private fun handleHazelIntent(
             navController.navigate(intent.route)
             onHandled()
         }
+        is HazelIntent.OpenScanner -> {
+            navController.navigate("mobility-home")
+            onHandled()
+        }
+        is HazelIntent.OpenCommunity -> {
+            navController.navigate("mobility-home")
+            onHandled()
+        }
+        is HazelIntent.OpenPhraseCards -> {
+            navController.navigate("speech-home")
+            onHandled()
+        }
+        is HazelIntent.OpenNavigation -> {
+            navController.navigate("mobility-home")
+            onHandled()
+        }
         is HazelIntent.BlindAssist -> {
-            // TODO: Navigate to blind home with specific action
             navController.navigate("blind-home")
             onHandled()
         }
         is HazelIntent.DeafAssist -> {
-            // TODO: Navigate to deaf home with specific action
             navController.navigate("deaf-home")
             onHandled()
         }
         is HazelIntent.SpeechAssist -> {
-            // TODO: Navigate to speech home with specific action
             navController.navigate("speech-home")
             onHandled()
         }
         is HazelIntent.MobilityAssist -> {
-            // TODO: Navigate to mobility home with specific action
             navController.navigate("mobility-home")
             onHandled()
         }
+        is HazelIntent.GeneralQuery -> {
+            // Unmatched freeform query will be handed to Gemini in Phase 3
+            onHandled()
+        }
         is HazelIntent.Unknown -> {
-            // TODO: Handle unknown intent (optional Gemini cloud boost)
-            // For now, just close the overlay
             onHandled()
         }
     }
