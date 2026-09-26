@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Limitless</string>
+    <string name="accessibility_service_description">Hazel Assistant - Provides accessibility shortcuts and voice commands for Limitless app</string>
 </resources>
