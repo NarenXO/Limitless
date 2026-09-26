@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,12 +30,16 @@ import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
 import com.teamdexters.limitless.assistant.DefaultWakeWordListener
 import com.teamdexters.limitless.assistant.HazelIntent
+import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
 import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
+import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
+import kotlinx.coroutines.CoroutineScope
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,18 +58,40 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Global wrapper for Hazel assistant integration.
- * Wraps the navigation host in a Scaffold with the floating mic button
- * and manages the Hazel listening overlay state.
+ * Wraps the navigation host in a Scaffold with the floating mic button,
+ * manages the Hazel listening overlay state, response banner, and offline/online query fallback.
  */
 @Composable
 fun HazelAssistantWrapper(database: LimitlessDatabase) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Hazel query handler
+    val queryHandler = remember { HazelQueryHandler(context) }
+    
+    // TTS initialization
+    var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        val tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsRef?.language = Locale.US
+            }
+        }
+        ttsRef = tts
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+            ttsRef = null
+        }
+    }
     
     // Hazel state management
     var isHazelListening by remember { mutableStateOf(false) }
     var transcribedText by remember { mutableStateOf("") }
+    var responseBannerText by remember { mutableStateOf("") }
+    var isBannerVisible by remember { mutableStateOf(false) }
     
     // Initialize wake-word detection pipeline
     DisposableEffect(context) {
@@ -116,7 +144,6 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                         onClick = {
                             isHazelListening = true
                             transcribedText = ""
-                            // TODO: Start speech recognition here
                         }
                     )
                 }
@@ -132,6 +159,16 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                     database = database
                 )
                 
+                // Accessible subtitle response banner (fires simultaneous TTS + visual subtitle)
+                HazelResponseBanner(
+                    text = responseBannerText,
+                    isVisible = isBannerVisible,
+                    onDismiss = {
+                        isBannerVisible = false
+                    },
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+                
                 // Hazel listening overlay
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
@@ -139,13 +176,23 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                     onDismiss = {
                         isHazelListening = false
                         transcribedText = ""
-                        // TODO: Stop speech recognition here
                     },
                     onIntentResult = { intent ->
-                        handleHazelIntent(intent, navController) {
-                            isHazelListening = false
-                            transcribedText = ""
-                        }
+                        handleHazelIntent(
+                            intent = intent,
+                            navController = navController,
+                            queryHandler = queryHandler,
+                            scope = coroutineScope,
+                            tts = ttsRef,
+                            onShowBanner = { text ->
+                                responseBannerText = text
+                                isBannerVisible = true
+                            },
+                            onHandled = {
+                                isHazelListening = false
+                                transcribedText = ""
+                            }
+                        )
                     },
                     intentRouter = intentRouter
                 )
@@ -155,11 +202,15 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
 }
 
 /**
- * Handles Hazel intent results and performs appropriate navigation.
+ * Handles Hazel intent results, performs appropriate navigation or triggers GeneralQuery fallback.
  */
 private fun handleHazelIntent(
     intent: HazelIntent,
     navController: NavController,
+    queryHandler: HazelQueryHandler,
+    scope: CoroutineScope,
+    tts: TextToSpeech?,
+    onShowBanner: (String) -> Unit,
     onHandled: () -> Unit
 ) {
     when (intent) {
@@ -200,11 +251,22 @@ private fun handleHazelIntent(
             onHandled()
         }
         is HazelIntent.GeneralQuery -> {
-            // Unmatched freeform query will be handed to Gemini in Phase 3
             onHandled()
+            queryHandler.handleGeneralQuery(
+                rawQuery = intent.rawQuery,
+                scope = scope,
+                tts = tts,
+                onResponseReady = onShowBanner
+            )
         }
         is HazelIntent.Unknown -> {
             onHandled()
+            queryHandler.handleGeneralQuery(
+                rawQuery = intent.rawQuery,
+                scope = scope,
+                tts = tts,
+                onResponseReady = onShowBanner
+            )
         }
     }
 }
