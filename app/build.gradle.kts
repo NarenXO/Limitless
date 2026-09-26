@@ -7,6 +7,10 @@ plugins {
 android {
     namespace = "com.teamdexters.limitless"
     compileSdk = 35
+    
+    kotlin {
+        jvmToolchain(17)
+    }
 
     defaultConfig {
         applicationId = "com.teamdexters.limitless"
@@ -63,6 +67,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.ui:ui-text-google-fonts")
     
     // Material3
     implementation("androidx.compose.material3:material3")
