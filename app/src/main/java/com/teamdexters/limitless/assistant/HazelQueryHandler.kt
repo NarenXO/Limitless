@@ -1,12 +1,12 @@
 package com.teamdexters.limitless.assistant
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.teamdexters.limitless.BuildConfig
 import com.teamdexters.limitless.assistant.cloud.GeminiClient
+import com.teamdexters.limitless.util.NetworkStatus
+import com.teamdexters.limitless.util.NetworkStatusProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,11 +17,16 @@ import java.util.Locale
  * Handles unmatched [HazelIntent.GeneralQuery] inputs by attempting optional Gemini cloud queries
  * when online, or falling back gracefully to offline accessibility responses when offline.
  *
+ * Uses [NetworkStatusTracker] for reactive, cached network checks instead of performing a
+ * synchronous connectivity lookup on each query. This guarantees zero main-thread blocking
+ * and immediate offline fallback in airplane mode.
+ *
  * Enforces 100% offline-first design rules: never crashes or hangs when offline or unauthenticated.
  */
 class HazelQueryHandler(
     private val context: Context,
-    private val geminiClient: GeminiClient = GeminiClient()
+    private val geminiClient: GeminiClient = GeminiClient(),
+    private val networkStatusTracker: NetworkStatusProvider? = null
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
@@ -29,8 +34,12 @@ class HazelQueryHandler(
     }
 
     /**
-     * Processes a general query by checking network availability and triggering
-     * Gemini or the offline fallback message.
+     * Processes a general query by checking network availability via [NetworkStatusTracker]
+     * and triggering Gemini or the offline fallback message.
+     *
+     * Network check priority:
+     * 1. [NetworkStatusTracker] reactive cached status (preferred, zero-cost).
+     * 2. Fallback: synchronous [isNetworkAvailableFallback] if tracker is null.
      *
      * @param rawQuery The user's unmatched spoken input text.
      * @param scope CoroutineScope for asynchronous execution.
@@ -44,7 +53,8 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
-            val responseText = if (isNetworkAvailable() && isApiKeyPresent()) {
+            val isOnline = isNetworkAvailable()
+            val responseText = if (isOnline && isApiKeyPresent()) {
                 val result = geminiClient.queryGemini(rawQuery)
                 result.getOrElse { e ->
                     Log.w(TAG, "Gemini API query failed or timed out: ${e.message}. Falling back to offline message.")
@@ -63,14 +73,30 @@ class HazelQueryHandler(
     }
 
     /**
-     * Checks whether active network interface has internet capability.
+     * Checks whether network is available using the reactive [NetworkStatusTracker] first,
+     * falling back to a synchronous connectivity check if tracker is not provided.
      */
     fun isNetworkAvailable(): Boolean {
+        // Prefer reactive tracker (zero-cost cached check)
+        networkStatusTracker?.let { tracker ->
+            return tracker.statusFlow.value is NetworkStatus.Online
+        }
+
+        // Fallback: synchronous ConnectivityManager check
+        return isNetworkAvailableFallback()
+    }
+
+    /**
+     * Fallback synchronous connectivity check using ConnectivityManager.
+     * Used only when [NetworkStatusTracker] is not injected.
+     */
+    private fun isNetworkAvailableFallback(): Boolean {
         return try {
-            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
             val activeNetwork = connectivityManager?.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         } catch (e: Exception) {
             false
         }

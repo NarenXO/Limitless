@@ -120,6 +120,7 @@ dependencies {
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     
     // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")

@@ -16,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,10 +38,12 @@ import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
+import com.teamdexters.limitless.ui.components.NetworkStatusBadge
 import com.teamdexters.limitless.ui.components.SharedToolsBar
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
 import com.teamdexters.limitless.ui.navigation.Screen
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
+import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
 import java.util.Locale
 
@@ -62,7 +65,11 @@ class MainActivity : ComponentActivity() {
 /**
  * Global wrapper for Hazel assistant integration.
  * Wraps the navigation host in a Scaffold with the shared quick tools bar,
- * floating mic button, Hazel listening overlay, response banner, and offline/online query fallback.
+ * floating mic button, Hazel listening overlay, response banner, network status badge,
+ * and offline/online query fallback.
+ *
+ * Integrates [NetworkStatusTracker] for reactive app-wide network monitoring.
+ * The tracker is registered on composition and unregistered on disposal to prevent memory leaks.
  */
 @Composable
 fun HazelAssistantWrapper(database: LimitlessDatabase) {
@@ -85,8 +92,23 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
     )
     val showToolsBar = currentRoute in personaHomeRoutes
 
-    // Hazel query handler
-    val queryHandler = remember { HazelQueryHandler(context) }
+    // App-wide network status tracker (register/unregister lifecycle-safe)
+    val networkStatusTracker = remember { NetworkStatusTracker(context) }
+    DisposableEffect(networkStatusTracker) {
+        networkStatusTracker.register()
+        onDispose {
+            networkStatusTracker.unregister()
+        }
+    }
+    val networkStatus by networkStatusTracker.statusFlow.collectAsState()
+
+    // Hazel query handler with network status tracker integration
+    val queryHandler = remember(networkStatusTracker) {
+        HazelQueryHandler(
+            context = context,
+            networkStatusTracker = networkStatusTracker
+        )
+    }
     
     // TTS initialization
     var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
@@ -175,6 +197,14 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                 LimitlessNavHost(
                     navController = navController,
                     database = database
+                )
+
+                // Network status badge: top-right corner, unobtrusive
+                NetworkStatusBadge(
+                    networkStatus = networkStatus,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 8.dp)
                 )
 
                 // Floating mic button anchored to bottom right of content screen
