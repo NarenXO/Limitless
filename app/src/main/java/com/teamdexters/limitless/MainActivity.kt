@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
 import com.teamdexters.limitless.assistant.DefaultWakeWordListener
@@ -36,7 +37,9 @@ import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
+import com.teamdexters.limitless.ui.components.SharedToolsBar
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
+import com.teamdexters.limitless.ui.navigation.Screen
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import kotlinx.coroutines.CoroutineScope
 import java.util.Locale
@@ -58,8 +61,8 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Global wrapper for Hazel assistant integration.
- * Wraps the navigation host in a Scaffold with the floating mic button,
- * manages the Hazel listening overlay state, response banner, and offline/online query fallback.
+ * Wraps the navigation host in a Scaffold with the shared quick tools bar,
+ * floating mic button, Hazel listening overlay, response banner, and offline/online query fallback.
  */
 @Composable
 fun HazelAssistantWrapper(database: LimitlessDatabase) {
@@ -68,6 +71,20 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
+    // Track current navigation route
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
+
+    val personaHomeRoutes = listOf(
+        Screen.BlindHome.route,
+        Screen.DeafHome.route,
+        Screen.SpeechHome.route,
+        Screen.MobilityHome.route,
+        Screen.Scanner.route,
+        Screen.Community.route
+    )
+    val showToolsBar = currentRoute in personaHomeRoutes
+
     // Hazel query handler
     val queryHandler = remember { HazelQueryHandler(context) }
     
@@ -133,17 +150,18 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
     ) {
         Scaffold(
             bottomBar = {
-                // Floating mic button positioned at bottom right
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.BottomEnd
-                ) {
-                    HazelFloatingMicButton(
-                        onClick = {
-                            isHazelListening = true
-                            transcribedText = ""
+                if (showToolsBar) {
+                    SharedToolsBar(
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (currentRoute != route) {
+                                navController.navigate(route) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        },
+                        onBackClick = {
+                            navController.popBackStack()
                         }
                     )
                 }
@@ -158,6 +176,21 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                     navController = navController,
                     database = database
                 )
+
+                // Floating mic button anchored to bottom right of content screen
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.BottomEnd
+                ) {
+                    HazelFloatingMicButton(
+                        onClick = {
+                            isHazelListening = true
+                            transcribedText = ""
+                        }
+                    )
+                }
                 
                 // Accessible subtitle response banner (fires simultaneous TTS + visual subtitle)
                 HazelResponseBanner(
@@ -219,35 +252,35 @@ private fun handleHazelIntent(
             onHandled()
         }
         is HazelIntent.OpenScanner -> {
-            navController.navigate("mobility-home")
+            navController.navigate(Screen.Scanner.route)
             onHandled()
         }
         is HazelIntent.OpenCommunity -> {
-            navController.navigate("mobility-home")
+            navController.navigate(Screen.Community.route)
             onHandled()
         }
         is HazelIntent.OpenPhraseCards -> {
-            navController.navigate("speech-home")
+            navController.navigate(Screen.SpeechHome.route)
             onHandled()
         }
         is HazelIntent.OpenNavigation -> {
-            navController.navigate("mobility-home")
+            navController.navigate(Screen.MobilityHome.route)
             onHandled()
         }
         is HazelIntent.BlindAssist -> {
-            navController.navigate("blind-home")
+            navController.navigate(Screen.BlindHome.route)
             onHandled()
         }
         is HazelIntent.DeafAssist -> {
-            navController.navigate("deaf-home")
+            navController.navigate(Screen.DeafHome.route)
             onHandled()
         }
         is HazelIntent.SpeechAssist -> {
-            navController.navigate("speech-home")
+            navController.navigate(Screen.SpeechHome.route)
             onHandled()
         }
         is HazelIntent.MobilityAssist -> {
-            navController.navigate("mobility-home")
+            navController.navigate(Screen.MobilityHome.route)
             onHandled()
         }
         is HazelIntent.GeneralQuery -> {

@@ -34,4 +34,16 @@ sealed class Screen(val route: String) {
      * Route: "mobility-home"
      */
     data object MobilityHome : Screen("mobility-home")
+
+    /**
+     * Accessibility scanner screen (MediaPipe & OCR audit).
+     * Route: "scanner"
+     */
+    data object Scanner : Screen("scanner")
+
+    /**
+     * Community reports and verified local accessibility ratings screen.
+     * Route: "community"
+     */
+    data object Community : Screen("community")
 }

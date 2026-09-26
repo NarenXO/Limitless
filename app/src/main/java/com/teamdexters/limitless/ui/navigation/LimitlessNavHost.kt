@@ -7,8 +7,10 @@ import androidx.navigation.compose.composable
 import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.persona.PersonaSelectScreen
 import com.teamdexters.limitless.ui.screens.BlindHomeScreen
+import com.teamdexters.limitless.ui.screens.CommunityScreen
 import com.teamdexters.limitless.ui.screens.DeafHomeScreen
 import com.teamdexters.limitless.ui.screens.MobilityHomeScreen
+import com.teamdexters.limitless.ui.screens.ScannerScreen
 import com.teamdexters.limitless.ui.screens.SpeechHomeScreen
 
 /**
@@ -50,6 +52,16 @@ fun LimitlessNavHost(
         // Mobility Home Screen
         composable(Screen.MobilityHome.route) {
             MobilityHomeScreen()
+        }
+
+        // Accessibility Scanner Screen
+        composable(Screen.Scanner.route) {
+            ScannerScreen()
+        }
+
+        // Community Reports Screen
+        composable(Screen.Community.route) {
+            CommunityScreen()
         }
     }
 }
