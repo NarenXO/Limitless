@@ -43,13 +43,8 @@ class HazelAccessibilityService : AccessibilityService() {
         event?.let {
             if (it.action == KeyEvent.ACTION_DOWN) {
                 when (it.keyCode) {
-                    KeyEvent.KEYCODE_VOLUME_UP -> {
-                        // TODO: Configure volume up + volume down combo for Hazel trigger
-                        // This is a stub - actual implementation would check for key combinations
-                        return true
-                    }
-                    KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                        // TODO: Configure volume up + volume down combo for Hazel trigger
+                    KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                        broadcastOpenHazel()
                         return true
                     }
                 }

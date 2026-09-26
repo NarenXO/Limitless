@@ -8,13 +8,21 @@ import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
 
+import com.teamdexters.limitless.R
+
 // Manrope font configuration
+val provider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
+)
+
 val manropeFont = GoogleFont("Manrope")
 
 private val manropeFontFamily = FontFamily(
-    Font(manropeFont, FontWeight.Normal),
-    Font(manropeFont, FontWeight.Medium),
-    Font(manropeFont, FontWeight.Bold)
+    Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Normal),
+    Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Medium),
+    Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Bold)
 )
 
 // Typography Styles using TextPrimary (0xFF1F1F1F) as default text color

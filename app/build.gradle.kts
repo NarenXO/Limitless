@@ -2,15 +2,12 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.teamdexters.limitless"
     compileSdk = 35
-    
-    kotlin {
-        jvmToolchain(17)
-    }
 
     defaultConfig {
         applicationId = "com.teamdexters.limitless"
@@ -57,6 +54,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
@@ -71,6 +72,7 @@ dependencies {
     
     // Material3
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     
     // Activity Compose
     implementation("androidx.activity:activity-compose:1.8.1")
@@ -103,6 +105,9 @@ dependencies {
     
     // Vosk-android (offline STT)
     implementation("com.alphacephei:vosk-android:0.3.32")
+    
+    // TensorFlow Lite
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

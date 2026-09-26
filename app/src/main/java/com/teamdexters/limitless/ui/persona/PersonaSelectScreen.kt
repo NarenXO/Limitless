@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -78,18 +79,19 @@ fun PersonaSelectScreen(
     val coroutineScope = rememberCoroutineScope()
     
     // TTS initialization
+    var ttsRef: TextToSpeech? by remember { mutableStateOf(null) }
     val tts = remember {
         TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                it.language = Locale.US
-                it.speak(
+                ttsRef?.language = Locale.US
+                ttsRef?.speak(
                     "Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair.",
                     TextToSpeech.QUEUE_FLUSH,
                     null,
                     "persona_announcement"
                 )
             }
-        }
+        }.also { ttsRef = it }
     }
     
     // Speech recognition setup
