@@ -21,12 +21,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.teamdexters.limitless.assistant.cloud.GeminiClient
 import com.teamdexters.limitless.ui.blind.*
 import com.teamdexters.limitless.ui.theme.*
+import com.teamdexters.limitless.util.NetworkStatusTracker
 
 /**
  * Blind & Low-Vision Assistant home screen.
- * Provides OCR text reading, color detection, and object detection modes with camera integration.
+ * Provides OCR text reading, color detection, object detection, and path feature detection modes with camera integration.
  */
 @Composable
 fun BlindHomeScreen() {
@@ -55,8 +57,11 @@ fun BlindHomeScreen() {
         }
     }
 
-    // Mode state: "ocr", "color", or "describe"
+    // Mode state: "ocr", "color", "describe", or "path"
     var currentMode by remember { mutableStateOf("ocr") }
+
+    // Richer descriptions toggle state
+    var useRicherDescriptions by remember { mutableStateOf(false) }
 
     // Managers
     val ttsManager = remember { TTSManager(context) }
@@ -64,12 +69,18 @@ fun BlindHomeScreen() {
     val colorDetector = remember { ColorDetector() }
     val objectDetector = remember { ObjectDetector(context) }
     val sceneDescriptionBuilder = remember { SceneDescriptionBuilder() }
+    val pathFeatureDetector = remember { PathFeatureDetector(context) }
+    val pathFeatureDescriptionBuilder = remember { PathFeatureDescriptionBuilder() }
+    
+    // Network and Gemini
+    val networkStatusTracker = remember { NetworkStatusTracker(context) }
+    val geminiClient = remember { GeminiClient() }
 
     // Result state
     var resultText by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
 
-    // Initialize TTS and Object Detector
+    // Initialize TTS, Object Detector, Path Feature Detector, and Network Tracker
     LaunchedEffect(Unit) {
         ttsManager.initialize { success ->
             if (!success) {
@@ -80,6 +91,12 @@ fun BlindHomeScreen() {
         val objectDetectorInitialized = objectDetector.initialize()
         // Note: Object detector may fail to initialize if model is not available
         // This is handled gracefully - the detector will return empty results
+
+        val pathFeatureDetectorInitialized = pathFeatureDetector.initialize()
+        // Note: Path feature detector may fail to initialize if model is not available
+        // This is handled gracefully - the detector will return empty results
+
+        networkStatusTracker.register()
     }
 
     // Cleanup on dispose
@@ -88,6 +105,8 @@ fun BlindHomeScreen() {
             ttsManager.release()
             ocrManager.close()
             objectDetector.close()
+            pathFeatureDetector.close()
+            networkStatusTracker.unregister()
         }
     }
 
@@ -137,7 +156,7 @@ fun BlindHomeScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Read Text button
                 ModeButton(
@@ -162,6 +181,49 @@ fun BlindHomeScreen() {
                     onClick = { currentMode = "describe" },
                     modifier = Modifier.weight(1f)
                 )
+
+                // Path Features button
+                ModeButton(
+                    text = "Path",
+                    isActive = currentMode == "path",
+                    onClick = { currentMode = "path" },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Richer descriptions toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(
+                    checked = useRicherDescriptions,
+                    onCheckedChange = { useRicherDescriptions = it },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (useRicherDescriptions) 
+                            "Richer descriptions enabled" 
+                        else 
+                            "Richer descriptions disabled"
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = PersonaBlind,
+                        uncheckedThumbColor = SurfaceTint,
+                        checkedTrackColor = PersonaBlind,
+                        uncheckedTrackColor = SurfaceTint
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Richer descriptions (online)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextPrimary,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Toggle for richer descriptions using online AI"
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -182,6 +244,7 @@ fun BlindHomeScreen() {
                     "ocr" -> "Capture & Read"
                     "color" -> "Detect Color"
                     "describe" -> "Describe Surroundings"
+                    "path" -> "Detect Path Features"
                     else -> "Capture & Read"
                 },
                 isProcessing = isProcessing,
@@ -235,12 +298,72 @@ fun BlindHomeScreen() {
                             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                                 try {
                                     val objects = objectDetector.detectObjects(frame)
-                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                    resultText = description
-                                    ttsManager.speak(description)
+                                    
+                                    // Use Gemini if toggle is ON and network is available
+                                    if (useRicherDescriptions && networkStatusTracker.isCurrentlyOnline()) {
+                                        try {
+                                            // Build object list for Gemini
+                                            val objectList = objects.joinToString(", ") { "${it.label} (confidence: ${it.confidence})" }
+                                            val prompt = "Describe this scene for a blind person. Detected objects: $objectList. Give a brief, helpful description in 1-2 sentences."
+                                            
+                                            // 5 second timeout for Gemini
+                                            val geminiResult = kotlinx.coroutines.withTimeoutOrNull(5000) {
+                                                geminiClient.queryGemini(prompt)
+                                            }
+                                            
+                                            if (geminiResult != null && geminiResult.isSuccess) {
+                                                val richDescription = geminiResult.getOrNull() ?: ""
+                                                if (richDescription.isNotBlank()) {
+                                                    resultText = richDescription
+                                                    ttsManager.speak(richDescription)
+                                                } else {
+                                                    // Fallback to rule-based
+                                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                    resultText = description
+                                                    ttsManager.speak(description)
+                                                }
+                                            } else {
+                                                // Fallback to rule-based on timeout or error
+                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                resultText = description
+                                                ttsManager.speak(description)
+                                            }
+                                        } catch (e: Exception) {
+                                            // Fallback to rule-based on any error
+                                            val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                            resultText = description
+                                            ttsManager.speak(description)
+                                        }
+                                    } else {
+                                        // Use rule-based description
+                                        val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                        resultText = description
+                                        ttsManager.speak(description)
+                                    }
                                 } catch (e: Exception) {
                                     resultText = "Error detecting objects"
                                     ttsManager.speak("Error detecting objects")
+                                } finally {
+                                    isProcessing = false
+                                }
+                            }
+                        }
+                        "path" -> {
+                            // Path feature detection mode
+                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                try {
+                                    if (!pathFeatureDetector.isReady()) {
+                                        resultText = "Path detection model not loaded"
+                                        ttsManager.speak("Path detection model not loaded")
+                                    } else {
+                                        val features = pathFeatureDetector.detectPathFeatures(frame)
+                                        val description = pathFeatureDescriptionBuilder.buildDescription(features)
+                                        resultText = description
+                                        ttsManager.speak(description)
+                                    }
+                                } catch (e: Exception) {
+                                    resultText = "Error detecting path features"
+                                    ttsManager.speak("Error detecting path features")
                                 } finally {
                                     isProcessing = false
                                 }
