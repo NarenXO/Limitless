@@ -60,7 +60,8 @@ import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.components.NetworkStatusBadge
-import com.teamdexters.limitless.ui.components.SharedToolsBar
+import com.teamdexters.limitless.ui.components.DemoBottomNavBar
+import com.teamdexters.limitless.ui.components.DemoTopAppBar
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
 import com.teamdexters.limitless.ui.navigation.Screen
 import com.teamdexters.limitless.ui.theme.HighlightBox
@@ -223,16 +224,27 @@ fun HazelAssistantWrapper(
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            bottomBar = {
+            topBar = {
                 if (showToolsBar) {
-                    SharedToolsBar(
+                    DemoTopAppBar(
                         currentRoute = currentRoute,
                         onNavigate = { route ->
                             if (currentRoute != route) {
                                 navController.navigate(route) { launchSingleTop = true }
                             }
-                        },
-                        onBackClick = { navController.popBackStack() }
+                        }
+                    )
+                }
+            },
+            bottomBar = {
+                if (showToolsBar) {
+                    DemoBottomNavBar(
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (currentRoute != route) {
+                                navController.navigate(route) { launchSingleTop = true }
+                            }
+                        }
                     )
                 }
             }
@@ -289,10 +301,8 @@ fun HazelAssistantWrapper(
                 // ── Hazel listening overlay ──────────────────────────────────
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
-                    transcribedText = transcribedText,
                     onDismiss = {
                         isHazelListening = false
-                        transcribedText = ""
                     },
                     onIntentResult = { intent ->
                         handleHazelIntent(
@@ -307,7 +317,6 @@ fun HazelAssistantWrapper(
                             },
                             onHandled = {
                                 isHazelListening = false
-                                transcribedText = ""
                             }
                         )
                     },

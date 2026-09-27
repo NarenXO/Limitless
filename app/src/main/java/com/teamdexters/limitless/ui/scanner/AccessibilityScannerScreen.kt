@@ -82,12 +82,22 @@ fun AccessibilityScannerScreen(
                                 val preview = androidx.camera.core.Preview.Builder().build().also {
                                     it.setSurfaceProvider(previewView.surfaceProvider)
                                 }
-                                val capture = androidx.camera.core.ImageCapture.Builder().build()
-                                imageCapture = capture
+                                val analysis = androidx.camera.core.ImageAnalysis.Builder()
+                                    .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                    .build()
+                                    
+                                analysis.setAnalyzer(executor) { imageProxy ->
+                                    if (!isScanning) {
+                                        val bitmap = imageProxy.toBitmap()
+                                        viewModel.startScan(bitmap)
+                                    }
+                                    imageProxy.close()
+                                }
+                                
                                 val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
                                 try {
                                     cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, capture)
+                                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                                 } catch (exc: Exception) {
                                     // Handle errors
                                 }
@@ -110,7 +120,8 @@ fun AccessibilityScannerScreen(
                     }
                 }
 
-                if (isScanning) {
+                if (isScanning && scanObjects.isEmpty() && signageText.isEmpty()) {
+                    // Only show scanning overlay if we haven't found anything yet (initial scan)
                     Box(
                         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center
@@ -121,34 +132,6 @@ fun AccessibilityScannerScreen(
                             Text("Scanning...", color = Color.White)
                         }
                     }
-                } else if (isCameraGranted) {
-                    // Capture Button
-                    Box(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .size(64.dp)
-                            .background(Color(0xFFF791A9), CircleShape)
-                            .clickable {
-                                val capture = imageCapture ?: return@clickable
-                                capture.takePicture(
-                                    androidx.core.content.ContextCompat.getMainExecutor(context),
-                                    object : androidx.camera.core.ImageCapture.OnImageCapturedCallback() {
-                                        override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
-                                            val bitmap = image.toBitmap()
-                                            viewModel.startScan(bitmap)
-                                            image.close()
-                                        }
-                                        override fun onError(exception: androidx.camera.core.ImageCaptureException) {
-                                            // Handle error
-                                        }
-                                    }
-                                )
-                            }
-                            .semantics { contentDescription = "Capture Frame for Analysis" },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
-                    }
                 }
             }
 
@@ -158,7 +141,6 @@ fun AccessibilityScannerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .clickable { navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L)) }
                         .semantics { contentDescription = "Scan Results Card" },
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
                 ) {
@@ -184,6 +166,18 @@ fun AccessibilityScannerScreen(
                         Text("Lighting Score:", style = MaterialTheme.typography.bodyMedium)
                         val lightStatus = if (lightingScore > 60) "Good Lighting" else "Dim Lighting"
                         Text("- $lightingScore/100 - $lightStatus", style = MaterialTheme.typography.bodySmall)
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { 
+                                viewModel.saveScan()
+                                navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L))
+                            },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                        ) {
+                            Text("GENERATE SCORE", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -244,16 +238,7 @@ fun AccessibilityScannerScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = { viewModel.saveScan() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .semantics { contentDescription = "Save Scan Results" },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9), contentColor = Color.White)
-                ) {
-                    Text("Save Scan")
-                }
+                // The save button was moved to the GENERATE SCORE button in the Results Card
             }
         }
     }

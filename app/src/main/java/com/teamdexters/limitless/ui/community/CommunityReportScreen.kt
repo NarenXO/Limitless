@@ -60,9 +60,11 @@ fun CommunityReportScreen(
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
 
+    val reports by viewModel.reports.collectAsState(initial = emptyList())
+
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         viewModel.onImageSelected(uri)
     }
@@ -78,7 +80,40 @@ fun CommunityReportScreen(
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetContent = {}
+        sheetPeekHeight = 64.dp,
+        sheetContent = {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(
+                    text = "Community Reports (${reports.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(reports) { report ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F1EE))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = report.locationName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Category: ${report.category}", style = MaterialTheme.typography.bodySmall)
+                                Text("Description: ${report.description}", style = MaterialTheme.typography.bodySmall)
+                                Text("Trust Score: ${report.trustScore}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -165,8 +200,11 @@ fun CommunityReportScreen(
                     .fillMaxWidth()
                     .height(200.dp)
                     .clickable { 
-                        // Simulate location card tap
-                        navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L)) 
+                        imagePickerLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
                     }
                     .semantics { contentDescription = "" },
                 shape = RoundedCornerShape(8.dp),

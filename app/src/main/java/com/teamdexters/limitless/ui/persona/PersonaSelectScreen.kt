@@ -183,15 +183,12 @@ fun PersonaSelectScreen(
     }
 
     // ── Helper: TTS-then-listen (waits for TTS to finish before listening) ────
+    val currentOnTtsDone = remember { java.util.concurrent.atomic.AtomicReference<(() -> Unit)?>(null) }
+
     fun speakThenListen(utterance: String, onTtsDone: () -> Unit) {
         val tts = ttsRef ?: run { onTtsDone(); return }
-        tts.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, null)
-        // Poll until TTS is no longer speaking, then fire callback
-        coroutineScope.launch {
-            while (tts.isSpeaking) delay(150)
-            delay(300) // brief pause before mic activates
-            withContext(Dispatchers.Main) { onTtsDone() }
-        }
+        currentOnTtsDone.set(onTtsDone)
+        tts.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, java.util.UUID.randomUUID().toString())
     }
 
     // ── Stage 1 name-retry loop ───────────────────────────────────────────────
@@ -259,6 +256,30 @@ fun PersonaSelectScreen(
         val tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 ttsRef?.language = Locale.US
+                ttsRef?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        coroutineScope.launch {
+                            delay(500) // Ensure 500ms delay after TTS finishes to prevent hardware echo
+                            withContext(Dispatchers.Main) {
+                                if (utteranceId == "welcome" && isNameStage) {
+                                    startNameCapture()
+                                } else {
+                                    currentOnTtsDone.getAndSet(null)?.invoke()
+                                }
+                            }
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        coroutineScope.launch {
+                            withContext(Dispatchers.Main) {
+                                if (utteranceId != "welcome") {
+                                    currentOnTtsDone.getAndSet(null)?.invoke()
+                                }
+                            }
+                        }
+                    }
+                })
                 // Stage 1: welcome + listen for name
                 ttsRef?.speak(
                     "Welcome to Limitless. What is your name?",
@@ -277,15 +298,6 @@ fun PersonaSelectScreen(
             recognizerRef = null
             ttsRef = null
         }
-    }
-
-    // ── Stage 1 auto-listen after TTS welcome finishes ────────────────────────
-    LaunchedEffect(ttsRef) {
-        if (ttsRef == null) return@LaunchedEffect
-        // Wait for TTS to initialise and finish the welcome utterance
-        while (ttsRef?.isSpeaking != false) delay(200)
-        delay(400)
-        if (isNameStage) startNameCapture()
     }
 
     // ── Stage 2 auto-listen after name is captured ────────────────────────────

@@ -19,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -53,12 +55,66 @@ import com.teamdexters.limitless.ui.theme.TextPrimary
 @Composable
 fun HazelListeningOverlay(
     isVisible: Boolean,
-    transcribedText: String,
     onDismiss: () -> Unit,
     onIntentResult: (HazelIntent) -> Unit,
     intentRouter: IntentRouter
 ) {
     if (!isVisible) return
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var localTranscribedText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    
+    androidx.compose.runtime.DisposableEffect(isVisible) {
+        if (isVisible) {
+            localTranscribedText = ""
+            val recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(context)
+            val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.US.toLanguageTag())
+                putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            }
+            
+            fun startListening() {
+                recognizer.setRecognitionListener(object : android.speech.RecognitionListener {
+                    override fun onReadyForSpeech(params: android.os.Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onError(error: Int) {
+                        if (error == android.speech.SpeechRecognizer.ERROR_CLIENT || error == android.speech.SpeechRecognizer.ERROR_NO_MATCH || error == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                            startListening()
+                        } else {
+                            onDismiss()
+                        }
+                    }
+                    override fun onResults(results: android.os.Bundle?) {
+                        val matches = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                        val best = matches?.firstOrNull()?.trim() ?: ""
+                        if (best.isNotEmpty()) {
+                            localTranscribedText = best
+                            onIntentResult(intentRouter.routeIntent(best))
+                        } else {
+                            startListening()
+                        }
+                    }
+                    override fun onPartialResults(partial: android.os.Bundle?) {
+                        val partials = partial?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                        partials?.firstOrNull()?.let { localTranscribedText = it }
+                    }
+                    override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+                })
+                recognizer.startListening(intent)
+            }
+            startListening()
+            
+            onDispose {
+                recognizer.destroy()
+            }
+        } else {
+            onDispose {}
+        }
+    }
     
     Box(
         modifier = Modifier
@@ -129,19 +185,13 @@ fun HazelListeningOverlay(
             )
             
             // Transcribed text display
-            if (transcribedText.isNotEmpty()) {
+            if (localTranscribedText.isNotEmpty()) {
                 Text(
-                    text = transcribedText,
+                    text = localTranscribedText,
                     style = LimitlessTypography.bodyMedium,
                     color = TextPrimary,
                     modifier = Modifier.padding(8.dp)
                 )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Process the transcribed text through IntentRouter
-                val intent = intentRouter.routeIntent(transcribedText)
-                onIntentResult(intent)
             }
         }
     }
