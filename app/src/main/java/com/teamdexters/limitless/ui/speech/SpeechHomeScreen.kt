@@ -11,29 +11,43 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.Healing
 import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.SentimentDissatisfied
+import androidx.compose.material.icons.filled.SentimentSatisfied
+import androidx.compose.material.icons.filled.SentimentVeryDissatisfied
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -56,29 +71,29 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.ui.speech.data.PhraseUsageDatabase
+import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaSpeech
 import com.teamdexters.limitless.ui.theme.SurfaceTint
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
 // ---------------------------------------------------------------------------
-// Data model
+// Data models
 // ---------------------------------------------------------------------------
 
 /**
  * Represents a single quick-phrase card shown on the Speech Home screen.
- *
- * @param phrase  The phrase that will be read aloud via TTS when selected.
- * @param icon    A flat, single-colour Material icon representing the phrase.
  */
 private data class PhraseCard(
     val phrase: String,
@@ -99,33 +114,43 @@ private val defaultPhrases: List<PhraseCard> = listOf(
     PhraseCard("I am in pain",            Icons.Default.LocalHospital)
 )
 
+/** Emotion communication card model for Section B. */
+private data class EmotionCard(
+    val emotion: String,
+    val phrase: String,
+    val icon: ImageVector
+)
+
+private val emotionCards: List<EmotionCard> = listOf(
+    EmotionCard("Happy",   "I am happy",    Icons.Default.SentimentSatisfied),
+    EmotionCard("Sad",     "I am sad",      Icons.Default.SentimentDissatisfied),
+    EmotionCard("Scared",  "I am scared",   Icons.Default.Warning),
+    EmotionCard("Angry",   "I am angry",    Icons.Default.SentimentVeryDissatisfied),
+    EmotionCard("Hungry",  "I am hungry",   Icons.Default.Restaurant),
+    EmotionCard("Thirsty", "I am thirsty",  Icons.Default.LocalDrink),
+    EmotionCard("Tired",   "I am tired",    Icons.Default.Bedtime),
+    EmotionCard("Pain",    "I am in pain",  Icons.Default.Healing)
+)
+
 // ---------------------------------------------------------------------------
 // Screen composable
 // ---------------------------------------------------------------------------
 
 /**
- * Speech Home Screen - Phase 2: On-Device Phrase Prediction.
+ * Speech Home Screen - Phase 3: TTS, Emotion Cards, and Emergency Button.
  *
- * Features:
- * - Adaptive prediction grid powered by PhrasePredictionEngine & local Room DB.
- * - Cold-start fallback: displays default 10 phrases until usage data accumulates.
- * - Dynamic "Predicted for you" subheader appears when predictions are active.
- * - Android TextToSpeech speaks the phrase on card tap or switch confirm.
- * - Full switch-scanning support via Modifier.focusable and Modifier.onFocusChanged.
- * - TalkBack semantics on every card.
- * - Haptic feedback on tap.
- *
- * Design tokens used:
- *   - Background  : LimitlessBackground (#F7F1EE)
- *   - Card surface : SurfaceTint (#E0F2F4)
- *   - Accent       : PersonaSpeech (#DDDD7B)
- *   - Body text    : TextPrimary (#1F1F1F)
+ * Sections (Top to Bottom):
+ * 1. Quick Phrases Header & Adaptive Prediction Phrase Grid (Phases 1-2)
+ * 2. Section A: Type-to-Speech (accessibility text field + Speak button)
+ * 3. Section B: "How are you feeling?" (horizontal LazyRow of emotion cards)
+ * 4. Section C: One-Tap Emergency Button (full width, 3x haptic pattern + emergency TTS)
  */
 @Composable
 fun SpeechHomeScreen() {
-    val context = LocalContext.current
-    val haptic  = LocalHapticFeedback.current
-    val scope   = rememberCoroutineScope()
+    val context     = LocalContext.current
+    val haptic      = LocalHapticFeedback.current
+    val scope       = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
 
     // -- Local Phrase Usage Database & Prediction Engine -----------------------
     val database = remember(context) { PhraseUsageDatabase.getDatabase(context) }
@@ -153,7 +178,7 @@ fun SpeechHomeScreen() {
         }
     }
 
-    // -- TextToSpeech lifecycle -----------------------------------------------
+    // -- TextToSpeech lifecycle (SINGLE shared instance for entire screen) -----
     var ttsReady by remember { mutableStateOf(false) }
     val tts      = remember { mutableStateOf<TextToSpeech?>(null) }
 
@@ -175,26 +200,44 @@ fun SpeechHomeScreen() {
     // -- Speak helper ---------------------------------------------------------
     fun speakPhrase(phrase: String) {
         tts.value?.let { engineTts ->
-            if (ttsReady) {
+            if (ttsReady && phrase.isNotBlank()) {
                 engineTts.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, phrase)
             }
         }
     }
 
-    // -- Focused card tracker (for switch-scan highlight) ---------------------
+    // -- Focused card tracker for switch-scanning -----------------------------
     var focusedIndex by remember { mutableIntStateOf(-1) }
 
-    // -- Layout ---------------------------------------------------------------
+    // -- Section A state -------------------------------------------------------
+    var typedText by remember { mutableStateOf("") }
+    var isSpeakButtonFocused by remember { mutableStateOf(false) }
+
+    // -- Section C state & handler ---------------------------------------------
+    var isEmergencyFocused by remember { mutableStateOf(false) }
+
+    fun triggerEmergency() {
+        speakPhrase("Emergency. I need help immediately. Please call for assistance.")
+        scope.launch {
+            repeat(3) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                delay(200)
+            }
+        }
+    }
+
+    // -- Main Layout ----------------------------------------------------------
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(LimitlessBackground)
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp)
-            .semantics { contentDescription = "Speech Home Screen. Quick Phrases." }
+            .semantics { contentDescription = "Speech Home Screen. Quick Phrases and Communication Tools." }
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Header
+        // 1. Header & Prediction Subheader -------------------------------------
         Text(
             text = "Quick Phrases",
             fontSize = 26.sp,
@@ -222,49 +265,311 @@ fun SpeechHomeScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Phrase grid
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(bottom = 24.dp),
+        // 2. Phrase Card Grid (Phases 1-2) -------------------------------------
+        val phraseRows = currentPhrases.chunked(2)
+        Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxWidth()
         ) {
-            itemsIndexed(currentPhrases) { index, card ->
-                val isFocused = focusedIndex == index
+            phraseRows.forEachIndexed { rowIndex, rowCards ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    rowCards.forEachIndexed { colIndex, card ->
+                        val cardIndex = rowIndex * 2 + colIndex
+                        val isFocused = focusedIndex == cardIndex
 
-                PhraseCardItem(
-                    card = card,
-                    isFocused = isFocused,
-                    onFocusChange = { focused ->
-                        if (focused) focusedIndex = index
-                        else if (focusedIndex == index) focusedIndex = -1
-                    },
-                    onSelect = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        speakPhrase(card.phrase)
+                        Box(modifier = Modifier.weight(1f)) {
+                            PhraseCardItem(
+                                card = card,
+                                isFocused = isFocused,
+                                onFocusChange = { focused ->
+                                    if (focused) focusedIndex = cardIndex
+                                    else if (focusedIndex == cardIndex) focusedIndex = -1
+                                },
+                                onSelect = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    speakPhrase(card.phrase)
 
-                        // Record usage and update predictions on IO thread
-                        scope.launch(Dispatchers.IO) {
-                            engine.recordUsage(card.phrase)
-                            val hasData = engine.hasUsageData()
-                            val defaultTexts = defaultPhrases.map { it.phrase }
-                            val updatedTexts = engine.getPredictedPhrases(defaultTexts)
+                                    scope.launch(Dispatchers.IO) {
+                                        engine.recordUsage(card.phrase)
+                                        val hasData = engine.hasUsageData()
+                                        val defaultTexts = defaultPhrases.map { it.phrase }
+                                        val updatedTexts = engine.getPredictedPhrases(defaultTexts)
 
-                            val iconMap = defaultPhrases.associate { it.phrase to it.icon }
-                            val updatedCards = updatedTexts.map { text ->
-                                PhraseCard(phrase = text, icon = iconMap[text] ?: Icons.Default.Help)
-                            }
+                                        val iconMap = defaultPhrases.associate { it.phrase to it.icon }
+                                        val updatedCards = updatedTexts.map { text ->
+                                            PhraseCard(phrase = text, icon = iconMap[text] ?: Icons.Default.Help)
+                                        }
 
-                            withContext(Dispatchers.Main) {
-                                currentPhrases = updatedCards
-                                isPredictedActive = hasData
-                            }
+                                        withContext(Dispatchers.Main) {
+                                            currentPhrases = updatedCards
+                                            isPredictedActive = hasData
+                                        }
+                                    }
+                                }
+                            )
                         }
                     }
+                    if (rowCards.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // 3. SECTION A: Type-to-Speech -----------------------------------------
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Type to Speech",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = PersonaSpeech,
+                modifier = Modifier.semantics { contentDescription = "Type to speech section header" }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = typedText,
+                    onValueChange = { typedText = it },
+                    placeholder = {
+                        Text(
+                            text = "Type anything to speak...",
+                            fontSize = 18.sp,
+                            color = TextPrimary.copy(alpha = 0.6f)
+                        )
+                    },
+                    textStyle = TextStyle(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = HighlightBox,
+                        unfocusedContainerColor = HighlightBox,
+                        disabledContainerColor = HighlightBox,
+                        focusedIndicatorColor = PersonaSpeech,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(60.dp)
+                        .semantics { contentDescription = "Type a message to speak aloud" }
+                )
+
+                val speakScale by animateFloatAsState(
+                    targetValue = if (isSpeakButtonFocused) 1.04f else 1.0f,
+                    animationSpec = tween(120),
+                    label = "speak_scale"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .height(60.dp)
+                        .scale(speakScale)
+                        .background(PersonaSpeech, RoundedCornerShape(16.dp))
+                        .border(
+                            width = if (isSpeakButtonFocused) 2.5.dp else 1.dp,
+                            color = if (isSpeakButtonFocused) TextPrimary else PersonaSpeech.copy(alpha = 0.40f),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            contentDescription = "Speak typed message"
+                            onClick(label = "Speak typed message") {
+                                if (typedText.isNotBlank()) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    speakPhrase(typedText)
+                                }
+                                true
+                            }
+                        }
+                        .clickable {
+                            if (typedText.isNotBlank()) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                speakPhrase(typedText)
+                            }
+                        }
+                        .focusable()
+                        .onFocusChanged { isSpeakButtonFocused = it.isFocused }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Speak",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // 4. SECTION B: Emotion Cards ------------------------------------------
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "How are you feeling?",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = PersonaSpeech,
+                modifier = Modifier.semantics { contentDescription = "How are you feeling header" }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(end = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                itemsIndexed(emotionCards) { _, emotionCard ->
+                    var isEmotionFocused by remember { mutableStateOf(false) }
+                    val emotionScale by animateFloatAsState(
+                        targetValue = if (isEmotionFocused) 1.04f else 1.0f,
+                        animationSpec = tween(120),
+                        label = "emotion_scale"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .scale(emotionScale)
+                            .width(104.dp)
+                            .height(104.dp)
+                            .background(SurfaceTint, RoundedCornerShape(16.dp))
+                            .border(
+                                width = if (isEmotionFocused) 2.5.dp else 1.dp,
+                                color = if (isEmotionFocused) PersonaSpeech else PersonaSpeech.copy(alpha = 0.30f),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .semantics(mergeDescendants = true) {
+                                role = Role.Button
+                                contentDescription = emotionCard.phrase
+                                onClick(label = "Speak ${emotionCard.phrase}") {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    speakPhrase(emotionCard.phrase)
+                                    true
+                                }
+                            }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                speakPhrase(emotionCard.phrase)
+                            }
+                            .focusable()
+                            .onFocusChanged { isEmotionFocused = it.isFocused }
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = emotionCard.icon,
+                                contentDescription = null,
+                                tint = TextPrimary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = emotionCard.emotion,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 5. SECTION C: Emergency Button ---------------------------------------
+        val emergencyScale by animateFloatAsState(
+            targetValue = if (isEmergencyFocused) 1.04f else 1.0f,
+            animationSpec = tween(120),
+            label = "emergency_scale"
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .scale(emergencyScale)
+                .background(PersonaSpeech, RoundedCornerShape(16.dp))
+                .border(
+                    width = if (isEmergencyFocused) 3.dp else 1.dp,
+                    color = if (isEmergencyFocused) TextPrimary else PersonaSpeech.copy(alpha = 0.40f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = "Emergency button. Tap to call for help."
+                    onClick(label = "Speak emergency message") {
+                        triggerEmergency()
+                        true
+                    }
+                }
+                .clickable {
+                    triggerEmergency()
+                }
+                .focusable()
+                .onFocusChanged { isEmergencyFocused = it.isFocused }
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "EMERGENCY",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    letterSpacing = 1.sp
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
@@ -274,11 +579,6 @@ fun SpeechHomeScreen() {
 
 /**
  * A single phrase card.
- *
- * @param card           Data for this card (phrase + icon).
- * @param isFocused      Whether this card currently holds Switch-Access focus.
- * @param onFocusChange  Called with true when focus enters, false when it leaves.
- * @param onSelect       Invoked on tap or switch-confirm.
  */
 @Composable
 private fun PhraseCardItem(
