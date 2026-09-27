@@ -98,6 +98,10 @@ dependencies {
     // Google ML Kit Text Recognition
     implementation("com.google.mlkit:text-recognition:16.0.0")
     
+    // Google ML Kit Barcode Scanning
+    // TODO(Naren): confirm ML Kit Barcode dependency is acceptable — same SDK family as existing ML Kit OCR.
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
     // Google ML Kit Translation
     implementation("com.google.mlkit:translate:17.0.1")
     
