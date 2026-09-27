@@ -46,4 +46,12 @@ sealed class Screen(val route: String) {
      * Route: "community"
      */
     data object Community : Screen("community")
+
+    /**
+     * Location detail screen.
+     * Route: "location-detail/{locationId}"
+     */
+    data object LocationDetail : Screen("location-detail/{locationId}") { 
+        fun createRoute(locationId: Long) = "location-detail/$locationId" 
+    }
 }

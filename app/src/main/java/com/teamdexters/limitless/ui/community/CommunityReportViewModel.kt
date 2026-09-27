@@ -97,9 +97,8 @@ class CommunityReportViewModel @Inject constructor(
                 hasRamp = currentCategory.equals("Ramp", ignoreCase = true),
                 hasElevator = currentCategory.equals("Lift/Elevator", ignoreCase = true),
                 hasAccessibleRestroom = currentCategory.equals("Accessible Washroom", ignoreCase = true),
-                photoUri = photoUriValue
-                // TODO(Naren): Store this calculated trustScore on UserReportEntity.trustScore
-                // trustScore = trustScore
+                photoUri = photoUriValue,
+                trustScore = trustScore
             )
             
             try {

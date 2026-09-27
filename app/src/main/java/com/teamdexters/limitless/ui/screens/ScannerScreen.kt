@@ -8,6 +8,6 @@ import com.teamdexters.limitless.ui.scanner.AccessibilityScannerScreen
  * ScannerViewModel is instantiated via hiltViewModel() inside AccessibilityScannerScreen.
  */
 @Composable
-fun ScannerScreen() {
-    AccessibilityScannerScreen()
+fun ScannerScreen(navController: androidx.navigation.NavHostController) {
+    AccessibilityScannerScreen(navController = navController)
 }

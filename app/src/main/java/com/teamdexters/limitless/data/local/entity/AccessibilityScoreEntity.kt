@@ -73,6 +73,11 @@ data class AccessibilityScoreEntity(
     val photoUri: String?,
 
     /**
+     * Indicates whether the location score has been verified by the Limitless Team.
+     */
+    val isTeamVerified: Boolean = false,
+
+    /**
      * Synchronization status with remote database (Supabase).
      * Valid values: "PENDING", "SYNCED", "FAILED"
      * Default value is "PENDING" (not yet synced).

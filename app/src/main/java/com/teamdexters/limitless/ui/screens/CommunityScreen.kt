@@ -8,6 +8,6 @@ import com.teamdexters.limitless.ui.community.CommunityReportScreen
  * CommunityReportViewModel is instantiated via hiltViewModel() inside CommunityReportScreen.
  */
 @Composable
-fun CommunityScreen() {
-    CommunityReportScreen()
+fun CommunityScreen(navController: androidx.navigation.NavHostController) {
+    CommunityReportScreen(navController = navController)
 }

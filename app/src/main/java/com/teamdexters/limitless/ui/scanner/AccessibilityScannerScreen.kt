@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @OptIn(ExperimentalMaterial3Api::class, com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 @Composable
 fun AccessibilityScannerScreen(
+    navController: androidx.navigation.NavHostController,
     viewModel: ScannerViewModel = hiltViewModel()
 ) {
     val isScanning by viewModel.isScanning.collectAsState()
@@ -157,6 +158,7 @@ fun AccessibilityScannerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
+                        .clickable { navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L)) }
                         .semantics { contentDescription = "Scan Results Card" },
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
                 ) {

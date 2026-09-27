@@ -38,6 +38,7 @@ import com.google.accompanist.permissions.*
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CommunityReportScreen(
+    navController: androidx.navigation.NavHostController,
     viewModel: CommunityReportViewModel = hiltViewModel()
 ) {
     // Categories – using generic icons for compilation
@@ -163,7 +164,10 @@ fun CommunityReportScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .clickable { imagePickerLauncher.launch("image/*") }
+                    .clickable { 
+                        // Simulate location card tap
+                        navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L)) 
+                    }
                     .semantics { contentDescription = "" },
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))

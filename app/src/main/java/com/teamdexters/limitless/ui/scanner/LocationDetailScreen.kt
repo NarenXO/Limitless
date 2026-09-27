@@ -19,16 +19,18 @@ import coil.compose.AsyncImage
 
 @Composable
 fun LocationDetailScreen(
-    locationTitle: String,
-    isVerified: Boolean,
-    overallScore: Int,
-    objectScore: Float,
-    ocrScore: Float,
-    brightnessScore: Float,
-    checklistScore: Float,
-    photoUri: String?,
-    timestamp: Long,
-    coordinates: String
+    locationId: Long = 1L,
+    onBackClick: () -> Unit = {},
+    locationTitle: String = "Location",
+    isVerified: Boolean = false,
+    overallScore: Int = 0,
+    objectScore: Float = 0f,
+    ocrScore: Float = 0f,
+    brightnessScore: Float = 0f,
+    checklistScore: Float = 0f,
+    photoUri: String? = null,
+    timestamp: Long = 0L,
+    coordinates: String = ""
 ) {
     Scaffold(
         containerColor = Color(0xFFF7F1EE)

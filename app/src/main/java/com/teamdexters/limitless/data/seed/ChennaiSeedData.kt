@@ -56,9 +56,8 @@ object ChennaiSeedData {
             photoUri = photo,
             confirmationCount = confirmations,
             syncStatus = "SYNCED",
-            timestamp = time
-            // TODO(Naren): Store this calculated trustScore on UserReportEntity.trustScore when the field is added
-            // trustScore = computedTrustScore
+            timestamp = time,
+            trustScore = computedTrustScore
         )
     }
 }

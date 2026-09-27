@@ -113,9 +113,9 @@ class ScannerViewModel @Inject constructor(
                     lightingScore = brightnessScore / 100f,
                     brailleSignagePresent = _hasBraille.value,
                     accessibleWashroomPresent = _hasWashroom.value,
-                    photoUri = _photoUri.value
+                    photoUri = _photoUri.value,
                     // TODO(Naren): AccessibilityScoreEntity needs wheelchairEntranceDetected if required
-                    // isTeamVerified = isVerified
+                    isTeamVerified = isVerified
                 )
                 
                 scoreDao.insertScore(entity)

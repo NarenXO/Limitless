@@ -30,7 +30,7 @@ import com.teamdexters.limitless.data.local.entity.UserReportEntity
         TaggedLocationEntity::class,
         PersonaPreferenceEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class LimitlessDatabase : RoomDatabase() {
@@ -80,7 +80,9 @@ abstract class LimitlessDatabase : RoomDatabase() {
                     context.applicationContext,
                     LimitlessDatabase::class.java,
                     "limitless_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }

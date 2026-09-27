@@ -3,6 +3,8 @@ package com.teamdexters.limitless.di
 import android.content.Context
 import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
+import com.teamdexters.limitless.data.local.dao.PersonaPreferenceDao
+import com.teamdexters.limitless.data.local.dao.TaggedLocationDao
 import com.teamdexters.limitless.data.local.dao.UserReportDao
 import dagger.Module
 import dagger.Provides
@@ -30,4 +32,10 @@ object DatabaseModule {
     fun provideAccessibilityScoreDao(database: LimitlessDatabase): AccessibilityScoreDao {
         return database.accessibilityScoreDao()
     }
+
+    @Provides
+    fun provideTaggedLocationDao(database: LimitlessDatabase): TaggedLocationDao = database.taggedLocationDao()
+
+    @Provides
+    fun providePersonaPreferenceDao(database: LimitlessDatabase): PersonaPreferenceDao = database.personaPreferenceDao()
 }
