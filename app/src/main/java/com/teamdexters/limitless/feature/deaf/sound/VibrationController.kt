@@ -9,7 +9,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.content.ContextCompat
-import com.teamdexters.limitless.feature.deaf.sound.SoundType
 
 /**
  * Controller for vibration patterns for different sound types.
