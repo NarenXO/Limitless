@@ -8,6 +8,8 @@ import com.teamdexters.limitless.ui.mobility.MobilityHomeScreen as FullMobilityH
  * Delegates to com.teamdexters.limitless.ui.mobility.MobilityHomeScreen.
  */
 @Composable
-fun MobilityHomeScreen() {
-    FullMobilityHomeScreen()
+fun MobilityHomeScreen(
+    onBack: () -> Unit = {}
+) {
+    FullMobilityHomeScreen(onBack = onBack)
 }

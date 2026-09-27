@@ -1,5 +1,10 @@
 package com.teamdexters.limitless.ui.speech
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -26,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
@@ -139,14 +145,12 @@ private val emotionCards: List<EmotionCard> = listOf(
 /**
  * Speech Home Screen - Phase 3: TTS, Emotion Cards, and Emergency Button.
  *
- * Sections (Top to Bottom):
- * 1. Quick Phrases Header & Adaptive Prediction Phrase Grid (Phases 1-2)
- * 2. Section A: Type-to-Speech (accessibility text field + Speak button)
- * 3. Section B: "How are you feeling?" (horizontal LazyRow of emotion cards)
- * 4. Section C: One-Tap Emergency Button (full width, 3x haptic pattern + emergency TTS)
+ * @param onBack Callback triggered when tapping the top back button.
  */
 @Composable
-fun SpeechHomeScreen() {
+fun SpeechHomeScreen(
+    onBack: () -> Unit = {}
+) {
     val context     = LocalContext.current
     val haptic      = LocalHapticFeedback.current
     val scope       = rememberCoroutineScope()
@@ -213,15 +217,35 @@ fun SpeechHomeScreen() {
     var typedText by remember { mutableStateOf("") }
     var isSpeakButtonFocused by remember { mutableStateOf(false) }
 
-    // -- Section C state & handler ---------------------------------------------
+    // -- Section C state & handler (REAL HARDWARE VIBRATOR FIX) ----------------
     var isEmergencyFocused by remember { mutableStateOf(false) }
 
     fun triggerEmergency() {
         speakPhrase("Emergency. I need help immediately. Please call for assistance.")
-        scope.launch {
-            repeat(3) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                delay(200)
+
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vibratorManager.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val timings = longArrayOf(0, 300, 150, 300, 150, 300)
+                val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
+                vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(longArrayOf(0, 300, 150, 300, 150, 300), -1)
+            }
+        } catch (_: Exception) {
+            scope.launch {
+                repeat(3) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    delay(200)
+                }
             }
         }
     }
@@ -235,7 +259,48 @@ fun SpeechHomeScreen() {
             .padding(horizontal = 16.dp)
             .semantics { contentDescription = "Speech Home Screen. Quick Phrases and Communication Tools." }
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Top Navigation Back Bar (FIX 1)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Transparent, RoundedCornerShape(20.dp))
+                    .semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        contentDescription = "Go back to persona selection"
+                        onClick(label = "Go back to persona selection") {
+                            onBack()
+                            true
+                        }
+                    }
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Go back to persona selection",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Back to Persona Selection",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
+                modifier = Modifier.clickable { onBack() }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 1. Header & Prediction Subheader -------------------------------------
         Text(

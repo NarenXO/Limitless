@@ -24,6 +24,7 @@ class PdrEngine(context: Context) : SensorEventListener {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
     private val stepCounterSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+    private val stepDetectorSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
     private val accelerometerSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val magnetometerSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
 
@@ -41,6 +42,7 @@ class PdrEngine(context: Context) : SensorEventListener {
 
     // Internal sensor state
     private var lastStepCount: Long = -1L
+    private var lastAccStepTime: Long = 0L
     private val strideLengthMeters: Float = 0.75f
 
     private val gravity = FloatArray(3)
@@ -55,6 +57,9 @@ class PdrEngine(context: Context) : SensorEventListener {
 
     fun start() {
         stepCounterSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+        stepDetectorSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
         accelerometerSensor?.let {
@@ -92,6 +97,10 @@ class PdrEngine(context: Context) : SensorEventListener {
         event ?: return
 
         when (event.sensor.type) {
+            Sensor.TYPE_STEP_DETECTOR -> {
+                advanceStep()
+            }
+
             Sensor.TYPE_STEP_COUNTER -> {
                 val totalSteps = event.values[0].toLong()
                 if (lastStepCount >= 0L) {
@@ -110,6 +119,17 @@ class PdrEngine(context: Context) : SensorEventListener {
                 System.arraycopy(event.values, 0, gravity, 0, 3)
                 hasGravity = true
                 updateHeading()
+
+                // Accelerometer peak detection step counting fallback
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                val magnitude = kotlin.math.sqrt(x * x + y * y + z * z)
+                val now = System.currentTimeMillis()
+                if (magnitude > 12.0f && (now - lastAccStepTime > 350)) {
+                    lastAccStepTime = now
+                    advanceStep()
+                }
             }
 
             Sensor.TYPE_MAGNETIC_FIELD -> {

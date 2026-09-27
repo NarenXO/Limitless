@@ -6,7 +6,12 @@
 
 package com.teamdexters.limitless.routing.indoor
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.speech.tts.TextToSpeech
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaMobility
 import com.teamdexters.limitless.ui.theme.SurfaceTint
@@ -63,6 +69,18 @@ import kotlin.math.hypot
 @Composable
 fun IndoorNavScreen() {
     val context = LocalContext.current
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val activityPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { }
+
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+                activityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+            }
+        }
+    }
 
     // -- Sensor PDR Engine Lifecycle -------------------------------------------
     val pdrEngine = remember { PdrEngine(context) }

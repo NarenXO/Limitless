@@ -1,7 +1,11 @@
 package com.teamdexters.limitless.routing.indoor
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.speech.tts.TextToSpeech
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -12,6 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -44,6 +51,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -73,6 +81,18 @@ fun QrScannerSection(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
+
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
 
     var scannedMessage by remember { mutableStateOf<String?>(null) }
     var lastScannedTime by remember { mutableStateOf(0L) }
@@ -107,80 +127,120 @@ fun QrScannerSection(
                     .weight(0.65f)
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        val previewView = PreviewView(ctx)
-                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                if (!hasCameraPermission) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(SurfaceTint)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Camera permission is required to scan indoor QR waypoints",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(PersonaMobility, RoundedCornerShape(12.dp))
+                                .clickable { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Grant Camera Permission",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                } else {
+                    AndroidView(
+                        factory = { ctx ->
+                            val previewView = PreviewView(ctx)
+                            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
-                        cameraProviderFuture.addListener({
-                            val cameraProvider = cameraProviderFuture.get()
+                            cameraProviderFuture.addListener({
+                                val cameraProvider = cameraProviderFuture.get()
 
-                            val preview = Preview.Builder().build().also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
-                            }
+                                val preview = Preview.Builder().build().also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
+                                }
 
-                            @SuppressLint("UnsafeOptInUsageError")
-                            val imageAnalysis = ImageAnalysis.Builder()
-                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                .build()
+                                @SuppressLint("UnsafeOptInUsageError")
+                                val imageAnalysis = ImageAnalysis.Builder()
+                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                    .build()
 
-                            imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                                val mediaImage = imageProxy.image
-                                if (mediaImage != null) {
-                                    val inputImage = InputImage.fromMediaImage(
-                                        mediaImage,
-                                        imageProxy.imageInfo.rotationDegrees
-                                    )
-                                    barcodeScanner.process(inputImage)
-                                        .addOnSuccessListener { barcodes ->
-                                            for (barcode in barcodes) {
-                                                val raw = barcode.rawValue ?: continue
-                                                val now = System.currentTimeMillis()
-                                                if (now - lastScannedTime > 3000) { // Throttle scans to 3s
-                                                    lastScannedTime = now
-                                                    val matchedWaypoint = kcgIndoorWaypoints.find { it.qrPayload == raw }
-                                                    if (matchedWaypoint != null) {
-                                                        pdrEngine.resetPosition(matchedWaypoint)
-                                                        scannedMessage = "Verified: ${matchedWaypoint.name}"
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        tts?.speak(
-                                                            matchedWaypoint.description,
-                                                            TextToSpeech.QUEUE_FLUSH,
-                                                            null,
-                                                            matchedWaypoint.id
-                                                        )
-                                                        onWaypointScanned(matchedWaypoint)
-                                                    } else {
-                                                        scannedMessage = "Unknown QR code: $raw"
+                                imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                                    val mediaImage = imageProxy.image
+                                    if (mediaImage != null) {
+                                        val inputImage = InputImage.fromMediaImage(
+                                            mediaImage,
+                                            imageProxy.imageInfo.rotationDegrees
+                                        )
+                                        barcodeScanner.process(inputImage)
+                                            .addOnSuccessListener { barcodes ->
+                                                for (barcode in barcodes) {
+                                                    val raw = barcode.rawValue ?: continue
+                                                    val now = System.currentTimeMillis()
+                                                    if (now - lastScannedTime > 3000) { // Throttle scans to 3s
+                                                        lastScannedTime = now
+                                                        val matchedWaypoint = kcgIndoorWaypoints.find { it.qrPayload == raw }
+                                                        if (matchedWaypoint != null) {
+                                                            pdrEngine.resetPosition(matchedWaypoint)
+                                                            scannedMessage = "Verified: ${matchedWaypoint.name}"
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            tts?.speak(
+                                                                matchedWaypoint.description,
+                                                                TextToSpeech.QUEUE_FLUSH,
+                                                                null,
+                                                                matchedWaypoint.id
+                                                            )
+                                                            onWaypointScanned(matchedWaypoint)
+                                                        } else {
+                                                            scannedMessage = "Unknown QR code: $raw"
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                        .addOnCompleteListener {
-                                            imageProxy.close()
-                                        }
-                                } else {
-                                    imageProxy.close()
+                                            .addOnCompleteListener {
+                                                imageProxy.close()
+                                            }
+                                    } else {
+                                        imageProxy.close()
+                                    }
                                 }
-                            }
 
-                            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-                            try {
-                                cameraProvider.unbindAll()
-                                cameraProvider.bindToLifecycle(
-                                    lifecycleOwner,
-                                    cameraSelector,
-                                    preview,
-                                    imageAnalysis
-                                )
-                            } catch (_: Exception) {}
-                        }, ContextCompat.getMainExecutor(ctx))
+                                try {
+                                    cameraProvider.unbindAll()
+                                    cameraProvider.bindToLifecycle(
+                                        lifecycleOwner,
+                                        cameraSelector,
+                                        preview,
+                                        imageAnalysis
+                                    )
+                                } catch (_: Exception) {}
+                            }, ContextCompat.getMainExecutor(ctx))
 
-                        previewView
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                            previewView
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 // Confirmation Banner Overlay
                 val currentMsg = scannedMessage

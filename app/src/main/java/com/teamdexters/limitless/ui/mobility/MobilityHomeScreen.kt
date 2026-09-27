@@ -92,7 +92,9 @@ import java.util.Locale
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MobilityHomeScreen() {
+fun MobilityHomeScreen(
+    onBack: () -> Unit = {}
+) {
     val context = LocalContext.current
     val haptic  = LocalHapticFeedback.current
     val scrollState = rememberScrollState()
@@ -222,7 +224,48 @@ fun MobilityHomeScreen() {
             .padding(horizontal = 16.dp)
             .semantics { contentDescription = "Mobility and Wheelchair Accessible Navigation Screen" }
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Top Navigation Back Bar (FIX 1)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(20.dp))
+                    .semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        contentDescription = "Go back to persona selection"
+                        onClick(label = "Go back to persona selection") {
+                            onBack()
+                            true
+                        }
+                    }
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Go back to persona selection",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Back to Persona Selection",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
+                modifier = Modifier.clickable { onBack() }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 1. Header -----------------------------------------------------------
         Text(

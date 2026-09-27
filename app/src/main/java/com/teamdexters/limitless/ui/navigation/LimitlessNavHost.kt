@@ -46,12 +46,12 @@ fun LimitlessNavHost(
         
         // Speech Home Screen
         composable(Screen.SpeechHome.route) {
-            SpeechHomeScreen()
+            SpeechHomeScreen(onBack = { navController.popBackStack() })
         }
         
         // Mobility Home Screen
         composable(Screen.MobilityHome.route) {
-            MobilityHomeScreen()
+            MobilityHomeScreen(onBack = { navController.popBackStack() })
         }
 
         // Accessibility Scanner Screen
