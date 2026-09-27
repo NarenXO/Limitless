@@ -11,7 +11,7 @@ import com.teamdexters.limitless.ui.screens.CommunityScreen
 import com.teamdexters.limitless.ui.screens.DeafHomeScreen
 import com.teamdexters.limitless.ui.screens.MobilityHomeScreen
 import com.teamdexters.limitless.ui.screens.ScannerScreen
-import com.teamdexters.limitless.ui.screens.SpeechHomeScreen
+import com.teamdexters.limitless.ui.speech.SpeechHomeScreen
 
 /**
  * Navigation host for the Limitless application.
