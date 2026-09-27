@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.room.Room
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.teamdexters.limitless.assistant.cloud.GeminiClient
 import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.blind.*
@@ -36,6 +39,7 @@ import com.teamdexters.limitless.util.NetworkStatusTracker
 fun BlindHomeScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
 
     // Camera permission handling
     val cameraPermission = remember {
@@ -153,6 +157,7 @@ fun BlindHomeScreen() {
 
     // Camera frame processing
     var latestFrame by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var latestRotation by remember { mutableStateOf(0) }
 
     Box(
         modifier = Modifier
@@ -166,6 +171,10 @@ fun BlindHomeScreen() {
                 showReticle = currentMode == "color",
                 onFrameReady = { bitmap ->
                     latestFrame = bitmap
+                },
+                onCaptureReady = { bitmap, rotation ->
+                    latestFrame = bitmap
+                    latestRotation = rotation
                 },
                 onError = { exception ->
                     Toast.makeText(context, "Camera error: ${exception.message}", Toast.LENGTH_SHORT).show()
@@ -344,25 +353,52 @@ fun BlindHomeScreen() {
                     },
                     onConfirm = {
                         if (landmarkName.isNotBlank()) {
-                            val frame = latestFrame
-                            if (frame != null) {
+                            val frame1 = latestFrame
+                            if (frame1 != null) {
                                 isProcessing = true
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                scope.launch {
                                     try {
-                                        landmarkTagger.tagLocation(
-                                            name = landmarkName,
-                                            photo = frame,
-                                            onSuccess = { tagId ->
-                                                resultText = "Place tagged: $landmarkName"
-                                                ttsManager.speak("Place tagged: $landmarkName")
-                                                landmarkName = ""
-                                                showTaggingDialog = false
-                                            },
-                                            onError = { error ->
-                                                resultText = "Failed to tag place"
-                                                ttsManager.speak("Failed to tag place")
-                                            }
-                                        )
+                                        // Capture first frame signature
+                                        // Wait 300ms for second frame
+                                        delay(300)
+                                        
+                                        // Capture second frame
+                                        val frame2 = latestFrame
+                                        
+                                        if (frame2 != null) {
+                                            // Use dual-frame averaging for better accuracy
+                                            landmarkTagger.tagLocationWithDualFrame(
+                                                name = landmarkName,
+                                                photo1 = frame1,
+                                                photo2 = frame2,
+                                                onSuccess = { tagId ->
+                                                    resultText = "Place tagged: $landmarkName"
+                                                    ttsManager.speak("Place tagged: $landmarkName")
+                                                    landmarkName = ""
+                                                    showTaggingDialog = false
+                                                },
+                                                onError = { error ->
+                                                    resultText = "Failed to tag place"
+                                                    ttsManager.speak("Failed to tag place")
+                                                }
+                                            )
+                                        } else {
+                                            // Fallback to single frame if second capture fails
+                                            landmarkTagger.tagLocation(
+                                                name = landmarkName,
+                                                photo = frame1,
+                                                onSuccess = { tagId ->
+                                                    resultText = "Place tagged: $landmarkName"
+                                                    ttsManager.speak("Place tagged: $landmarkName")
+                                                    landmarkName = ""
+                                                    showTaggingDialog = false
+                                                },
+                                                onError = { error ->
+                                                    resultText = "Failed to tag place"
+                                                    ttsManager.speak("Failed to tag place")
+                                                }
+                                            )
+                                        }
                                     } catch (e: Exception) {
                                         resultText = "Failed to tag place"
                                         ttsManager.speak("Failed to tag place")
@@ -426,17 +462,21 @@ fun BlindHomeScreen() {
                         "recognize" -> {
                             // Landmark recognition mode
                             isProcessing = true
-                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                            scope.launch {
                                 try {
                                     val result = landmarkRecognizer.recognizeLandmark(frame)
                                     when (result) {
                                         is LandmarkRecognizer.RecognitionResult.Success -> {
-                                            resultText = "You are near: ${result.locationName}"
-                                            ttsManager.speak("You are near: ${result.locationName}")
+                                            resultText = result.message
+                                            ttsManager.speak(result.message)
                                         }
                                         is LandmarkRecognizer.RecognitionResult.NoMatch -> {
                                             resultText = "No tagged place recognized"
-                                            ttsManager.speak("No tagged place recognized")
+                                            ttsManager.speak(result.message)
+                                        }
+                                        is LandmarkRecognizer.RecognitionResult.Ambiguous -> {
+                                            resultText = "Multiple similar places detected"
+                                            ttsManager.speak(result.message)
                                         }
                                         is LandmarkRecognizer.RecognitionResult.Error -> {
                                             resultText = "Error recognizing place"
@@ -458,15 +498,18 @@ fun BlindHomeScreen() {
                             when (currentMode) {
                                 "ocr" -> {
                                     // OCR mode
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                    scope.launch {
                                         try {
-                                            val text = ocrManager.recognizeText(frame)
+                                            // Add 700ms settle delay before capture for better stability
+                                            delay(700)
+                                            
+                                            val text = ocrManager.recognizeText(frame, latestRotation)
                                             if (text != null && text.isNotBlank()) {
                                                 resultText = text
                                                 ttsManager.speak(text)
                                             } else {
-                                                resultText = "No text detected"
-                                                ttsManager.speak("No text detected")
+                                                resultText = "No clear text detected"
+                                                ttsManager.speak("No clear text detected. Move closer and hold steady.")
                                             }
                                         } catch (e: Exception) {
                                             resultText = "Error reading text"
@@ -480,8 +523,13 @@ fun BlindHomeScreen() {
                                     // Color detection mode
                                     try {
                                         val colorName = colorDetector.detectColorAtCenter(frame)
-                                        resultText = "Color: $colorName"
-                                        ttsManager.speak(colorName)
+                                        if (colorName == "unknown") {
+                                            resultText = "Unable to detect color"
+                                            ttsManager.speak("Unable to detect color")
+                                        } else {
+                                            resultText = "Color detected is $colorName"
+                                            ttsManager.speak("Color detected is $colorName")
+                                        }
                                     } catch (e: Exception) {
                                         resultText = "Error detecting color"
                                         ttsManager.speak("Error detecting color")
@@ -491,50 +539,56 @@ fun BlindHomeScreen() {
                                 }
                                 "describe" -> {
                                     // Object detection mode
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                    scope.launch {
                                         try {
                                             val objects = objectDetector.detectObjects(frame)
                                             
-                                            // Use Gemini if toggle is ON and network is available
-                                            if (useRicherDescriptions && networkStatusTracker.isCurrentlyOnline()) {
-                                                try {
-                                                    // Build object list for Gemini
-                                                    val objectList = objects.joinToString(", ") { "${it.label} (confidence: ${it.confidence})" }
-                                                    val prompt = "Describe this scene for a blind person. Detected objects: $objectList. Give a brief, helpful description in 1-2 sentences."
-                                                    
-                                                    // 5 second timeout for Gemini
-                                                    val geminiResult = kotlinx.coroutines.withTimeoutOrNull(5000) {
-                                                        geminiClient.queryGemini(prompt)
-                                                    }
-                                                    
-                                                    if (geminiResult != null && geminiResult.isSuccess) {
-                                                        val richDescription = geminiResult.getOrNull() ?: ""
-                                                        if (richDescription.isNotBlank()) {
-                                                            resultText = richDescription
-                                                            ttsManager.speak(richDescription)
+                                            // Check if no objects were detected (filtered out or model failed)
+                                            if (objects.isEmpty()) {
+                                                resultText = "No clear objects detected"
+                                                ttsManager.speak("No clear objects detected. Try better lighting or move closer.")
+                                            } else {
+                                                // Use Gemini if toggle is ON and network is available
+                                                if (useRicherDescriptions && networkStatusTracker.isCurrentlyOnline()) {
+                                                    try {
+                                                        // Build object list for Gemini
+                                                        val objectList = objects.joinToString(", ") { "${it.label} (confidence: ${it.confidence})" }
+                                                        val prompt = "Describe this scene for a blind person. Detected objects: $objectList. Give a brief, helpful description in 1-2 sentences."
+                                                        
+                                                        // 5 second timeout for Gemini
+                                                        val geminiResult = withTimeoutOrNull(5000) {
+                                                            geminiClient.queryGemini(prompt)
+                                                        }
+                                                        
+                                                        if (geminiResult != null && geminiResult.isSuccess) {
+                                                            val richDescription = geminiResult.getOrNull() ?: ""
+                                                            if (richDescription.isNotBlank()) {
+                                                                resultText = richDescription
+                                                                ttsManager.speak(richDescription)
+                                                            } else {
+                                                                // Fallback to rule-based
+                                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                                resultText = description
+                                                                ttsManager.speak(description)
+                                                            }
                                                         } else {
-                                                            // Fallback to rule-based
+                                                            // Fallback to rule-based on timeout or error
                                                             val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
                                                             resultText = description
                                                             ttsManager.speak(description)
                                                         }
-                                                    } else {
-                                                        // Fallback to rule-based on timeout or error
+                                                    } catch (e: Exception) {
+                                                        // Fallback to rule-based on any error
                                                         val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
                                                         resultText = description
                                                         ttsManager.speak(description)
                                                     }
-                                                } catch (e: Exception) {
-                                                    // Fallback to rule-based on any error
+                                                } else {
+                                                    // Use rule-based description
                                                     val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
                                                     resultText = description
                                                     ttsManager.speak(description)
                                                 }
-                                            } else {
-                                                // Use rule-based description
-                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                                resultText = description
-                                                ttsManager.speak(description)
                                             }
                                         } catch (e: Exception) {
                                             resultText = "Error detecting objects"
@@ -546,7 +600,7 @@ fun BlindHomeScreen() {
                                 }
                                 "path" -> {
                                     // Path feature detection mode
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                    scope.launch {
                                         try {
                                             if (!pathFeatureDetector.isReady()) {
                                                 resultText = "Path detection model not loaded"

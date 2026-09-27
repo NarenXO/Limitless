@@ -29,6 +29,7 @@ import java.io.ByteArrayOutputStream
  * @param modifier Modifier for the preview
  * @param showReticle Whether to show a centered reticle overlay (for color detection mode)
  * @param onFrameReady Callback when a frame is ready for processing
+ * @param onCaptureReady Callback when high-quality capture is ready for OCR
  * @param onError Callback for camera errors
  */
 @Composable
@@ -36,6 +37,7 @@ fun CameraPreview(
     modifier: Modifier = Modifier,
     showReticle: Boolean = false,
     onFrameReady: (Bitmap) -> Unit = {},
+    onCaptureReady: ((Bitmap, Int) -> Unit)? = null,
     onError: (Exception) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -58,6 +60,7 @@ fun CameraPreview(
                 lifecycleOwner = lifecycleOwner,
                 previewView = previewView,
                 onFrameReady = onFrameReady,
+                onCaptureReady = onCaptureReady,
                 onError = onError
             )
         } else {
@@ -122,6 +125,7 @@ private fun startCamera(
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
     onFrameReady: (Bitmap) -> Unit,
+    onCaptureReady: ((Bitmap, Int) -> Unit)?,
     onError: (Exception) -> Unit
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -144,9 +148,14 @@ private fun startCamera(
                 .also {
                     it.setAnalyzer(
                         ContextCompat.getMainExecutor(context),
-                        FrameAnalyzer(onFrameReady)
+                        FrameAnalyzer(onFrameReady, onCaptureReady)
                     )
                 }
+
+            // Image capture use case for high-quality OCR
+            val imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAX_QUALITY)
+                .build()
 
             // Select back camera as a default
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -155,11 +164,11 @@ private fun startCamera(
             cameraProvider.unbindAll()
 
             // Bind use cases to camera
+            val useCases = mutableListOf(preview, imageAnalyzer, imageCapture)
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
-                preview,
-                imageAnalyzer
+                *useCases.toTypedArray()
             )
 
         } catch (e: Exception) {
@@ -172,7 +181,8 @@ private fun startCamera(
  * Image analysis analyzer that converts camera frames to Bitmaps.
  */
 private class FrameAnalyzer(
-    private val onFrameReady: (Bitmap) -> Unit
+    private val onFrameReady: (Bitmap) -> Unit,
+    private val onCaptureReady: ((Bitmap, Int) -> Unit)?
 ) : ImageAnalysis.Analyzer {
 
     private var lastFrameTime = 0L
@@ -190,9 +200,11 @@ private class FrameAnalyzer(
         lastFrameTime = currentFrameTime
 
         try {
-            val bitmap = imageProxyToBitmap(image)
+            val bitmap = imageProxyToBitmap(image, image.imageInfo.rotationDegrees)
             if (bitmap != null) {
                 onFrameReady(bitmap)
+                // Also notify capture ready callback if provided
+                onCaptureReady?.invoke(bitmap, image.imageInfo.rotationDegrees)
             }
         } catch (e: Exception) {
             // Ignore conversion errors
@@ -202,9 +214,9 @@ private class FrameAnalyzer(
     }
 
     /**
-     * Convert ImageProxy to Bitmap.
+     * Convert ImageProxy to Bitmap with rotation handling.
      */
-    private fun imageProxyToBitmap(image: ImageProxy): Bitmap? {
+    private fun imageProxyToBitmap(image: ImageProxy, rotationDegrees: Int): Bitmap? {
         val yBuffer = image.planes[0].buffer
         val uBuffer = image.planes[1].buffer
         val vBuffer = image.planes[2].buffer
@@ -225,7 +237,20 @@ private class FrameAnalyzer(
         yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 100, out)
         val imageBytes = out.toByteArray()
 
-        return android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        
+        // Handle rotation
+        return if (rotationDegrees != 0 && bitmap != null) {
+            val matrix = android.graphics.Matrix()
+            matrix.postRotate(rotationDegrees.toFloat())
+            val rotatedBitmap = android.graphics.Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+            )
+            bitmap.recycle()
+            rotatedBitmap
+        } else {
+            bitmap
+        }
     }
 }
 

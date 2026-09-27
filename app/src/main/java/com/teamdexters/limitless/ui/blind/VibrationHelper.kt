@@ -45,7 +45,7 @@ class VibrationHelper(private val context: Context) {
     }
 
     /**
-     * LEFT: two short pulses (100ms, 80ms gap, 100ms)
+     * LEFT: 2 short pulses (100ms pulse, 80ms pause, 100ms pulse)
      */
     private fun createLeftPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -57,7 +57,7 @@ class VibrationHelper(private val context: Context) {
     }
 
     /**
-     * RIGHT: three short pulses (100ms each, 80ms gaps)
+     * RIGHT: 3 short pulses (100ms pulse, 80ms pause, 100ms pulse, 80ms pause, 100ms pulse)
      */
     private fun createRightPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -69,7 +69,7 @@ class VibrationHelper(private val context: Context) {
     }
 
     /**
-     * STRAIGHT: one short pulse (~150ms)
+     * STRAIGHT: 1 short pulse (150ms pulse)
      */
     private fun createStraightPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -81,7 +81,7 @@ class VibrationHelper(private val context: Context) {
     }
 
     /**
-     * ARRIVE: one long pulse (~600ms)
+     * ARRIVE: 1 long pulse (600ms pulse)
      */
     private fun createArrivePattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -89,6 +89,15 @@ class VibrationHelper(private val context: Context) {
         } else {
             @Suppress("DEPRECATION")
             VibrationEffect.createOneShot(600, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+    }
+
+    /**
+     * Stop any ongoing vibration.
+     */
+    fun stop() {
+        if (hasVibrator()) {
+            vibrator?.cancel()
         }
     }
 }

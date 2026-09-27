@@ -23,7 +23,7 @@ class SceneDescriptionBuilder {
      */
     fun buildDescription(objects: List<DetectedObject>, frameWidth: Int): String {
         if (objects.isEmpty()) {
-            return "No objects detected in view."
+            return "No clear objects detected. Try better lighting or move closer."
         }
 
         // Group objects by position
@@ -33,7 +33,7 @@ class SceneDescriptionBuilder {
 
         for (obj in objects) {
             val position = getPosition(obj.boundingBox, frameWidth)
-            val label = obj.label.lowercase()
+            val label = obj.label
 
             when (position) {
                 Position.LEFT -> leftObjects.add(label)
@@ -46,7 +46,7 @@ class SceneDescriptionBuilder {
         val parts = mutableListOf<String>()
 
         if (leftObjects.isNotEmpty()) {
-            val leftText = formatObjectList(leftObjects, "left")
+            val leftText = formatObjectList(leftObjects, "on your left")
             parts.add(leftText)
         }
 
@@ -56,19 +56,20 @@ class SceneDescriptionBuilder {
         }
 
         if (rightObjects.isNotEmpty()) {
-            val rightText = formatObjectList(rightObjects, "right")
+            val rightText = formatObjectList(rightObjects, "on your right")
             parts.add(rightText)
         }
 
         return if (parts.isNotEmpty()) {
             parts.joinToString(", ")
         } else {
-            "No objects detected in view."
+            "No clear objects detected. Try better lighting or move closer."
         }
     }
 
     /**
      * Determine the position of an object based on its bounding box center.
+     * Uses stable position bucketing: x < 0.35 -> left, 0.35 <= x <= 0.65 -> center, x > 0.65 -> right
      * @param boundingBox The object's bounding box
      * @param frameWidth Width of the camera frame
      * @return Position bucket (LEFT, CENTER, or RIGHT)
@@ -78,8 +79,8 @@ class SceneDescriptionBuilder {
         val relativeX = centerX / frameWidth
 
         return when {
-            relativeX < 0.33f -> Position.LEFT
-            relativeX <= 0.66f -> Position.CENTER
+            relativeX < 0.35f -> Position.LEFT
+            relativeX <= 0.65f -> Position.CENTER
             else -> Position.RIGHT
         }
     }
@@ -87,37 +88,18 @@ class SceneDescriptionBuilder {
     /**
      * Format a list of objects with their position.
      * @param objects List of object labels
-     * @param position Position descriptor (e.g., "left", "ahead", "right")
+     * @param position Position descriptor (e.g., "on your left", "ahead", "on your right")
      * @return Formatted string like "chair on your left" or "person and door ahead"
      */
     private fun formatObjectList(objects: List<String>, position: String): String {
         return when (objects.size) {
-            1 -> "${objects[0]} on your $position"
-            2 -> "${objects[0]} and ${objects[1]} on your $position"
+            1 -> "${objects[0]} $position"
+            2 -> "${objects[0]} and ${objects[1]} $position"
             else -> {
                 val allButLast = objects.dropLast(1).joinToString(", ")
                 val last = objects.last()
-                "$allButLast, and $last on your $position"
+                "$allButLast, and $last $position"
             }
-        }
-    }
-
-    /**
-     * Normalize object labels for better speech output.
-     * Converts technical labels to more natural language.
-     * @param label Original label from the detector
-     * @return Normalized label
-     */
-    private fun normalizeLabel(label: String): String {
-        return when (label.lowercase()) {
-            "person" -> "person"
-            "cell phone" -> "phone"
-            "laptop" -> "laptop"
-            "chair" -> "chair"
-            "cup" -> "cup"
-            "bottle" -> "bottle"
-            "book" -> "book"
-            else -> label
         }
     }
 }

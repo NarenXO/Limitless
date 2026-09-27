@@ -37,7 +37,7 @@ class PathFeatureDetector(private val context: Context) {
             val modelFile = FileUtil.loadMappedFile(context, MODEL_PATH)
             
             // Check if the file is a valid TFLite model (not a placeholder)
-            val isValidModel = modelFile.size > 1000 // Placeholder files are typically small
+            val isValidModel = modelFile.capacity() > 1000 // Placeholder files are typically small
             
             if (!isValidModel) {
                 // Placeholder model detected

@@ -62,6 +62,38 @@ class TTSManager(private val context: Context) {
     }
 
     /**
+     * Speak the given text aloud and wait for completion using coroutines.
+     * @param text The text to speak
+     */
+    suspend fun speakAndWait(text: String) {
+        if (!isInitialized) {
+            return
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            tts?.let { ttsEngine ->
+                ttsEngine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        if (continuation.isActive) {
+                            continuation.resume(Unit)
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        if (continuation.isActive) {
+                            continuation.resume(Unit)
+                        }
+                    }
+                })
+
+                ttsEngine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_utterance")
+            } ?: run {
+                continuation.resume(Unit)
+            }
+        }
+    }
+
+    /**
      * Stop any ongoing speech.
      */
     fun stop() {
