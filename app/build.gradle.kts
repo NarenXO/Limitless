@@ -50,7 +50,7 @@ android {
     }
     
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.8.6"
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
     
     packaging {
