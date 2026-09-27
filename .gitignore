@@ -14,6 +14,9 @@ build/
 .cxx
 local.properties
 
+# Vosk model (large binary, not in repo)
+app/src/main/assets/vosk-model-small-en-us/
+
 # Gradle wrapper — must always be committed
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties

@@ -61,6 +61,7 @@ android {
     
     androidResources {
         noCompress += "tflite"
+        noCompress += "vosk-model-small-en-us"
     }
 }
 
