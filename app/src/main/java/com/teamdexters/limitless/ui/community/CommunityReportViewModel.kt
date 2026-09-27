@@ -15,10 +15,20 @@ import javax.inject.Inject
 import com.teamdexters.limitless.data.local.dao.UserReportDao
 import com.teamdexters.limitless.data.local.entity.UserReportEntity
 
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.teamdexters.limitless.data.seed.DatabaseSeeder
+
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
-    private val userReportDao: UserReportDao
+    private val userReportDao: UserReportDao,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
+    init {
+        // TODO(Naren): Call DatabaseSeeder.seedIfEmpty(dao, context) inside Application.onCreate for global app pre-population
+        viewModelScope.launch {
+            DatabaseSeeder.seedIfEmpty(userReportDao, context)
+        }
+    }
     private val _selectedCategory = MutableStateFlow<Category?>(null)
     val selectedCategory: StateFlow<Category?> = _selectedCategory
 
