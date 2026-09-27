@@ -36,10 +36,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,10 +60,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teamdexters.limitless.ui.speech.data.PhraseUsageDatabase
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaSpeech
 import com.teamdexters.limitless.ui.theme.SurfaceTint
 import com.teamdexters.limitless.ui.theme.TextPrimary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 // ---------------------------------------------------------------------------
@@ -79,7 +85,7 @@ private data class PhraseCard(
     val icon: ImageVector
 )
 
-/** Default phrase set for Phase 1. Predictions will be added in Phase 2. */
+/** Default phrase set for static fallback / cold-start. */
 private val defaultPhrases: List<PhraseCard> = listOf(
     PhraseCard("I need help",             Icons.Default.Help),
     PhraseCard("Thank you",               Icons.Default.Handshake),
@@ -98,53 +104,79 @@ private val defaultPhrases: List<PhraseCard> = listOf(
 // ---------------------------------------------------------------------------
 
 /**
- * Speech Home Screen - Phase 1: Switch-Scannable Phrase Cards.
+ * Speech Home Screen - Phase 2: On-Device Phrase Prediction.
  *
  * Features:
- * - 2-column LazyVerticalGrid of phrase cards.
+ * - Adaptive prediction grid powered by PhrasePredictionEngine & local Room DB.
+ * - Cold-start fallback: displays default 10 phrases until usage data accumulates.
+ * - Dynamic "Predicted for you" subheader appears when predictions are active.
  * - Android TextToSpeech speaks the phrase on card tap or switch confirm.
- * - Full switch-scanning support via Modifier.focusable and
- *   Modifier.onFocusChanged: focused card receives a PersonaSpeech accent
- *   border and a subtle scale-up animation.
- * - TalkBack semantics on every card (role, contentDescription, onClick label).
- * - HapticFeedbackType.LongPress fired on every selection.
- * - TTS is initialised once and cleaned up in DisposableEffect.
+ * - Full switch-scanning support via Modifier.focusable and Modifier.onFocusChanged.
+ * - TalkBack semantics on every card.
+ * - Haptic feedback on tap.
  *
- * Design tokens used (never hardcoded hex):
- *   - Background  : LimitlessBackground
- *   - Card surface : SurfaceTint
- *   - Accent       : PersonaSpeech
- *   - Body text    : TextPrimary
+ * Design tokens used:
+ *   - Background  : LimitlessBackground (#F7F1EE)
+ *   - Card surface : SurfaceTint (#E0F2F4)
+ *   - Accent       : PersonaSpeech (#DDDD7B)
+ *   - Body text    : TextPrimary (#1F1F1F)
  */
 @Composable
 fun SpeechHomeScreen() {
     val context = LocalContext.current
     val haptic  = LocalHapticFeedback.current
+    val scope   = rememberCoroutineScope()
+
+    // -- Local Phrase Usage Database & Prediction Engine -----------------------
+    val database = remember(context) { PhraseUsageDatabase.getDatabase(context) }
+    val engine   = remember(database) { PhrasePredictionEngine(database.phraseUsageDao()) }
+
+    var currentPhrases by remember { mutableStateOf(defaultPhrases) }
+    var isPredictedActive by remember { mutableStateOf(false) }
+
+    // -- Load initial predictions or fallback ---------------------------------
+    LaunchedEffect(engine) {
+        withContext(Dispatchers.IO) {
+            val hasData = engine.hasUsageData()
+            val defaultTexts = defaultPhrases.map { it.phrase }
+            val predictedTexts = engine.getPredictedPhrases(defaultTexts)
+
+            val iconMap = defaultPhrases.associate { it.phrase to it.icon }
+            val rankedCards = predictedTexts.map { text ->
+                PhraseCard(phrase = text, icon = iconMap[text] ?: Icons.Default.Help)
+            }
+
+            withContext(Dispatchers.Main) {
+                currentPhrases = rankedCards
+                isPredictedActive = hasData
+            }
+        }
+    }
 
     // -- TextToSpeech lifecycle -----------------------------------------------
     var ttsReady by remember { mutableStateOf(false) }
     val tts      = remember { mutableStateOf<TextToSpeech?>(null) }
 
     DisposableEffect(context) {
-        val engine = TextToSpeech(context) { status ->
+        val engineTts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts.value?.language = Locale.US
                 ttsReady = true
             }
         }
-        tts.value = engine
+        tts.value = engineTts
         onDispose {
-            engine.stop()
-            engine.shutdown()
+            engineTts.stop()
+            engineTts.shutdown()
             tts.value = null
         }
     }
 
     // -- Speak helper ---------------------------------------------------------
     fun speakPhrase(phrase: String) {
-        tts.value?.let { engine ->
+        tts.value?.let { engineTts ->
             if (ttsReady) {
-                engine.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, phrase)
+                engineTts.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, phrase)
             }
         }
     }
@@ -174,6 +206,20 @@ fun SpeechHomeScreen() {
                 .semantics { contentDescription = "Quick Phrases header" }
         )
 
+        if (isPredictedActive) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Predicted for you",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = PersonaSpeech,
+                textAlign = TextAlign.Start,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "Predicted for you subheader" }
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Phrase grid
@@ -184,11 +230,11 @@ fun SpeechHomeScreen() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            itemsIndexed(defaultPhrases) { index, card ->
+            itemsIndexed(currentPhrases) { index, card ->
                 val isFocused = focusedIndex == index
 
                 PhraseCardItem(
-                    card    = card,
+                    card = card,
                     isFocused = isFocused,
                     onFocusChange = { focused ->
                         if (focused) focusedIndex = index
@@ -197,6 +243,24 @@ fun SpeechHomeScreen() {
                     onSelect = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         speakPhrase(card.phrase)
+
+                        // Record usage and update predictions on IO thread
+                        scope.launch(Dispatchers.IO) {
+                            engine.recordUsage(card.phrase)
+                            val hasData = engine.hasUsageData()
+                            val defaultTexts = defaultPhrases.map { it.phrase }
+                            val updatedTexts = engine.getPredictedPhrases(defaultTexts)
+
+                            val iconMap = defaultPhrases.associate { it.phrase to it.icon }
+                            val updatedCards = updatedTexts.map { text ->
+                                PhraseCard(phrase = text, icon = iconMap[text] ?: Icons.Default.Help)
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                currentPhrases = updatedCards
+                                isPredictedActive = hasData
+                            }
+                        }
                     }
                 )
             }
@@ -223,11 +287,10 @@ private fun PhraseCardItem(
     onFocusChange: (Boolean) -> Unit,
     onSelect: () -> Unit
 ) {
-    // Subtle scale animation on focus - flat, no bounce, no elastic
     val scale by animateFloatAsState(
-        targetValue    = if (isFocused) 1.04f else 1.0f,
-        animationSpec  = tween(durationMillis = 120),
-        label          = "card_scale"
+        targetValue   = if (isFocused) 1.04f else 1.0f,
+        animationSpec = tween(durationMillis = 120),
+        label         = "card_scale"
     )
 
     val borderWidth = if (isFocused) 2.5.dp else 1.dp
@@ -239,7 +302,6 @@ private fun PhraseCardItem(
             .fillMaxWidth()
             .background(SurfaceTint, RoundedCornerShape(16.dp))
             .border(borderWidth, borderColor, RoundedCornerShape(16.dp))
-            // Accessibility semantics block
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = card.phrase
@@ -248,11 +310,9 @@ private fun PhraseCardItem(
                     true
                 }
             }
-            // Tappable - fires on direct touch
             .clickable(onClickLabel = "Speak ${card.phrase}") {
                 onSelect()
             }
-            // Switch-scanning focus support
             .focusable()
             .onFocusChanged { focusState ->
                 onFocusChange(focusState.isFocused)
@@ -266,7 +326,7 @@ private fun PhraseCardItem(
         ) {
             Icon(
                 imageVector  = card.icon,
-                contentDescription = null,  // described by card semantics block above
+                contentDescription = null,
                 tint         = TextPrimary,
                 modifier     = Modifier.size(36.dp)
             )
