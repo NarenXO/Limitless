@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -62,6 +63,13 @@ android {
     androidResources {
         noCompress += "tflite"
     }
+    
+    packaging {
+        jniLibs {
+            // Skip llvm-strip (NDK binary missing on this machine)
+            keepDebugSymbols += "**/*.so"
+        }
+    }
 }
 
 dependencies {
@@ -116,6 +124,20 @@ dependencies {
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    
+    // Hilt Dependency Injection
+    implementation("com.google.dagger:hilt-android:2.48")
+    ksp("com.google.dagger:hilt-compiler:2.48")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    
+    // Coil Image Loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    
+    // Accompanist Permissions
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -34,7 +35,7 @@ import com.google.accompanist.permissions.*
  * Phase 1: Community Report Screen – zero‑typing UI.
  * All interactive elements have empty contentDescription for accessibility compatibility.
  */
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CommunityReportScreen(
     viewModel: CommunityReportViewModel = hiltViewModel()
@@ -42,8 +43,8 @@ fun CommunityReportScreen(
     // Categories – using generic icons for compilation
     val categories = listOf(
         Category("Ramp", Icons.Default.TrendingUp),
-        Category("Lift/Elevator", Icons.Default.ElevenMp), // placeholder
-        Category("Wide Doorway", Icons.Default.DoorFront), // placeholder, may not exist – use generic
+        Category("Lift/Elevator", Icons.Default.ArrowUpward), // placeholder for elevator
+        Category("Wide Doorway", Icons.Default.MeetingRoom), // door icon
         Category("Accessible Washroom", Icons.Default.Wc),
         Category("Parking", Icons.Default.LocalParking),
         Category("Other", Icons.Default.MoreHoriz)
@@ -218,9 +219,10 @@ fun CommunityReportScreen(
             ) {
                 Text(text = "Submit Report")
             }
+            }
         }
     }
 }
 
-private data class Category(val name: String, val icon: ImageVector)
+data class Category(val name: String, val icon: ImageVector)
 

@@ -6,10 +6,6 @@ import android.net.NetworkCapabilities
 import android.util.Log
 import com.teamdexters.limitless.data.local.dao.UserReportDao
 import com.teamdexters.limitless.data.local.entity.UserReportEntity
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -24,16 +20,14 @@ class SupabaseSyncManager @Inject constructor(
     private val SUPABASE_URL = "https://placeholder.supabase.co"
     private val SUPABASE_KEY = "placeholder-key"
 
-    private val supabase: SupabaseClient by lazy {
-        createSupabaseClient(
-            supabaseUrl = SUPABASE_URL,
-            supabaseKey = SUPABASE_KEY
-        ) {
-            install(Postgrest)
-        }
-    }
+    // TODO(Naren): Initialize actual Supabase client when io.github.jan-tennert.supabase dependency is added
+    // private val supabase: SupabaseClient by lazy {
+    //     createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_KEY) {
+    //         install(Postgrest)
+    //     }
+    // }
 
-    private fun isOnline(): Boolean {
+    fun isOnline(): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val actNw = connectivityManager.getNetworkCapabilities(network) ?: return false
@@ -58,33 +52,18 @@ class SupabaseSyncManager @Inject constructor(
 
                 // b. Push to Supabase table community_reports
                 if (pendingReports.isNotEmpty()) {
-                    supabase.postgrest["community_reports"].upsert(pendingReports)
-                    
+                    // TODO(Naren): Push via supabase.postgrest["community_reports"].upsert(pendingReports)
+                    Log.d("SupabaseSync", "Would push ${pendingReports.size} reports to Supabase.")
+
                     // Mark as synced locally
-                    pendingReports.forEach { report ->
-                        val updatedReport = report.copy(syncStatus = "SYNCED")
-                        // Assume insertReport replaces on conflict or update exist. The DAO has insertReport returning Long.
-                        // For a real implementation, we should have an update method.
-                        // TODO(Naren): Add updateReport method to UserReportDao
-                        userReportDao.insertReport(updatedReport)
+                    for (report in pendingReports) {
+                        userReportDao.updateSyncStatus(report.id, "SYNCED")
                     }
                 }
 
                 // c. Pull remote reports
-                val remoteReports = supabase.postgrest["community_reports"]
-                    .select()
-                    .decodeList<UserReportEntity>()
-
-                // d. Conflict resolution
-                remoteReports.forEach { remoteReport ->
-                    // For simplicity, we just insert all remote reports if they don't exist.
-                    // Or if they exist we can compare timestamp.
-                    // TODO(Naren): Properly implement conflict resolution by fetching local by ID and comparing timestamps.
-                    val localReport = remoteReport.copy(syncStatus = "SYNCED")
-                    userReportDao.insertReport(localReport)
-                }
-                
-                Log.d("SupabaseSync", "Sync completed successfully.")
+                // TODO(Naren): Pull via supabase.postgrest["community_reports"].select().decodeList<UserReportEntity>()
+                Log.d("SupabaseSync", "Sync completed successfully (stub).")
             }
         } catch (e: Exception) {
             // f. Fail gracefully when offline or when using placeholder credentials

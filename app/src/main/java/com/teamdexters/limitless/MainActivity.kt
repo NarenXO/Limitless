@@ -70,6 +70,9 @@ import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
 import java.util.Locale
 
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     /**
