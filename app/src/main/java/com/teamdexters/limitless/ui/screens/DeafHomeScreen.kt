@@ -28,7 +28,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +44,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teamdexters.limitless.feature.deaf.caption.CaptionLine
 import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
+import com.teamdexters.limitless.ui.components.SubtitleOverlay
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaDeaf
@@ -65,6 +68,15 @@ fun DeafHomeScreen(
     
     val listState = rememberLazyListState()
     val coroutineScope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main) }
+    
+    // SubtitleOverlay preview test state
+    var showSubtitle by remember { mutableStateOf(false) }
+    var subtitleText by remember { mutableStateOf("") }
+    val sampleResponses = listOf(
+        "Hazel: Accessible ramp detected ahead.",
+        "Hazel: Emergency exit is behind you.",
+        "Hazel: Elevator is to your right on the ground floor."
+    )
 
     // Check mic permission
     val micPermissionGranted = remember {
@@ -185,6 +197,47 @@ fun DeafHomeScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // SubtitleOverlay preview section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "SubtitleOverlay Preview",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    sampleResponses.forEachIndexed { index, response ->
+                        Button(
+                            onClick = {
+                                subtitleText = response
+                                showSubtitle = true
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Text(
+                                text = "Sample ${index + 1}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Caption display area
             Box(
                 modifier = Modifier
@@ -215,6 +268,14 @@ fun DeafHomeScreen(
                 }
             }
         }
+
+        // SubtitleOverlay preview
+        SubtitleOverlay(
+            text = subtitleText,
+            isVisible = showSubtitle,
+            onDismiss = { showSubtitle = false },
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
