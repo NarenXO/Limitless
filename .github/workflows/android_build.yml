@@ -1,5 +1,6 @@
 name: Build Android Debug APK
 
+# Workflow to build Android Debug APK for feature/deaf-camera branch
 on:
   push:
     branches: [ "feature/deaf-camera" ]
