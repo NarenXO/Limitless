@@ -19,18 +19,18 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Fix gradlew permissions and line endings
+    - name: Fix gradlew permissions & line endings
       run: |
         sed -i 's/\r$//' gradlew
         chmod +x gradlew
 
+    - name: Configure local.properties & Accept Licenses
+      run: |
+        echo "sdk.dir=$ANDROID_HOME" > local.properties
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
     - name: Build Debug APK
       run: ./gradlew assembleDebug --no-daemon --stacktrace
-      env:
-        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m"
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
