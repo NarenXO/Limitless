@@ -41,19 +41,35 @@ class SoundAlertViewModel : ViewModel() {
      * @param context Android context
      */
     fun initialize(context: Context) {
-        if (soundClassifier == null) {
-            soundClassifier = SoundClassifier(context)
-        }
-        if (vibrationController == null) {
-            vibrationController = VibrationController(context)
-        }
-
-        viewModelScope.launch {
-            val loaded = soundClassifier?.loadModel() ?: false
-            _modelLoaded.value = loaded
-            if (!loaded) {
-                _errorMessage.value = soundClassifier?.getLoadError() ?: "Model failed to load"
+        try {
+            if (soundClassifier == null) {
+                soundClassifier = SoundClassifier(context)
             }
+            if (vibrationController == null) {
+                vibrationController = VibrationController(context)
+            }
+
+            viewModelScope.launch {
+                try {
+                    val loaded = soundClassifier?.loadModel() ?: false
+                    _modelLoaded.value = loaded
+                    if (!loaded) {
+                        val error = soundClassifier?.getLoadError()
+                        _errorMessage.value = if (error?.contains("yamnet.tflite") == true) {
+                            "YAMNet model missing — using test buttons only"
+                        } else {
+                            "Model failed to load"
+                        }
+                    }
+                } catch (e: Exception) {
+                    _modelLoaded.value = false
+                    _errorMessage.value = "YAMNet model missing — using test buttons only"
+                }
+            }
+        } catch (e: Exception) {
+            // Never crash on initialization
+            _modelLoaded.value = false
+            _errorMessage.value = "YAMNet model missing — using test buttons only"
         }
     }
 

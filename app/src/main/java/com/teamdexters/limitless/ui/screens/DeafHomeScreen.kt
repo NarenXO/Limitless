@@ -139,29 +139,34 @@ fun DeafHomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Title
-            Text(
-                text = "Live Captions",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            // Offline capable chip
+            // Top row: Title and Offline capable chip
             Row(
-                modifier = Modifier
-                    .background(SurfaceTint, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Offline capable",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = "Live Captions",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
+
+                // Offline capable chip
+                Row(
+                    modifier = Modifier
+                        .background(SurfaceTint, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Offline capable",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -184,7 +189,11 @@ fun DeafHomeScreen(
                 ) {
                     Button(
                         onClick = {
-                            soundAlertViewModel.setAlertEnabled(!isAlertEnabled)
+                            try {
+                                soundAlertViewModel.setAlertEnabled(!isAlertEnabled)
+                            } catch (e: Exception) {
+                                // Never crash on toggle
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isAlertEnabled) PersonaDeaf else SurfaceTint
@@ -201,7 +210,7 @@ fun DeafHomeScreen(
                     }
                 }
 
-                // Sound model error message
+                // Sound model error message (smaller, single line)
                 AnimatedVisibility(
                     visible = soundErrorMessage != null,
                     enter = fadeIn(),
@@ -211,85 +220,84 @@ fun DeafHomeScreen(
                         Row(
                             modifier = Modifier
                                 .background(HighlightBox, RoundedCornerShape(16.dp))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = message,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                maxLines = 1
                             )
                         }
                     }
                 }
 
-                // Manual test buttons
-                if (soundModelLoaded) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Test Alerts",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Manual test buttons (always available, even without model)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Test Alerts",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { soundAlertViewModel.triggerTestAlert(SoundType.SIREN) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceTint
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp)
                     ) {
-                        Button(
-                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.SIREN) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text(
-                                text = "Siren",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                        }
-                        Button(
-                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.FIRE_ALARM) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text(
-                                text = "Fire",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                        }
-                        Button(
-                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.DOORBELL) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text(
-                                text = "Door",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                        }
+                        Text(
+                            text = "Siren",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                    }
+                    Button(
+                        onClick = { soundAlertViewModel.triggerTestAlert(SoundType.FIRE_ALARM) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceTint
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = "Fire",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                    }
+                    Button(
+                        onClick = { soundAlertViewModel.triggerTestAlert(SoundType.DOORBELL) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceTint
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = "Door",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Error messages
+            // Error messages (smaller, single line)
             AnimatedVisibility(
                 visible = errorMessage != null,
                 enter = fadeIn(),
@@ -299,14 +307,15 @@ fun DeafHomeScreen(
                     Row(
                         modifier = Modifier
                             .background(HighlightBox, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = message,
-                            fontSize = 13.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            maxLines = 1
                         )
                     }
                 }
@@ -341,16 +350,16 @@ fun DeafHomeScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // SubtitleOverlay preview section
+            // Hazel Response Preview section
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "SubtitleOverlay Preview",
-                    fontSize = 14.sp,
+                    text = "Hazel Response Preview",
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = TextPrimary.copy(alpha = 0.7f),
+                    color = TextPrimary.copy(alpha = 0.6f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
@@ -364,14 +373,14 @@ fun DeafHomeScreen(
                                 showSubtitle = true
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
+                                containerColor = SurfaceTint
                             ),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(40.dp)
+                            modifier = Modifier.height(32.dp)
                         ) {
                             Text(
                                 text = "Sample ${index + 1}",
-                                fontSize = 12.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = TextPrimary
                             )

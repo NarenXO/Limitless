@@ -47,6 +47,10 @@ class AudioStreamer {
             // Permission denied
             release()
             return null
+        } catch (e: IllegalStateException) {
+            // AudioRecord not properly initialized
+            release()
+            return null
         } catch (e: Exception) {
             release()
             return null

@@ -1,6 +1,7 @@
 package com.teamdexters.limitless.feature.deaf.caption
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.vosk.Model
@@ -16,6 +17,7 @@ class VoskCaptionEngine(private val context: Context) {
     private var recognizer: Recognizer? = null
 
     companion object {
+        private const val TAG = "VoskCaptionEngine"
         private const val MODEL_PATH = "vosk-model-small-en-us"
         private const val SAMPLE_RATE = 16000
     }
@@ -35,20 +37,28 @@ class VoskCaptionEngine(private val context: Context) {
                 val extracted = extractModelFromAssets(modelDir)
                 if (!extracted) {
                     // Model not found in assets
+                    Log.e(TAG, "Model not found in assets: $MODEL_PATH")
                     return@withContext false
                 }
             }
 
             // Verify model directory has required files
             if (!modelDir.exists() || !modelDir.isDirectory) {
+                Log.e(TAG, "Model directory does not exist: ${modelDir.absolutePath}")
                 return@withContext false
             }
 
             // Load the model
             model = Model(modelDir.absolutePath)
-            model != null
+            val success = model != null
+            if (success) {
+                Log.d(TAG, "Vosk model loaded successfully")
+            } else {
+                Log.e(TAG, "Failed to create Vosk model from: ${modelDir.absolutePath}")
+            }
+            success
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error loading Vosk model", e)
             false
         }
     }

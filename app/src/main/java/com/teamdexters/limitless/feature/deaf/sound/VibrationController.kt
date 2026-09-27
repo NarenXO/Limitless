@@ -16,12 +16,16 @@ import androidx.core.content.ContextCompat
  */
 class VibrationController(private val context: Context) {
     private val vibrator: Vibrator? by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vibratorManager?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -51,38 +55,42 @@ class VibrationController(private val context: Context) {
      * @param soundType Type of sound detected
      */
     fun vibrate(soundType: SoundType) {
-        if (!hasVibrator()) {
-            return
-        }
-
-        val vibrationEffect = when (soundType) {
-            SoundType.FIRE_ALARM -> createFireAlarmPattern()
-            SoundType.SIREN -> createSirenPattern()
-            SoundType.DOORBELL -> createDoorbellPattern()
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val audioAttributes = when (soundType) {
-                SoundType.FIRE_ALARM, SoundType.SIREN -> {
-                    // Emergency sounds - override silent/DND
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                }
-                SoundType.DOORBELL -> {
-                    // Notification sound
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                }
+        try {
+            if (!hasVibrator()) {
+                return
             }
-            
-            vibrator?.vibrate(vibrationEffect, audioAttributes)
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator?.vibrate(vibrationEffect)
+
+            val vibrationEffect = when (soundType) {
+                SoundType.FIRE_ALARM -> createFireAlarmPattern()
+                SoundType.SIREN -> createSirenPattern()
+                SoundType.DOORBELL -> createDoorbellPattern()
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = when (soundType) {
+                    SoundType.FIRE_ALARM, SoundType.SIREN -> {
+                        // Emergency sounds - override silent/DND
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    }
+                    SoundType.DOORBELL -> {
+                        // Notification sound
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    }
+                }
+                
+                vibrator?.vibrate(vibrationEffect, audioAttributes)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(vibrationEffect)
+            }
+        } catch (e: Exception) {
+            // Never crash on vibration
         }
     }
 

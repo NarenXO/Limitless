@@ -42,10 +42,15 @@ class CaptionViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            val loaded = voskEngine?.loadModel() ?: false
-            _modelLoaded.value = loaded
-            if (!loaded) {
-                _errorMessage.value = "Caption model not loaded"
+            try {
+                val loaded = voskEngine?.loadModel() ?: false
+                _modelLoaded.value = loaded
+                if (!loaded) {
+                    _errorMessage.value = "Vosk model failed to load"
+                }
+            } catch (e: Exception) {
+                _modelLoaded.value = false
+                _errorMessage.value = "Vosk model failed to load"
             }
         }
     }
@@ -56,10 +61,12 @@ class CaptionViewModel : ViewModel() {
      * @param micPermissionGranted Whether RECORD_AUDIO permission is granted
      */
     fun startListening(context: Context, micPermissionGranted: Boolean) {
-        if (_isListening.value || !micPermissionGranted) {
-            if (!micPermissionGranted) {
-                _errorMessage.value = "Mic permission needed for captions"
-            }
+        if (_isListening.value) {
+            return
+        }
+
+        if (!micPermissionGranted) {
+            _errorMessage.value = "Mic permission needed for captions"
             return
         }
 
@@ -69,61 +76,69 @@ class CaptionViewModel : ViewModel() {
             return
         }
 
-        if (!engine.initRecognizer()) {
-            _errorMessage.value = "Failed to initialize recognizer"
-            return
-        }
-
-        _isListening.value = true
-        _errorMessage.value = null
-        isRecognitionActive = true
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val streamer = AudioStreamer()
-            audioStreamer = streamer
-
-            val audioRecord = streamer.startRecording()
-            if (audioRecord == null) {
-                _errorMessage.value = "Failed to start audio recording"
-                _isListening.value = false
-                isRecognitionActive = false
-                return@launch
+        try {
+            if (!engine.initRecognizer()) {
+                _errorMessage.value = "Failed to initialize recognizer"
+                return
             }
 
-            val buffer = ByteArray(4096)
-            
-            while (isRecognitionActive && _isListening.value) {
-                val bytesRead = streamer.readAudio(buffer)
-                if (bytesRead > 0) {
-                    val audioData = buffer.copyOf(bytesRead)
-                    val result = engine.processAudio(audioData)
+            _isListening.value = true
+            _errorMessage.value = null
+            isRecognitionActive = true
+
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val streamer = AudioStreamer()
+                    audioStreamer = streamer
+
+                    val audioRecord = streamer.startRecording()
+                    if (audioRecord == null) {
+                        _errorMessage.value = "Failed to start audio recording"
+                        _isListening.value = false
+                        isRecognitionActive = false
+                        return@launch
+                    }
+
+                    val buffer = ByteArray(4096)
                     
-                    if (result.isPartial || result.isFinal) {
-                        val text = extractTextFromJson(result.jsonResult)
+                    while (isRecognitionActive && _isListening.value) {
+                        val bytesRead = streamer.readAudio(buffer)
+                        if (bytesRead > 0) {
+                            val audioData = buffer.copyOf(bytesRead)
+                            val result = engine.processAudio(audioData)
+                            
+                            if (result.isPartial || result.isFinal) {
+                                val text = extractTextFromJson(result.jsonResult)
+                                if (text.isNotEmpty()) {
+                                    withContext(Dispatchers.Main) {
+                                        updateCaptions(text, result.isPartial)
+                                    }
+                                }
+                            }
+                        } else {
+                            // Error reading audio
+                            break
+                        }
+                    }
+
+                    // Get any final result
+                    val finalResult = engine.getFinalResult()
+                    if (finalResult.isFinal) {
+                        val text = extractTextFromJson(finalResult.jsonResult)
                         if (text.isNotEmpty()) {
                             withContext(Dispatchers.Main) {
-                                updateCaptions(text, result.isPartial)
+                                updateCaptions(text, false)
                             }
                         }
                     }
-                } else {
-                    // Error reading audio
-                    break
+                } catch (e: Exception) {
+                    _errorMessage.value = "Audio recognition error"
+                } finally {
+                    stopListeningInternal()
                 }
             }
-
-            // Get any final result
-            val finalResult = engine.getFinalResult()
-            if (finalResult.isFinal) {
-                val text = extractTextFromJson(finalResult.jsonResult)
-                if (text.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        updateCaptions(text, false)
-                    }
-                }
-            }
-
-            stopListeningInternal()
+        } catch (e: Exception) {
+            _errorMessage.value = "Failed to start recognition"
         }
     }
 
@@ -164,13 +179,14 @@ class CaptionViewModel : ViewModel() {
                 currentList.add(CaptionLine(text, true))
             }
         } else {
-            // Final result - convert last partial to final (if exists), then add new final
+            // Final result - replace last partial if exists, else add new final
             if (currentList.isNotEmpty() && currentList.last().isPartial) {
-                // Convert the partial to final and keep it
-                currentList[currentList.size - 1] = CaptionLine(currentList.last().text, false)
+                // Replace the partial with the final result
+                currentList[currentList.size - 1] = CaptionLine(text, false)
+            } else {
+                // Add the new final result
+                currentList.add(CaptionLine(text, false))
             }
-            // Add the new final result
-            currentList.add(CaptionLine(text, false))
         }
         
         _captions.value = currentList
