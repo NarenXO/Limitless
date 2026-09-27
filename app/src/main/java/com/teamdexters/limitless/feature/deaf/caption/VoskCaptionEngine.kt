@@ -156,7 +156,7 @@ class VoskCaptionEngine(private val context: Context) {
         val recognizerRef = recognizer ?: return RecognitionResult("", false, false)
         
         return try {
-            val result = recognizerRef.finalResult()
+            val result = recognizerRef.finalResult
             RecognitionResult(result, true, false)
         } catch (e: Exception) {
             e.printStackTrace()

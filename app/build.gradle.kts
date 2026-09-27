@@ -105,7 +105,8 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
     // Vosk-android (offline STT)
-    implementation("com.alphacephei:vosk-android:0.3.32")
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
     
     // TensorFlow Lite
     implementation("org.tensorflow:tensorflow-lite:2.14.0")

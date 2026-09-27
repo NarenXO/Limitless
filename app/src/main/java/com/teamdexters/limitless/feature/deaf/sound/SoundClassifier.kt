@@ -48,7 +48,7 @@ class SoundClassifier(private val context: Context) {
             val modelBuffer = loadModelFile()
             if (modelBuffer == null) {
                 loadError = "Model file not found: $MODEL_FILE"
-                Log.e(TAG, loadError)
+                Log.e(TAG, loadError!!)
                 return false
             }
 
@@ -58,7 +58,7 @@ class SoundClassifier(private val context: Context) {
             labels = loadLabels()
             if (labels.isEmpty()) {
                 loadError = "Label file not found: $LABEL_FILE"
-                Log.e(TAG, loadError)
+                Log.e(TAG, loadError!!)
                 return false
             }
 
