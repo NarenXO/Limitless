@@ -59,19 +59,18 @@ class CommunityReportViewModel @Inject constructor(
     private val _isOnline = MutableStateFlow(true) // Should be updated via ConnectivityManager in a real app
     val isOnline: StateFlow<Boolean> = _isOnline
 
+    // Expose real-time Flow of all reports from Room DAO
+    val reports: kotlinx.coroutines.flow.Flow<List<UserReportEntity>> = userReportDao.getAllReports()
+
     fun fetchCurrentLocation(context: Context) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         try {
-            fusedLocationClient.lastLocation.addOnSuccessListener { loc: android.location.Location? ->
-                if (loc != null) {
-                    _location.value = loc
-                } else {
-                    _location.value = android.location.Location("dummy").apply {
-                        latitude = 0.0
-                        longitude = 0.0
+            fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc: android.location.Location? ->
+                    if (loc != null) {
+                        _location.value = loc
                     }
                 }
-            }
         } catch (e: SecurityException) {
             // Handle missing permissions
         }

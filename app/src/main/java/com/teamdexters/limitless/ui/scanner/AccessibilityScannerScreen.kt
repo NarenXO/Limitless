@@ -24,7 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 @Composable
 fun AccessibilityScannerScreen(
     viewModel: ScannerViewModel = hiltViewModel()
@@ -56,7 +56,14 @@ fun AccessibilityScannerScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Camera Preview Placeholder
+            // Live CameraX Preview
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            val cameraProviderFuture = remember { androidx.camera.lifecycle.ProcessCameraProvider.getInstance(context) }
+            var imageCapture by remember { mutableStateOf<androidx.camera.core.ImageCapture?>(null) }
+            val cameraPermissionState = com.google.accompanist.permissions.rememberPermissionState(android.Manifest.permission.CAMERA)
+            val isCameraGranted = cameraPermissionState.status == com.google.accompanist.permissions.PermissionStatus.Granted
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -64,6 +71,44 @@ fun AccessibilityScannerScreen(
                     .background(Color.Black),
                 contentAlignment = Alignment.BottomCenter
             ) {
+                if (isCameraGranted) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { ctx ->
+                            val previewView = androidx.camera.view.PreviewView(ctx)
+                            val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
+                            cameraProviderFuture.addListener({
+                                val cameraProvider = cameraProviderFuture.get()
+                                val preview = androidx.camera.core.Preview.Builder().build().also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
+                                }
+                                val capture = androidx.camera.core.ImageCapture.Builder().build()
+                                imageCapture = capture
+                                val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
+                                try {
+                                    cameraProvider.unbindAll()
+                                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, capture)
+                                } catch (exc: Exception) {
+                                    // Handle errors
+                                }
+                            }, executor)
+                            previewView
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("Camera permission required", color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
+                            Text("Grant Permission")
+                        }
+                    }
+                }
+
                 if (isScanning) {
                     Box(
                         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
@@ -75,7 +120,7 @@ fun AccessibilityScannerScreen(
                             Text("Scanning...", color = Color.White)
                         }
                     }
-                } else {
+                } else if (isCameraGranted) {
                     // Capture Button
                     Box(
                         modifier = Modifier
@@ -83,9 +128,20 @@ fun AccessibilityScannerScreen(
                             .size(64.dp)
                             .background(Color(0xFFF791A9), CircleShape)
                             .clickable {
-                                // Mock generating a Bitmap to simulate capture
-                                val mockBitmap = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888)
-                                viewModel.startScan(mockBitmap)
+                                val capture = imageCapture ?: return@clickable
+                                capture.takePicture(
+                                    androidx.core.content.ContextCompat.getMainExecutor(context),
+                                    object : androidx.camera.core.ImageCapture.OnImageCapturedCallback() {
+                                        override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                                            val bitmap = image.toBitmap()
+                                            viewModel.startScan(bitmap)
+                                            image.close()
+                                        }
+                                        override fun onError(exception: androidx.camera.core.ImageCaptureException) {
+                                            // Handle error
+                                        }
+                                    }
+                                )
                             }
                             .semantics { contentDescription = "Capture Frame for Analysis" },
                         contentAlignment = Alignment.Center
@@ -109,8 +165,12 @@ fun AccessibilityScannerScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         
                         Text("Detected Objects:", style = MaterialTheme.typography.bodyMedium)
-                        scanObjects.forEach { obj ->
-                            Text("- ${obj.label} (${(obj.confidence * 100).toInt()}%)", style = MaterialTheme.typography.bodySmall)
+                        if (scanObjects.isEmpty()) {
+                            Text("- No accessibility structures detected in frame", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        } else {
+                            scanObjects.forEach { obj ->
+                                Text("- ${obj.label} (${(obj.confidence * 100).toInt()}%)", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                         
                         Spacer(modifier = Modifier.height(8.dp))

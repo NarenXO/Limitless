@@ -24,43 +24,45 @@ class ScannerAnalyzer {
         Triple(objects, text, lighting)
     }
 
-    suspend fun detectObjects(bitmap: Bitmap): List<ScanObjectResult> = withContext(Dispatchers.Default) {
-        // TODO(Naren): Integrate actual MediaPipe Object Detector API here
-        // Placeholder for MediaPipe object detection implementation
-        // Simulating detection delay
-        Thread.sleep(500)
-        
-        val possibleLabels = listOf("ramp", "stairs", "handrail", "wheelchair entrance")
-        val results = mutableListOf<ScanObjectResult>()
-        
-        // Mocking some detections
-        if (Math.random() > 0.3) {
-            results.add(ScanObjectResult("ramp", 0.92f))
-        }
-        if (Math.random() > 0.5) {
-            results.add(ScanObjectResult("handrail", 0.85f))
-        }
-        
-        results
+    suspend fun detectObjects(bitmap: Bitmap): List<ScanObjectResult> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+        val labeler = com.google.mlkit.vision.label.ImageLabeling.getClient(
+            com.google.mlkit.vision.label.defaults.ImageLabelerOptions.DEFAULT_OPTIONS
+        )
+        labeler.process(image)
+            .addOnSuccessListener { labels ->
+                val possibleLabels = listOf("ramp", "stairs", "handrail", "wheelchair", "door", "entrance")
+                val results = labels.filter { label -> 
+                    possibleLabels.any { it.equals(label.text, ignoreCase = true) } 
+                }.map { ScanObjectResult(it.text, it.confidence) }
+                continuation.resume(results, null)
+            }
+            .addOnFailureListener {
+                continuation.resume(emptyList(), null)
+            }
     }
 
-    suspend fun recognizeSignageText(bitmap: Bitmap): List<String> = withContext(Dispatchers.Default) {
-        // TODO(Naren): Integrate actual ML Kit TextRecognition.getClient(...) here
-        // Placeholder for ML Kit Text Recognition implementation
-        Thread.sleep(600)
-        
-        val keywordsToFind = listOf("accessible", "wheelchair", "ramp", "lift", "elevator", "braille", "restroom", "disabled")
-        val foundKeywords = mutableListOf<String>()
-        
-        // Mock finding keywords
-        if (Math.random() > 0.4) {
-            foundKeywords.add("accessible")
-        }
-        if (Math.random() > 0.6) {
-            foundKeywords.add("wheelchair")
-        }
-        
-        foundKeywords
+    suspend fun recognizeSignageText(bitmap: Bitmap): List<String> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+        val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
+        )
+        recognizer.process(image)
+            .addOnSuccessListener { visionText ->
+                val keywordsToFind = listOf("accessible", "wheelchair", "ramp", "lift", "elevator", "braille", "restroom", "disabled")
+                val foundKeywords = mutableListOf<String>()
+                val textLower = visionText.text.lowercase()
+                
+                for (keyword in keywordsToFind) {
+                    if (textLower.contains(keyword)) {
+                        foundKeywords.add(keyword)
+                    }
+                }
+                continuation.resume(foundKeywords, null)
+            }
+            .addOnFailureListener {
+                continuation.resume(emptyList(), null)
+            }
     }
 
     suspend fun calculateLightingScore(bitmap: Bitmap): Int = withContext(Dispatchers.Default) {

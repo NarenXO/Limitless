@@ -106,6 +106,9 @@ dependencies {
     // Google ML Kit Text Recognition
     implementation("com.google.mlkit:text-recognition:16.0.0")
     
+    // Google ML Kit Image Labeling for Object Detection
+    implementation("com.google.mlkit:image-labeling:17.0.7")
+    
     // Google ML Kit Translation
     implementation("com.google.mlkit:translate:17.0.1")
     
