@@ -88,6 +88,10 @@ fun BlindHomeScreen() {
     var landmarkName by remember { mutableStateOf("") }
     var isListeningForSpeech by remember { mutableStateOf(false) }
 
+    // Navigation state
+    var showNavigationOverlay by remember { mutableStateOf(false) }
+    val vibrationHelper = remember { VibrationHelper(context) }
+
     // Managers
     val ttsManager = remember { TTSManager(context) }
     val ocrManager = remember { OCRManager() }
@@ -246,6 +250,28 @@ fun BlindHomeScreen() {
                 }
             }
 
+            // Start Navigation button
+            Button(
+                onClick = { showNavigationOverlay = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .semantics {
+                        contentDescription = "Start navigation"
+                    },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PersonaBlind,
+                    contentColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Start Navigation",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
             // Richer descriptions toggle
             Row(
                 modifier = Modifier
@@ -356,6 +382,16 @@ fun BlindHomeScreen() {
                         showTaggingDialog = false
                         landmarkSpeechRecognizer.stopRecognition()
                         isListeningForSpeech = false
+                    }
+                )
+            }
+
+            // Navigation overlay
+            if (showNavigationOverlay) {
+                NavigationOverlay(
+                    route = sampleMockRoute,
+                    onExit = {
+                        showNavigationOverlay = false
                     }
                 )
             }
