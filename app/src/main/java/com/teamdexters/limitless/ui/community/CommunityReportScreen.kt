@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +54,7 @@ fun CommunityReportScreen(
     val imageUri by viewModel.imageUri.collectAsState()
     val location by viewModel.location.collectAsState()
     val submitResult by viewModel.submitResult.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
 
@@ -79,10 +82,37 @@ fun CommunityReportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Category selector
+            // Sync status bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE0F2F4))
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                    contentDescription = if (isOnline) "Online and Synced" else "Offline",
+                    tint = Color.DarkGray,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isOnline) "Synced with Community" else "Offline (Saved locally)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.DarkGray
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Category selector
             Text(text = "Select Category", style = MaterialTheme.typography.titleMedium)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(categories) { category ->

@@ -46,6 +46,9 @@ class CommunityReportViewModel @Inject constructor(
     private val _submitResult = MutableStateFlow<Boolean?>(null)
     val submitResult: StateFlow<Boolean?> = _submitResult
 
+    private val _isOnline = MutableStateFlow(true) // Should be updated via ConnectivityManager in a real app
+    val isOnline: StateFlow<Boolean> = _isOnline
+
     fun fetchCurrentLocation(context: Context) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
         try {
@@ -72,6 +75,10 @@ class CommunityReportViewModel @Inject constructor(
         val currentLngDouble = currentLng.toDouble()
         
         viewModelScope.launch {
+            val confirmationCount = 1
+            val photoUriValue = _imageUri.value?.toString()
+            val trustScore = minOf(100, (confirmationCount * 15) + (if (!photoUriValue.isNullOrEmpty()) 25 else 0))
+
             val report = UserReportEntity(
                 locationName = "Community Location",
                 latitude = currentLatDouble,
@@ -81,7 +88,9 @@ class CommunityReportViewModel @Inject constructor(
                 hasRamp = currentCategory.equals("Ramp", ignoreCase = true),
                 hasElevator = currentCategory.equals("Lift/Elevator", ignoreCase = true),
                 hasAccessibleRestroom = currentCategory.equals("Accessible Washroom", ignoreCase = true),
-                photoUri = _imageUri.value?.toString()
+                photoUri = photoUriValue
+                // TODO(Naren): Store this calculated trustScore on UserReportEntity.trustScore
+                // trustScore = trustScore
             )
             
             try {
