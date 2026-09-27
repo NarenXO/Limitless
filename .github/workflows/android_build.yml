@@ -28,9 +28,10 @@ jobs:
       run: |
         echo "sdk.dir=$ANDROID_HOME" > local.properties
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
 
     - name: Build Debug APK
-      run: bash ./gradlew assembleDebug --no-daemon --stacktrace --info
+      run: bash ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
