@@ -104,6 +104,9 @@ dependencies {
     // osmdroid (offline map tiles)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
     
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
     // Retrofit (for Supabase REST calls)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
