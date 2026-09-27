@@ -1,19 +1,35 @@
 package com.teamdexters.limitless
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -25,7 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -42,21 +63,51 @@ import com.teamdexters.limitless.ui.components.NetworkStatusBadge
 import com.teamdexters.limitless.ui.components.SharedToolsBar
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
 import com.teamdexters.limitless.ui.navigation.Screen
+import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
+import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Tracks whether the user has granted RECORD_AUDIO at runtime.
+     * Initialized eagerly so the Compose tree always reads the correct value.
+     */
+    private val micGranted = mutableStateOf(false)
+
+    /**
+     * Runtime permission launcher for RECORD_AUDIO.
+     * Must be registered before onCreate returns (ActivityResultContracts).
+     */
+    private val micPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            micGranted.value = isGranted
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Initialize database
+
+        // Check current permission state before first frame renders
+        micGranted.value = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        // Request on cold start if not yet granted
+        if (!micGranted.value) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+
         val database = LimitlessDatabase.getDatabase(applicationContext)
-        
+
         setContent {
             LimitlessTheme {
-                HazelAssistantWrapper(database)
+                HazelAssistantWrapper(
+                    database = database,
+                    micGranted = micGranted.value
+                )
             }
         }
     }
@@ -64,20 +115,23 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Global wrapper for Hazel assistant integration.
- * Wraps the navigation host in a Scaffold with the shared quick tools bar,
- * floating mic button, Hazel listening overlay, response banner, network status badge,
- * and offline/online query fallback.
+ *
+ * When [micGranted] is false, a subtle denial chip is shown at the top of the screen
+ * informing the user that the microphone is required for voice commands. All other
+ * features remain fully functional.
  *
  * Integrates [NetworkStatusTracker] for reactive app-wide network monitoring.
- * The tracker is registered on composition and unregistered on disposal to prevent memory leaks.
  */
 @Composable
-fun HazelAssistantWrapper(database: LimitlessDatabase) {
+fun HazelAssistantWrapper(
+    database: LimitlessDatabase,
+    micGranted: Boolean
+) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Track current navigation route
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
@@ -109,7 +163,7 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
             networkStatusTracker = networkStatusTracker
         )
     }
-    
+
     // TTS initialization
     var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
@@ -125,15 +179,16 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
             ttsRef = null
         }
     }
-    
+
     // Hazel state management
     var isHazelListening by remember { mutableStateOf(false) }
     var transcribedText by remember { mutableStateOf("") }
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
-    
-    // Initialize wake-word detection pipeline
-    DisposableEffect(context) {
+
+    // Initialize wake-word detection pipeline (only when mic is granted)
+    DisposableEffect(context, micGranted) {
+        if (!micGranted) return@DisposableEffect onDispose {}
         val wakeWordListener = DefaultWakeWordListener(context)
         wakeWordListener.startListening {
             isHazelListening = true
@@ -159,17 +214,11 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
             context.registerReceiver(receiver, filter)
         }
         onDispose {
-            try {
-                context.unregisterReceiver(receiver)
-            } catch (e: Exception) {
-                // Ignore if not registered
-            }
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
-    
-    Surface(
-        modifier = Modifier.fillMaxSize()
-    ) {
+
+    Surface(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
                 if (showToolsBar) {
@@ -177,14 +226,10 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                         currentRoute = currentRoute,
                         onNavigate = { route ->
                             if (currentRoute != route) {
-                                navController.navigate(route) {
-                                    launchSingleTop = true
-                                }
+                                navController.navigate(route) { launchSingleTop = true }
                             }
                         },
-                        onBackClick = {
-                            navController.popBackStack()
-                        }
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }
@@ -199,7 +244,7 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                     database = database
                 )
 
-                // Network status badge: top-right corner, unobtrusive
+                // ── Network status badge: top-right corner, unobtrusive ──────
                 NetworkStatusBadge(
                     networkStatus = networkStatus,
                     modifier = Modifier
@@ -207,7 +252,15 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                         .padding(top = 8.dp, end = 8.dp)
                 )
 
-                // Floating mic button anchored to bottom right of content screen
+                // ── Mic-denied chip: subtle top-left notice ──────────────────
+                MicDeniedChip(
+                    visible = !micGranted,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 8.dp, start = 8.dp)
+                )
+
+                // ── Floating mic button ──────────────────────────────────────
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -221,18 +274,16 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
                         }
                     )
                 }
-                
-                // Accessible subtitle response banner (fires simultaneous TTS + visual subtitle)
+
+                // ── Response banner ──────────────────────────────────────────
                 HazelResponseBanner(
                     text = responseBannerText,
                     isVisible = isBannerVisible,
-                    onDismiss = {
-                        isBannerVisible = false
-                    },
+                    onDismiss = { isBannerVisible = false },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
-                
-                // Hazel listening overlay
+
+                // ── Hazel listening overlay ──────────────────────────────────
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
                     transcribedText = transcribedText,
@@ -265,7 +316,52 @@ fun HazelAssistantWrapper(database: LimitlessDatabase) {
 }
 
 /**
- * Handles Hazel intent results, performs appropriate navigation or triggers GeneralQuery fallback.
+ * Subtle chip shown when RECORD_AUDIO permission is denied.
+ * Uses HighlightBox background and MicOff icon — no emoji, no white (#FFFFFF).
+ * Full TalkBack content description for accessibility.
+ */
+@Composable
+private fun MicDeniedChip(
+    visible: Boolean,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .background(HighlightBox, RoundedCornerShape(20.dp))
+                .border(1.dp, TextPrimary.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .semantics {
+                    contentDescription =
+                        "Microphone permission denied. Voice commands are unavailable. " +
+                        "Please enable the microphone in Settings."
+                },
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.MicOff,
+                contentDescription = null,
+                tint = TextPrimary,
+                modifier = Modifier.padding(end = 2.dp)
+            )
+            Text(
+                text = "Mic off — voice commands unavailable",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+        }
+    }
+}
+
+/**
+ * Handles Hazel intent results — navigation or GeneralQuery cloud fallback.
  */
 private fun handleHazelIntent(
     intent: HazelIntent,
@@ -277,43 +373,16 @@ private fun handleHazelIntent(
     onHandled: () -> Unit
 ) {
     when (intent) {
-        is HazelIntent.NavigateTo -> {
-            navController.navigate(intent.route)
-            onHandled()
-        }
-        is HazelIntent.OpenScanner -> {
-            navController.navigate(Screen.Scanner.route)
-            onHandled()
-        }
-        is HazelIntent.OpenCommunity -> {
-            navController.navigate(Screen.Community.route)
-            onHandled()
-        }
-        is HazelIntent.OpenPhraseCards -> {
-            navController.navigate(Screen.SpeechHome.route)
-            onHandled()
-        }
-        is HazelIntent.OpenNavigation -> {
-            navController.navigate(Screen.MobilityHome.route)
-            onHandled()
-        }
-        is HazelIntent.BlindAssist -> {
-            navController.navigate(Screen.BlindHome.route)
-            onHandled()
-        }
-        is HazelIntent.DeafAssist -> {
-            navController.navigate(Screen.DeafHome.route)
-            onHandled()
-        }
-        is HazelIntent.SpeechAssist -> {
-            navController.navigate(Screen.SpeechHome.route)
-            onHandled()
-        }
-        is HazelIntent.MobilityAssist -> {
-            navController.navigate(Screen.MobilityHome.route)
-            onHandled()
-        }
-        is HazelIntent.GeneralQuery -> {
+        is HazelIntent.NavigateTo    -> { navController.navigate(intent.route); onHandled() }
+        is HazelIntent.OpenScanner   -> { navController.navigate(Screen.Scanner.route); onHandled() }
+        is HazelIntent.OpenCommunity -> { navController.navigate(Screen.Community.route); onHandled() }
+        is HazelIntent.OpenPhraseCards -> { navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.OpenNavigation  -> { navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.BlindAssist   -> { navController.navigate(Screen.BlindHome.route); onHandled() }
+        is HazelIntent.DeafAssist    -> { navController.navigate(Screen.DeafHome.route); onHandled() }
+        is HazelIntent.SpeechAssist  -> { navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.MobilityAssist-> { navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.GeneralQuery  -> {
             onHandled()
             queryHandler.handleGeneralQuery(
                 rawQuery = intent.rawQuery,
