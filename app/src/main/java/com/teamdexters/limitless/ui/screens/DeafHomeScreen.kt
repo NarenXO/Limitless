@@ -44,6 +44,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teamdexters.limitless.feature.deaf.caption.CaptionLine
 import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
+import com.teamdexters.limitless.feature.deaf.sound.SoundAlertViewModel
+import com.teamdexters.limitless.feature.deaf.sound.SoundType
+import com.teamdexters.limitless.ui.components.SoundAlertBanner
 import com.teamdexters.limitless.ui.components.SubtitleOverlay
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
@@ -53,18 +56,26 @@ import com.teamdexters.limitless.ui.theme.TextPrimary
 import kotlinx.coroutines.launch
 
 /**
- * Home screen for deaf and hard-of-hearing users with live captions.
- * Features offline speech-to-text using Vosk for real-time captioning.
+ * Home screen for deaf and hard-of-hearing users with live captions and sound alerts.
+ * Features offline speech-to-text using Vosk for real-time captioning and
+ * YAMNet-based environmental sound detection for emergency alerts.
  */
 @Composable
 fun DeafHomeScreen(
-    viewModel: CaptionViewModel = viewModel()
+    captionViewModel: CaptionViewModel = viewModel(),
+    soundAlertViewModel: SoundAlertViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val captions by viewModel.captions.collectAsState()
-    val isListening by viewModel.isListening.collectAsState()
-    val modelLoaded by viewModel.modelLoaded.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val captions by captionViewModel.captions.collectAsState()
+    val isListening by captionViewModel.isListening.collectAsState()
+    val modelLoaded by captionViewModel.modelLoaded.collectAsState()
+    val errorMessage by captionViewModel.errorMessage.collectAsState()
+    
+    // Sound alert state
+    val currentAlert by soundAlertViewModel.currentAlert.collectAsState()
+    val isAlertEnabled by soundAlertViewModel.isAlertEnabled.collectAsState()
+    val soundModelLoaded by soundAlertViewModel.modelLoaded.collectAsState()
+    val soundErrorMessage by soundAlertViewModel.errorMessage.collectAsState()
     
     val listState = rememberLazyListState()
     val coroutineScope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main) }
@@ -86,9 +97,10 @@ fun DeafHomeScreen(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Initialize model on first composition
+    // Initialize models on first composition
     LaunchedEffect(Unit) {
-        viewModel.initialize(context)
+        captionViewModel.initialize(context)
+        soundAlertViewModel.initialize(context)
     }
 
     // Auto-scroll to bottom when new captions arrive
@@ -103,7 +115,8 @@ fun DeafHomeScreen(
     // Release resources on dispose
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.stopListening()
+            captionViewModel.stopListening()
+            soundAlertViewModel.clearAlert()
         }
     }
 
@@ -118,13 +131,21 @@ fun DeafHomeScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Sound Alert Banner
+            SoundAlertBanner(
+                alert = currentAlert,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Title
             Text(
                 text = "Live Captions",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
-                modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)
+                modifier = Modifier.padding(bottom = 24.dp)
             )
 
             // Offline capable chip
@@ -141,6 +162,129 @@ fun DeafHomeScreen(
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
                 )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Sound Alerts Toggle Section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Sound Alerts",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            soundAlertViewModel.setAlertEnabled(!isAlertEnabled)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isAlertEnabled) PersonaDeaf else SurfaceTint
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Text(
+                            text = if (isAlertEnabled) "On" else "Off",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                    }
+                }
+
+                // Sound model error message
+                AnimatedVisibility(
+                    visible = soundErrorMessage != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    soundErrorMessage?.let { message ->
+                        Row(
+                            modifier = Modifier
+                                .background(HighlightBox, RoundedCornerShape(16.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = message,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+
+                // Manual test buttons
+                if (soundModelLoaded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Test Alerts",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.SIREN) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = "Siren",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                        Button(
+                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.FIRE_ALARM) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = "Fire",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                        Button(
+                            onClick = { soundAlertViewModel.triggerTestAlert(SoundType.DOORBELL) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaDeaf.copy(alpha = 0.8f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = "Door",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -174,9 +318,9 @@ fun DeafHomeScreen(
             Button(
                 onClick = {
                     if (isListening) {
-                        viewModel.stopListening()
+                        captionViewModel.stopListening()
                     } else {
-                        viewModel.startListening(context, micPermissionGranted)
+                        captionViewModel.startListening(context, micPermissionGranted)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
