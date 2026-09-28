@@ -37,8 +37,15 @@ class CaptionViewModel : ViewModel() {
      * Initialize the caption engine and load the Vosk model.
      */
     fun initialize(context: Context) {
-        if (voskEngine == null) {
-            voskEngine = VoskCaptionEngine(context)
+        try {
+            if (voskEngine == null) {
+                voskEngine = VoskCaptionEngine(context)
+            }
+        } catch (e: Exception) {
+            // If engine creation fails, app continues without captions
+            _modelLoaded.value = false
+            _errorMessage.value = "Vosk model failed to load"
+            return
         }
 
         viewModelScope.launch {

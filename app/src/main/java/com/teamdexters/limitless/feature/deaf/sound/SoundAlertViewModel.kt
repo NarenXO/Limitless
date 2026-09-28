@@ -45,31 +45,36 @@ class SoundAlertViewModel : ViewModel() {
             if (soundClassifier == null) {
                 soundClassifier = SoundClassifier(context)
             }
+        } catch (e: Exception) {
+            // If classifier creation fails, app continues without sound detection
+            _modelLoaded.value = false
+            _errorMessage.value = "YAMNet model missing — using test buttons only"
+        }
+
+        try {
             if (vibrationController == null) {
                 vibrationController = VibrationController(context)
             }
-
-            viewModelScope.launch {
-                try {
-                    val loaded = soundClassifier?.loadModel() ?: false
-                    _modelLoaded.value = loaded
-                    if (!loaded) {
-                        val error = soundClassifier?.getLoadError()
-                        _errorMessage.value = if (error?.contains("yamnet.tflite") == true) {
-                            "YAMNet model missing — using test buttons only"
-                        } else {
-                            "Model failed to load"
-                        }
-                    }
-                } catch (e: Exception) {
-                    _modelLoaded.value = false
-                    _errorMessage.value = "YAMNet model missing — using test buttons only"
-                }
-            }
         } catch (e: Exception) {
-            // Never crash on initialization
-            _modelLoaded.value = false
-            _errorMessage.value = "YAMNet model missing — using test buttons only"
+            // If vibration controller fails, app continues without vibration
+        }
+
+        viewModelScope.launch {
+            try {
+                val loaded = soundClassifier?.loadModel() ?: false
+                _modelLoaded.value = loaded
+                if (!loaded) {
+                    val error = soundClassifier?.getLoadError()
+                    _errorMessage.value = if (error?.contains("yamnet.tflite") == true) {
+                        "YAMNet model missing — using test buttons only"
+                    } else {
+                        "Model failed to load"
+                    }
+                }
+            } catch (e: Exception) {
+                _modelLoaded.value = false
+                _errorMessage.value = "YAMNet model missing — using test buttons only"
+            }
         }
     }
 

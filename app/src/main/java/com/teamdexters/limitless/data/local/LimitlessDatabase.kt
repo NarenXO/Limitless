@@ -96,7 +96,7 @@ abstract class LimitlessDatabase : RoomDatabase() {
                         INSTANCE = instance
                         instance
                     } catch (e2: Exception) {
-                        // Last resort: create a minimal in-memory database
+                        // Last resort: create a minimal in-memory database with main thread queries allowed
                         val instance = Room.inMemoryDatabaseBuilder(
                             context.applicationContext,
                             LimitlessDatabase::class.java
