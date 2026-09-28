@@ -193,11 +193,25 @@ fun QrScannerSection(
                                         barcodeScanner.process(inputImage)
                                             .addOnSuccessListener { barcodes ->
                                                 for (barcode in barcodes) {
-                                                    val raw = barcode.rawValue ?: continue
+                                                    val rawPayload = barcode.rawValue ?: continue
+                                                    val cleanPayload = rawPayload
+                                                        .trim()
+                                                        .replace("\n", "")
+                                                        .replace("\r", "")
+                                                        .replace("\t", "")
+                                                        .replace("\\uFEFF", "")
+                                                        .uppercase()
+
+                                                    android.util.Log.e("QR_DEBUG", "Raw payload bytes: ${rawPayload.toByteArray().toList()}")
+                                                    android.util.Log.e("QR_DEBUG", "Clean payload: '$cleanPayload'")
+
                                                     val now = System.currentTimeMillis()
                                                     if (now - lastScannedTime > 3000) { // Throttle scans to 3s
                                                         lastScannedTime = now
-                                                        val matchedWaypoint = kcgIndoorWaypoints.find { it.qrPayload == raw }
+                                                        val matchedWaypoint = kcgIndoorWaypoints.find { it.qrPayload.uppercase() == cleanPayload }
+                                                        
+                                                        android.util.Log.e("QR_DEBUG", "Match found: ${matchedWaypoint?.name ?: "NONE"}")
+
                                                         if (matchedWaypoint != null) {
                                                             pdrEngine.resetPosition(matchedWaypoint)
                                                             scannedMessage = "Verified: ${matchedWaypoint.name}"
@@ -210,7 +224,7 @@ fun QrScannerSection(
                                                             )
                                                             onWaypointScanned(matchedWaypoint)
                                                         } else {
-                                                            scannedMessage = "Unknown QR code: $raw"
+                                                            scannedMessage = "Unknown QR code: $cleanPayload"
                                                         }
                                                     }
                                                 }

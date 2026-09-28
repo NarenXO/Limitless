@@ -31,7 +31,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 0,
         xMeters = 0f,
         yMeters = 0f,
-        qrPayload = "LIMITLESS:kcg-entrance",
+        qrPayload = "LIMITLESS:KCG-ENTRANCE",
         description = "Main entrance, ground floor, automatic sliding door with accessible ramp"
     ),
     IndoorWaypoint(
@@ -40,7 +40,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 0,
         xMeters = 15f,
         yMeters = 5f,
-        qrPayload = "LIMITLESS:kcg-reception",
+        qrPayload = "LIMITLESS:KCG-RECEPTION",
         description = "Reception desk, ground floor, staff assistance available"
     ),
     IndoorWaypoint(
@@ -49,7 +49,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 0,
         xMeters = 25f,
         yMeters = 10f,
-        qrPayload = "LIMITLESS:kcg-lift",
+        qrPayload = "LIMITLESS:KCG-LIFT",
         description = "Central elevator, ground floor, braille buttons and voice announcements"
     ),
     IndoorWaypoint(
@@ -58,7 +58,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 0,
         xMeters = 30f,
         yMeters = 2f,
-        qrPayload = "LIMITLESS:kcg-restroom",
+        qrPayload = "LIMITLESS:KCG-RESTROOM",
         description = "Accessible restroom, ground floor, wide automatic door and grab bars"
     ),
     IndoorWaypoint(
@@ -67,7 +67,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 0,
         xMeters = 20f,
         yMeters = 12f,
-        qrPayload = "LIMITLESS:kcg-ramp",
+        qrPayload = "LIMITLESS:KCG-RAMP",
         description = "Accessible ramp to first floor, gentle 1 to 12 incline slope"
     ),
     IndoorWaypoint(
@@ -76,7 +76,7 @@ val kcgIndoorWaypoints: List<IndoorWaypoint> = listOf(
         floor = 1,
         xMeters = 25f,
         yMeters = 15f,
-        qrPayload = "LIMITLESS:kcg-ward",
+        qrPayload = "LIMITLESS:KCG-WARD",
         description = "Admin office, first floor, double wide entrance doors"
     )
 )
