@@ -53,6 +53,7 @@ class PdrEngine(context: Context) : SensorEventListener {
     private val rotationMatrix = FloatArray(9)
     private val orientation = FloatArray(3)
 
+    private var internalHeading = 0f
     private var lastUiUpdateTime = 0L
 
     fun start() {
@@ -116,24 +117,32 @@ class PdrEngine(context: Context) : SensorEventListener {
             }
 
             Sensor.TYPE_ACCELEROMETER -> {
-                System.arraycopy(event.values, 0, gravity, 0, 3)
+                // Low-pass filter for gravity vector
+                val alphaGrav = 0.8f
+                gravity[0] = alphaGrav * gravity[0] + (1 - alphaGrav) * event.values[0]
+                gravity[1] = alphaGrav * gravity[1] + (1 - alphaGrav) * event.values[1]
+                gravity[2] = alphaGrav * gravity[2] + (1 - alphaGrav) * event.values[2]
                 hasGravity = true
                 updateHeading()
 
-                // Accelerometer peak detection step counting fallback
+                // Accelerometer peak detection step counting fallback (14.0 m/s^2 threshold, 450ms cadence)
                 val x = event.values[0]
                 val y = event.values[1]
                 val z = event.values[2]
                 val magnitude = kotlin.math.sqrt(x * x + y * y + z * z)
                 val now = System.currentTimeMillis()
-                if (magnitude > 12.0f && (now - lastAccStepTime > 350)) {
+                if (magnitude > 14.0f && (now - lastAccStepTime > 450)) {
                     lastAccStepTime = now
                     advanceStep()
                 }
             }
 
             Sensor.TYPE_MAGNETIC_FIELD -> {
-                System.arraycopy(event.values, 0, geomagnetic, 0, 3)
+                // Low-pass filter for geomagnetic vector
+                val alphaMag = 0.8f
+                geomagnetic[0] = alphaMag * geomagnetic[0] + (1 - alphaMag) * event.values[0]
+                geomagnetic[1] = alphaMag * geomagnetic[1] + (1 - alphaMag) * event.values[1]
+                geomagnetic[2] = alphaMag * geomagnetic[2] + (1 - alphaMag) * event.values[2]
                 hasGeomagnetic = true
                 updateHeading()
             }
@@ -144,7 +153,7 @@ class PdrEngine(context: Context) : SensorEventListener {
         if (!hasGravity || !hasGeomagnetic) return
 
         val now = System.currentTimeMillis()
-        if (now - lastUiUpdateTime < 100) return // Throttle UI updates to max 10 Hz
+        if (now - lastUiUpdateTime < 200) return // Throttle UI updates to max 5 Hz (200ms)
         lastUiUpdateTime = now
 
         val success = SensorManager.getRotationMatrix(rotationMatrix, null, gravity, geomagnetic)
@@ -154,9 +163,18 @@ class PdrEngine(context: Context) : SensorEventListener {
             var azimuthDeg = Math.toDegrees(azimuthRad.toDouble()).toFloat()
             if (azimuthDeg < 0f) azimuthDeg += 360f
 
-            // Low-pass filter smoothing (alpha = 0.15f)
-            val alpha = 0.15f
-            headingDegrees = headingDegrees + alpha * (azimuthDeg - headingDegrees)
+            // Low-pass filter smoothing: 0.85 * old + 0.15 * new
+            var diff = azimuthDeg - internalHeading
+            while (diff < -180f) diff += 360f
+            while (diff > 180f) diff -= 360f
+            internalHeading = (internalHeading + 0.15f * diff + 360f) % 360f
+
+            // 3-degree hysteresis
+            var headingDiff = kotlin.math.abs(internalHeading - headingDegrees)
+            if (headingDiff > 180f) headingDiff = 360f - headingDiff
+            if (headingDiff > 3.0f) {
+                headingDegrees = internalHeading
+            }
         }
     }
 

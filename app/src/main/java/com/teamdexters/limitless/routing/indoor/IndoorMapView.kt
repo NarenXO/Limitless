@@ -22,6 +22,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.teamdexters.limitless.ui.theme.PersonaMobility
 import com.teamdexters.limitless.ui.theme.SurfaceTint
 import com.teamdexters.limitless.ui.theme.TextPrimary
@@ -47,6 +52,25 @@ fun IndoorMapView(
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
+
+    var drawUserX by remember { mutableFloatStateOf(userX) }
+    var drawUserY by remember { mutableFloatStateOf(userY) }
+    var drawHeading by remember { mutableFloatStateOf(headingDegrees) }
+
+    val shouldUpdate by remember(userX, userY, headingDegrees) {
+        derivedStateOf {
+            val distMoved = kotlin.math.hypot((userX - drawUserX).toDouble(), (userY - drawUserY).toDouble())
+            var headingDiff = kotlin.math.abs(headingDegrees - drawHeading)
+            if (headingDiff > 180f) headingDiff = 360f - headingDiff
+            distMoved > 0.5 || headingDiff > 3.0f
+        }
+    }
+
+    if (shouldUpdate) {
+        drawUserX = userX
+        drawUserY = userY
+        drawHeading = headingDegrees
+    }
 
     Box(
         modifier = modifier
@@ -128,8 +152,8 @@ fun IndoorMapView(
             }
 
             // 3. Draw User Position Dot (PersonaMobility)
-            val userCx = toCanvasX(userX)
-            val userCy = toCanvasY(userY)
+            val userCx = toCanvasX(drawUserX)
+            val userCy = toCanvasY(drawUserY)
 
             drawCircle(
                 color = PersonaMobility,
@@ -144,7 +168,7 @@ fun IndoorMapView(
             )
 
             // 4. Draw Heading Arrow
-            val rad = Math.toRadians(headingDegrees.toDouble())
+            val rad = Math.toRadians(drawHeading.toDouble())
             val arrowLength = 32f
             val endX = userCx + (arrowLength * sin(rad)).toFloat()
             val endY = userCy - (arrowLength * cos(rad)).toFloat()

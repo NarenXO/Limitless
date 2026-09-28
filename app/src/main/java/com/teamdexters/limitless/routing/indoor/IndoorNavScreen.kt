@@ -60,6 +60,9 @@ import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.hypot
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
 /**
  * Main Indoor Navigation Screen for KCG Main Building.
  *
@@ -140,6 +143,7 @@ fun IndoorNavScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(LimitlessBackground)
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
             .semantics { contentDescription = "Indoor Navigation Screen for KCG Main Building." }
     ) {
@@ -219,7 +223,7 @@ fun IndoorNavScreen() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.50f)
+                .height(300.dp)
         ) {
             QrScannerSection(
                 pdrEngine = pdrEngine,
@@ -239,7 +243,7 @@ fun IndoorNavScreen() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.40f)
+                .height(250.dp)
         ) {
             IndoorMapView(
                 userX = pdrEngine.xMeters,

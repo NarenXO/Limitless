@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.ArrowBack
@@ -51,6 +52,8 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -251,56 +254,47 @@ fun SpeechHomeScreen(
     }
 
     // -- Main Layout ----------------------------------------------------------
+    Scaffold(
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        android.util.Log.d("LimitlessNav", "Back button clicked in SpeechHomeScreen")
+                        onBack()
+                    },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Go back to persona selection",
+                        tint = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Speech & Communication",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+        },
+        containerColor = LimitlessBackground
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LimitlessBackground)
+            .padding(innerPadding)
             .verticalScroll(scrollState)
             .padding(horizontal = 16.dp)
             .semantics { contentDescription = "Speech Home Screen. Quick Phrases and Communication Tools." }
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Top Navigation Back Bar (FIX 1)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.Transparent, RoundedCornerShape(20.dp))
-                    .semantics(mergeDescendants = true) {
-                        role = Role.Button
-                        contentDescription = "Go back to persona selection"
-                        onClick(label = "Go back to persona selection") {
-                            onBack()
-                            true
-                        }
-                    }
-                    .clickable { onBack() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Go back to persona selection",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Back to Persona Selection",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary,
-                modifier = Modifier.clickable { onBack() }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         // 1. Header & Prediction Subheader -------------------------------------
         Text(
@@ -636,6 +630,7 @@ fun SpeechHomeScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
     }
+    } // end Scaffold
 }
 
 // ---------------------------------------------------------------------------
