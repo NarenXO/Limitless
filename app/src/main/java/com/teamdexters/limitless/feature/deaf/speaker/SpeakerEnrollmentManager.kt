@@ -53,12 +53,12 @@ class SpeakerEnrollmentManager(private val context: Context) {
      * Records 4 seconds of audio at 16kHz.
      */
     suspend fun startEnrollment(name: String): VoiceProfile? {
-        return withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.Main) {
             try {
                 _isRecording.value = true
                 _enrollmentStatus.value = EnrollmentStatus.Recording
                 
-                val audioData = recordAudio()
+                val audioData = withContext(Dispatchers.IO) { recordAudio() }
                 
                 if (audioData.isEmpty()) {
                     _enrollmentStatus.value = EnrollmentStatus.Error
