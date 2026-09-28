@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
@@ -83,7 +82,7 @@ fun CameraPreview(
 
 /**
  * Simple reticle overlay for color detection mode.
- * Shows a small centered square to indicate the sampling region.
+ * Shows a centered square with PersonaBlind ring and TextPrimary crosshair.
  */
 @Composable
 private fun ReticleOverlay() {
@@ -94,16 +93,16 @@ private fun ReticleOverlay() {
             modifier = Modifier.fillMaxSize()
         ) {
             val canvasSize = size
-            val reticleSize = 50f
+            val reticleSize = 72f
             val strokeWidth = 3f
 
             val centerX = canvasSize.width / 2
             val centerY = canvasSize.height / 2
             val halfReticle = reticleSize / 2
 
-            // Draw a simple square reticle
+            // Draw PersonaBlind ring
             drawRect(
-                color = androidx.compose.ui.graphics.Color.White,
+                color = PersonaBlind,
                 topLeft = androidx.compose.ui.geometry.Offset(
                     centerX - halfReticle,
                     centerY - halfReticle
@@ -112,6 +111,34 @@ private fun ReticleOverlay() {
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                     width = strokeWidth
                 )
+            )
+
+            // Draw TextPrimary crosshair - horizontal line
+            drawLine(
+                color = TextPrimary,
+                start = androidx.compose.ui.geometry.Offset(
+                    centerX - halfReticle + 10f,
+                    centerY
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    centerX + halfReticle - 10f,
+                    centerY
+                ),
+                strokeWidth = strokeWidth
+            )
+
+            // Draw TextPrimary crosshair - vertical line
+            drawLine(
+                color = TextPrimary,
+                start = androidx.compose.ui.geometry.Offset(
+                    centerX,
+                    centerY - halfReticle + 10f
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    centerX,
+                    centerY + halfReticle - 10f
+                ),
+                strokeWidth = strokeWidth
             )
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Full-screen navigation overlay for turn-by-turn directions.
@@ -158,7 +159,7 @@ fun NavigationOverlay(
             shouldAutoAdvance = true
             
             // Auto-advance logic: wait for TTS completion (max 4s), then pause 1.5s, then advance
-            autoAdvanceJob = kotlinx.coroutines.launch {
+            autoAdvanceJob = launch {
                 // Wait for TTS to complete (up to 4 seconds max)
                 var waited = 0L
                 while (isSpeaking && waited < 4000) {
@@ -251,10 +252,12 @@ fun NavigationOverlay(
                     shape =
                         RoundedCornerShape(12.dp),
 
-                    modifier = Modifier.semantics {
-                        contentDescription =
-                            "Exit navigation"
-                    }
+                    modifier = Modifier
+                        .height(56.dp)
+                        .semantics {
+                            contentDescription =
+                                "Exit navigation. Double tap to close."
+                        }
                 ) {
                     Text("Exit")
                 }
@@ -471,7 +474,7 @@ private fun NavigationStepCard(
                     color = TextPrimary,
 
                     fontWeight =
-                        FontWeight.Bold,
+                    FontWeight.Bold,
 
                     fontSize = 48.sp
                 )
@@ -487,14 +490,14 @@ private fun NavigationStepCard(
                     color = TextPrimary,
 
                     fontWeight =
-                        FontWeight.Bold,
+                    FontWeight.Bold,
 
                     fontSize = 48.sp
                 )
             }
 
             /**
-             * Accessible description for screen readers.
+             * Step counter.
              */
             Text(
                 text =
@@ -502,6 +505,9 @@ private fun NavigationStepCard(
 
                 style =
                     MaterialTheme.typography.bodyMedium,
+
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
 
                 color = TextPrimary
             )

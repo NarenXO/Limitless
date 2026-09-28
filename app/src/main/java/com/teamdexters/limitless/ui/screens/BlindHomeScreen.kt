@@ -5,7 +5,12 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -15,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -124,6 +130,7 @@ fun BlindHomeScreen() {
     // Result state
     var resultText by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
+    var showResultBanner by remember { mutableStateOf(false) }
 
     // Initialize TTS, Object Detector, Path Feature Detector, and Network Tracker
     LaunchedEffect(Unit) {
@@ -201,34 +208,90 @@ fun BlindHomeScreen() {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Mode toggle buttons in 2x3 grid
-            Column(
+            // Header row
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Blind & Low-Vision Assist",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    fontSize = 22.sp,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Blind and Low-Vision Assist screen"
+                    }
+                )
+            }
+
+            // Camera preview card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .border(
+                        width = 2.dp,
+                        color = PersonaBlind,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                if (cameraPermission) {
+                    CameraPreview(
+                        modifier = Modifier.fillMaxSize(),
+                        showReticle = currentMode == "color",
+                        onFrameReady = { bitmap ->
+                            latestFrame = bitmap
+                        },
+                        onCaptureReady = { bitmap, rotation ->
+                            latestFrame = bitmap
+                            latestRotation = rotation
+                        },
+                        onError = { exception ->
+                            Toast.makeText(context, "Camera error: ${exception.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Camera permission required",
+                            color = TextPrimary,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Mode selector - 2-column responsive grid
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // First row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    ModeButton(
+                    ModeChip(
                         text = "Read Text",
                         isActive = currentMode == "ocr",
                         onClick = { currentMode = "ocr" },
                         modifier = Modifier.weight(1f)
                     )
-                    ModeButton(
+                    ModeChip(
                         text = "Detect Color",
                         isActive = currentMode == "color",
                         onClick = { currentMode = "color" },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ModeButton(
-                        text = "Describe",
-                        isActive = currentMode == "describe",
-                        onClick = { currentMode = "describe" },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -236,21 +299,34 @@ fun BlindHomeScreen() {
                 // Second row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    ModeButton(
+                    ModeChip(
+                        text = "Describe",
+                        isActive = currentMode == "describe",
+                        onClick = { currentMode = "describe" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModeChip(
                         text = "Path",
                         isActive = currentMode == "path",
                         onClick = { currentMode = "path" },
                         modifier = Modifier.weight(1f)
                     )
-                    ModeButton(
+                }
+                
+                // Third row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ModeChip(
                         text = "Tag Place",
                         isActive = currentMode == "tag",
                         onClick = { currentMode = "tag" },
                         modifier = Modifier.weight(1f)
                     )
-                    ModeButton(
+                    ModeChip(
                         text = "Recognize",
                         isActive = currentMode == "recognize",
                         onClick = { currentMode = "recognize" },
@@ -259,44 +335,31 @@ fun BlindHomeScreen() {
                 }
             }
 
-            // Start Navigation button
-            Button(
-                onClick = { showNavigationOverlay = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .semantics {
-                        contentDescription = "Start navigation"
-                    },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PersonaBlind,
-                    contentColor = TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "Start Navigation",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Richer descriptions toggle
+            // Richer descriptions toggle row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center,
+                    .height(48.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = "Richer descriptions (online)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    color = TextPrimary
+                )
                 Switch(
                     checked = useRicherDescriptions,
                     onCheckedChange = { useRicherDescriptions = it },
                     modifier = Modifier.semantics {
                         contentDescription = if (useRicherDescriptions) 
-                            "Richer descriptions enabled" 
+                            "Richer descriptions enabled. Double tap to disable." 
                         else 
-                            "Richer descriptions disabled"
+                            "Richer descriptions disabled. Double tap to enable."
                     },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = PersonaBlind,
@@ -305,21 +368,16 @@ fun BlindHomeScreen() {
                         uncheckedTrackColor = SurfaceTint
                     )
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Richer descriptions (online)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextPrimary,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Toggle for richer descriptions using online AI"
-                    }
-                )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Result banner
-            if (resultText.isNotEmpty()) {
+            // Result banner with fade animation
+            AnimatedVisibility(
+                visible = showResultBanner && resultText.isNotEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
                 ResultBanner(
                     text = resultText,
                     modifier = Modifier
@@ -327,6 +385,336 @@ fun BlindHomeScreen() {
                         .padding(bottom = 16.dp)
                 )
             }
+
+            // Primary action button
+            ActionButton(
+                text = when (currentMode) {
+                    "ocr" -> "Read Text Aloud"
+                    "color" -> "Announce Color"
+                    "describe" -> "Describe Surroundings"
+                    "path" -> "Detect Path Features"
+                    "tag" -> "Tag This Place"
+                    "recognize" -> "Recognize Place"
+                    else -> "Read Text Aloud"
+                },
+                isProcessing = isProcessing,
+                onClick = {
+                    if (isProcessing) return@ActionButton
+
+                    val frame = latestFrame
+                    if (frame == null) {
+                        Toast.makeText(context, "Camera not ready", Toast.LENGTH_SHORT).show()
+                        return@ActionButton
+                    }
+
+                    when (currentMode) {
+                        "tag" -> {
+                            // Landmark tagging mode
+                            showTaggingDialog = true
+                            ttsManager.speak("Say the name of this place")
+                        }
+                        "recognize" -> {
+                            // Landmark recognition mode
+                            isProcessing = true
+                            scope.launch {
+                                try {
+                                    val result = landmarkRecognizer.recognizeLandmark(frame)
+                                    when (result) {
+                                        is LandmarkRecognizer.RecognitionResult.Success -> {
+                                            resultText = result.message
+                                            showResultBanner = true
+                                            ttsManager.speak(result.message)
+                                            // Auto-hide banner after 6 seconds
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        }
+                                        is LandmarkRecognizer.RecognitionResult.NoMatch -> {
+                                            resultText = "No tagged place recognized"
+                                            showResultBanner = true
+                                            ttsManager.speak(result.message)
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        }
+                                        is LandmarkRecognizer.RecognitionResult.Ambiguous -> {
+                                            resultText = "Multiple similar places detected"
+                                            showResultBanner = true
+                                            ttsManager.speak(result.message)
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        }
+                                        is LandmarkRecognizer.RecognitionResult.Error -> {
+                                            resultText = "Error recognizing place"
+                                            showResultBanner = true
+                                            ttsManager.speak("Error recognizing place")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    resultText = "Error recognizing place"
+                                    showResultBanner = true
+                                    ttsManager.speak("Error recognizing place")
+                                    kotlinx.coroutines.launch {
+                                        kotlinx.coroutines.delay(6000)
+                                        showResultBanner = false
+                                    }
+                                } finally {
+                                    isProcessing = false
+                                }
+                            }
+                        }
+                        else -> {
+                            // Other modes require processing state
+                            isProcessing = true
+
+                            when (currentMode) {
+                                "ocr" -> {
+                                    // OCR mode
+                                    scope.launch {
+                                        try {
+                                            // Add 700ms settle delay before capture for better stability
+                                            delay(700)
+                                            
+                                            val text = ocrManager.recognizeText(frame, latestRotation)
+                                            if (text != null && text.isNotBlank()) {
+                                                resultText = text
+                                                showResultBanner = true
+                                                ttsManager.speak(text)
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            } else {
+                                                resultText = "No clear text detected"
+                                                showResultBanner = true
+                                                ttsManager.speak("No clear text detected. Move closer and hold steady.")
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            resultText = "Error reading text"
+                                            showResultBanner = true
+                                            ttsManager.speak("Error reading text")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        } finally {
+                                            isProcessing = false
+                                        }
+                                    }
+                                }
+                                "color" -> {
+                                    // Color detection mode
+                                    try {
+                                        val colorName = colorDetector.detectColorAtCenter(frame)
+                                        if (colorName == "unknown") {
+                                            resultText = "Unable to detect color"
+                                            showResultBanner = true
+                                            ttsManager.speak("Unable to detect color")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        } else {
+                                            resultText = "Color detected is $colorName"
+                                            showResultBanner = true
+                                            ttsManager.speak("Color detected is $colorName")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        resultText = "Error detecting color"
+                                        showResultBanner = true
+                                        ttsManager.speak("Error detecting color")
+                                        kotlinx.coroutines.launch {
+                                            kotlinx.coroutines.delay(6000)
+                                            showResultBanner = false
+                                        }
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
+                                "describe" -> {
+                                    // Object detection mode
+                                    scope.launch {
+                                        try {
+                                            val objects = objectDetector.detectObjects(frame)
+                                            
+                                            // Check if no objects were detected (filtered out or model failed)
+                                            if (objects.isEmpty()) {
+                                                resultText = "No clear objects detected"
+                                                showResultBanner = true
+                                                ttsManager.speak("No clear objects detected. Try better lighting or move closer.")
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            } else {
+                                                // Use Gemini if toggle is ON and network is available
+                                                if (useRicherDescriptions && networkStatusTracker.isCurrentlyOnline()) {
+                                                    try {
+                                                        // Build object list for Gemini
+                                                        val objectList = objects.joinToString(", ") { "${it.label} (confidence: ${it.confidence})" }
+                                                        val prompt = "Describe this scene for a blind person. Detected objects: $objectList. Give a brief, helpful description in 1-2 sentences."
+                                                        
+                                                        // 5 second timeout for Gemini
+                                                        val geminiResult = withTimeoutOrNull(5000) {
+                                                            geminiClient.queryGemini(prompt)
+                                                        }
+                                                        
+                                                        if (geminiResult != null && geminiResult.isSuccess) {
+                                                            val richDescription = geminiResult.getOrNull() ?: ""
+                                                            if (richDescription.isNotBlank()) {
+                                                                resultText = richDescription
+                                                                showResultBanner = true
+                                                                ttsManager.speak(richDescription)
+                                                                kotlinx.coroutines.launch {
+                                                                    kotlinx.coroutines.delay(6000)
+                                                                    showResultBanner = false
+                                                                }
+                                                            } else {
+                                                                // Fallback to rule-based
+                                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                                resultText = description
+                                                                showResultBanner = true
+                                                                ttsManager.speak(description)
+                                                                kotlinx.coroutines.launch {
+                                                                    kotlinx.coroutines.delay(6000)
+                                                                    showResultBanner = false
+                                                                }
+                                                            }
+                                                        } else {
+                                                            // Fallback to rule-based on timeout or error
+                                                            val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                            resultText = description
+                                                            showResultBanner = true
+                                                            ttsManager.speak(description)
+                                                            kotlinx.coroutines.launch {
+                                                                kotlinx.coroutines.delay(6000)
+                                                                showResultBanner = false
+                                                            }
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        // Fallback to rule-based on any error
+                                                        val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                        resultText = description
+                                                        showResultBanner = true
+                                                        ttsManager.speak(description)
+                                                        kotlinx.coroutines.launch {
+                                                            kotlinx.coroutines.delay(6000)
+                                                            showResultBanner = false
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Use rule-based description
+                                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                    resultText = description
+                                                    showResultBanner = true
+                                                    ttsManager.speak(description)
+                                                    kotlinx.coroutines.launch {
+                                                        kotlinx.coroutines.delay(6000)
+                                                        showResultBanner = false
+                                                    }
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            resultText = "Error detecting objects"
+                                            showResultBanner = true
+                                            ttsManager.speak("Error detecting objects")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        } finally {
+                                            isProcessing = false
+                                        }
+                                    }
+                                }
+                                "path" -> {
+                                    // Path feature detection mode
+                                    scope.launch {
+                                        try {
+                                            if (!pathFeatureDetector.isReady()) {
+                                                resultText = "Path detection model not loaded"
+                                                showResultBanner = true
+                                                ttsManager.speak("Path detection model not loaded")
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            } else {
+                                                val features = pathFeatureDetector.detectPathFeatures(frame)
+                                                val description = pathFeatureDescriptionBuilder.buildDescription(features)
+                                                resultText = description
+                                                showResultBanner = true
+                                                ttsManager.speak(description)
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            resultText = "Error detecting path features"
+                                            showResultBanner = true
+                                            ttsManager.speak("Error detecting path features")
+                                            kotlinx.coroutines.launch {
+                                                kotlinx.coroutines.delay(6000)
+                                                showResultBanner = false
+                                            }
+                                        } finally {
+                                            isProcessing = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Secondary button - Start Navigation
+            Button(
+                onClick = { showNavigationOverlay = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .semantics {
+                        contentDescription = "Start navigation. Double tap to open turn-by-turn directions."
+                    },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PersonaBlind,
+                    contentColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(
+                    text = "Start Navigation",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
             // Landmark tagging dialog
             if (showTaggingDialog) {
@@ -432,212 +820,16 @@ fun BlindHomeScreen() {
                 )
             }
 
-            // Action button
-            ActionButton(
-                text = when (currentMode) {
-                    "ocr" -> "Capture & Read"
-                    "color" -> "Detect Color"
-                    "describe" -> "Describe Surroundings"
-                    "path" -> "Detect Path Features"
-                    "tag" -> "Tag This Place"
-                    "recognize" -> "Recognize Place"
-                    else -> "Capture & Read"
-                },
-                isProcessing = isProcessing,
-                onClick = {
-                    if (isProcessing) return@ActionButton
-
-                    val frame = latestFrame
-                    if (frame == null) {
-                        Toast.makeText(context, "Camera not ready", Toast.LENGTH_SHORT).show()
-                        return@ActionButton
-                    }
-
-                    when (currentMode) {
-                        "tag" -> {
-                            // Landmark tagging mode
-                            showTaggingDialog = true
-                            ttsManager.speak("Say the name of this place")
-                        }
-                        "recognize" -> {
-                            // Landmark recognition mode
-                            isProcessing = true
-                            scope.launch {
-                                try {
-                                    val result = landmarkRecognizer.recognizeLandmark(frame)
-                                    when (result) {
-                                        is LandmarkRecognizer.RecognitionResult.Success -> {
-                                            resultText = result.message
-                                            ttsManager.speak(result.message)
-                                        }
-                                        is LandmarkRecognizer.RecognitionResult.NoMatch -> {
-                                            resultText = "No tagged place recognized"
-                                            ttsManager.speak(result.message)
-                                        }
-                                        is LandmarkRecognizer.RecognitionResult.Ambiguous -> {
-                                            resultText = "Multiple similar places detected"
-                                            ttsManager.speak(result.message)
-                                        }
-                                        is LandmarkRecognizer.RecognitionResult.Error -> {
-                                            resultText = "Error recognizing place"
-                                            ttsManager.speak("Error recognizing place")
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    resultText = "Error recognizing place"
-                                    ttsManager.speak("Error recognizing place")
-                                } finally {
-                                    isProcessing = false
-                                }
-                            }
-                        }
-                        else -> {
-                            // Other modes require processing state
-                            isProcessing = true
-
-                            when (currentMode) {
-                                "ocr" -> {
-                                    // OCR mode
-                                    scope.launch {
-                                        try {
-                                            // Add 700ms settle delay before capture for better stability
-                                            delay(700)
-                                            
-                                            val text = ocrManager.recognizeText(frame, latestRotation)
-                                            if (text != null && text.isNotBlank()) {
-                                                resultText = text
-                                                ttsManager.speak(text)
-                                            } else {
-                                                resultText = "No clear text detected"
-                                                ttsManager.speak("No clear text detected. Move closer and hold steady.")
-                                            }
-                                        } catch (e: Exception) {
-                                            resultText = "Error reading text"
-                                            ttsManager.speak("Error reading text")
-                                        } finally {
-                                            isProcessing = false
-                                        }
-                                    }
-                                }
-                                "color" -> {
-                                    // Color detection mode
-                                    try {
-                                        val colorName = colorDetector.detectColorAtCenter(frame)
-                                        if (colorName == "unknown") {
-                                            resultText = "Unable to detect color"
-                                            ttsManager.speak("Unable to detect color")
-                                        } else {
-                                            resultText = "Color detected is $colorName"
-                                            ttsManager.speak("Color detected is $colorName")
-                                        }
-                                    } catch (e: Exception) {
-                                        resultText = "Error detecting color"
-                                        ttsManager.speak("Error detecting color")
-                                    } finally {
-                                        isProcessing = false
-                                    }
-                                }
-                                "describe" -> {
-                                    // Object detection mode
-                                    scope.launch {
-                                        try {
-                                            val objects = objectDetector.detectObjects(frame)
-                                            
-                                            // Check if no objects were detected (filtered out or model failed)
-                                            if (objects.isEmpty()) {
-                                                resultText = "No clear objects detected"
-                                                ttsManager.speak("No clear objects detected. Try better lighting or move closer.")
-                                            } else {
-                                                // Use Gemini if toggle is ON and network is available
-                                                if (useRicherDescriptions && networkStatusTracker.isCurrentlyOnline()) {
-                                                    try {
-                                                        // Build object list for Gemini
-                                                        val objectList = objects.joinToString(", ") { "${it.label} (confidence: ${it.confidence})" }
-                                                        val prompt = "Describe this scene for a blind person. Detected objects: $objectList. Give a brief, helpful description in 1-2 sentences."
-                                                        
-                                                        // 5 second timeout for Gemini
-                                                        val geminiResult = withTimeoutOrNull(5000) {
-                                                            geminiClient.queryGemini(prompt)
-                                                        }
-                                                        
-                                                        if (geminiResult != null && geminiResult.isSuccess) {
-                                                            val richDescription = geminiResult.getOrNull() ?: ""
-                                                            if (richDescription.isNotBlank()) {
-                                                                resultText = richDescription
-                                                                ttsManager.speak(richDescription)
-                                                            } else {
-                                                                // Fallback to rule-based
-                                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                                                resultText = description
-                                                                ttsManager.speak(description)
-                                                            }
-                                                        } else {
-                                                            // Fallback to rule-based on timeout or error
-                                                            val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                                            resultText = description
-                                                            ttsManager.speak(description)
-                                                        }
-                                                    } catch (e: Exception) {
-                                                        // Fallback to rule-based on any error
-                                                        val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                                        resultText = description
-                                                        ttsManager.speak(description)
-                                                    }
-                                                } else {
-                                                    // Use rule-based description
-                                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
-                                                    resultText = description
-                                                    ttsManager.speak(description)
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            resultText = "Error detecting objects"
-                                            ttsManager.speak("Error detecting objects")
-                                        } finally {
-                                            isProcessing = false
-                                        }
-                                    }
-                                }
-                                "path" -> {
-                                    // Path feature detection mode
-                                    scope.launch {
-                                        try {
-                                            if (!pathFeatureDetector.isReady()) {
-                                                resultText = "Path detection model not loaded"
-                                                ttsManager.speak("Path detection model not loaded")
-                                            } else {
-                                                val features = pathFeatureDetector.detectPathFeatures(frame)
-                                                val description = pathFeatureDescriptionBuilder.buildDescription(features)
-                                                resultText = description
-                                                ttsManager.speak(description)
-                                            }
-                                        } catch (e: Exception) {
-                                            resultText = "Error detecting path features"
-                                            ttsManager.speak("Error detecting path features")
-                                        } finally {
-                                            isProcessing = false
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
-            )
-
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 /**
- * Mode toggle button with TalkBack support.
+ * Mode chip with TalkBack support.
  */
 @Composable
-private fun ModeButton(
+private fun ModeChip(
     text: String,
     isActive: Boolean,
     onClick: () -> Unit,
@@ -648,18 +840,22 @@ private fun ModeButton(
         modifier = modifier
             .height(56.dp)
             .semantics {
-                contentDescription = if (isActive) "$text mode active" else "Switch to $text mode"
+                contentDescription = if (isActive) "$text mode selected" else "$text mode. Double tap to select."
             },
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isActive) PersonaBlind else SurfaceTint,
             contentColor = TextPrimary
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = if (isActive) {
+            BorderStroke(2.dp, TextPrimary)
+        } else null
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            fontSize = 16.sp,
             textAlign = TextAlign.Center
         )
     }
@@ -680,13 +876,14 @@ private fun ActionButton(
         enabled = !isProcessing,
         modifier = modifier
             .semantics {
-                contentDescription = if (isProcessing) "Processing" else text
+                contentDescription = if (isProcessing) "Processing. Please wait." else text
             },
         colors = ButtonDefaults.buttonColors(
             containerColor = PersonaBlind,
             contentColor = TextPrimary
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(2.dp, TextPrimary)
     ) {
         if (isProcessing) {
             CircularProgressIndicator(
@@ -718,17 +915,21 @@ private fun ResultBanner(
         colors = CardDefaults.cardColors(
             containerColor = HighlightBox
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, TextPrimary)
     ) {
         Text(
             text = text,
             modifier = Modifier
-                .padding(16.dp)
+                .padding(14.dp)
                 .fillMaxWidth()
                 .semantics {
                     contentDescription = "Result: $text"
+                    liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite
                 },
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            fontSize = 16.sp,
             color = TextPrimary,
             textAlign = TextAlign.Center
         )
@@ -750,6 +951,7 @@ private fun LandmarkTaggingDialog(
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
+        containerColor = LimitlessBackground,
         title = {
             Text(
                 text = "Tag This Place",
@@ -788,7 +990,8 @@ private fun LandmarkTaggingDialog(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isListening) PersonaBlind else SurfaceTint,
                             contentColor = TextPrimary
-                        )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         if (isListening) {
                             Text("Stop Listening")
@@ -806,7 +1009,8 @@ private fun LandmarkTaggingDialog(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PersonaBlind,
                     contentColor = TextPrimary
-                )
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Tag")
             }
