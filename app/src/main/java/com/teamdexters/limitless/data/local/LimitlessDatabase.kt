@@ -76,13 +76,36 @@ abstract class LimitlessDatabase : RoomDatabase() {
          */
         fun getDatabase(context: Context): LimitlessDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    LimitlessDatabase::class.java,
-                    "limitless_database"
-                ).build()
-                INSTANCE = instance
-                instance
+                try {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        LimitlessDatabase::class.java,
+                        "limitless_database"
+                    )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    INSTANCE = instance
+                    instance
+                } catch (e: Exception) {
+                    // Fallback: if database creation fails, try with in-memory database
+                    try {
+                        val instance = Room.inMemoryDatabaseBuilder(
+                            context.applicationContext,
+                            LimitlessDatabase::class.java
+                        ).build()
+                        INSTANCE = instance
+                        instance
+                    } catch (e2: Exception) {
+                        // Last resort: create a minimal in-memory database
+                        val instance = Room.inMemoryDatabaseBuilder(
+                            context.applicationContext,
+                            LimitlessDatabase::class.java
+                        ).allowMainThreadQueries()
+                        .build()
+                        INSTANCE = instance
+                        instance
+                    }
+                }
             }
         }
     }

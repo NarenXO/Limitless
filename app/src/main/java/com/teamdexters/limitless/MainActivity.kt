@@ -91,16 +91,30 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Check current permission state before first frame renders
-        micGranted.value = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-
-        // Request on cold start if not yet granted
-        if (!micGranted.value) {
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        try {
+            micGranted.value = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        } catch (e: Exception) {
+            // If permission check fails, assume not granted
+            micGranted.value = false
         }
 
-        val database = LimitlessDatabase.getDatabase(applicationContext)
+        // Request on cold start if not yet granted
+        try {
+            if (!micGranted.value) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        } catch (e: Exception) {
+            // If permission request fails, app continues without mic access
+        }
+
+        val database = try {
+            LimitlessDatabase.getDatabase(applicationContext)
+        } catch (e: Exception) {
+            // If database fails, app continues with null database
+            null
+        }
 
         setContent {
             LimitlessTheme {
@@ -124,7 +138,7 @@ class MainActivity : ComponentActivity() {
  */
 @Composable
 fun HazelAssistantWrapper(
-    database: LimitlessDatabase,
+    database: LimitlessDatabase?,
     micGranted: Boolean
 ) {
     val navController = rememberNavController()
@@ -167,15 +181,28 @@ fun HazelAssistantWrapper(
     // TTS initialization
     var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
-        val tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                ttsRef?.language = Locale.US
+        val tts = try {
+            TextToSpeech(context) { status ->
+                try {
+                    if (status == TextToSpeech.SUCCESS) {
+                        ttsRef?.language = Locale.US
+                    }
+                } catch (e: Exception) {
+                    // Ignore TTS language setting errors
+                }
             }
+        } catch (e: Exception) {
+            // If TTS initialization fails, app continues without TTS
+            null
         }
         ttsRef = tts
         onDispose {
-            tts.stop()
-            tts.shutdown()
+            try {
+                tts?.stop()
+                tts?.shutdown()
+            } catch (e: Exception) {
+                // Ignore TTS cleanup errors
+            }
             ttsRef = null
         }
     }
@@ -189,12 +216,25 @@ fun HazelAssistantWrapper(
     // Initialize wake-word detection pipeline (only when mic is granted)
     DisposableEffect(context, micGranted) {
         if (!micGranted) return@DisposableEffect onDispose {}
-        val wakeWordListener = DefaultWakeWordListener(context)
-        wakeWordListener.startListening {
-            isHazelListening = true
+        val wakeWordListener = try {
+            DefaultWakeWordListener(context)
+        } catch (e: Exception) {
+            // If wake word listener fails, app continues without it
+            return@DisposableEffect onDispose {}
+        }
+        try {
+            wakeWordListener.startListening {
+                isHazelListening = true
+            }
+        } catch (e: Exception) {
+            // If wake word listening fails, app continues without it
         }
         onDispose {
-            wakeWordListener.stopListening()
+            try {
+                wakeWordListener.stopListening()
+            } catch (e: Exception) {
+                // Ignore cleanup errors
+            }
         }
     }
 

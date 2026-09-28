@@ -52,10 +52,27 @@ class SoundClassifier(private val context: Context) {
                 return false
             }
 
-            val options = Interpreter.Options()
-            interpreter = Interpreter(modelBuffer, options)
+            val options = try {
+                Interpreter.Options()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create TFLite options", e)
+                return false
+            }
             
-            labels = loadLabels()
+            interpreter = try {
+                Interpreter(modelBuffer, options)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create TFLite interpreter", e)
+                return false
+            }
+            
+            labels = try {
+                loadLabels()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load labels", e)
+                emptyList()
+            }
+            
             if (labels.isEmpty()) {
                 loadError = "Label file not found: $LABEL_FILE"
                 Log.e(TAG, loadError!!)

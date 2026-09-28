@@ -94,7 +94,7 @@ private const val TAG = "PersonaSelectScreen"
 @Composable
 fun PersonaSelectScreen(
     navController: NavController,
-    database: LimitlessDatabase
+    database: LimitlessDatabase?
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -594,18 +594,22 @@ fun PersonaCard(
 private fun savePersonaAndNavigate(
     persona: String,
     navController: NavController,
-    database: LimitlessDatabase,
+    database: LimitlessDatabase?,
     coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
     coroutineScope.launch {
         withContext(Dispatchers.IO) {
-            database.personaPreferenceDao().setPreference(
-                PersonaPreferenceEntity(
-                    id = 1,
-                    selectedPersona = persona,
-                    updatedAt = System.currentTimeMillis()
+            try {
+                database?.personaPreferenceDao()?.setPreference(
+                    PersonaPreferenceEntity(
+                        id = 1,
+                        selectedPersona = persona,
+                        updatedAt = System.currentTimeMillis()
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                // If database save fails, continue with navigation
+            }
         }
         val destination = when (persona) {
             "BLIND"    -> Screen.BlindHome.route

@@ -20,7 +20,7 @@ import com.teamdexters.limitless.ui.screens.SpeechHomeScreen
 @Composable
 fun LimitlessNavHost(
     navController: NavHostController,
-    database: LimitlessDatabase
+    database: LimitlessDatabase?
 ) {
     NavHost(
         navController = navController,
