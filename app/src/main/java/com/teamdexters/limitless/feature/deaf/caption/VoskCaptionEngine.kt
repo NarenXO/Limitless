@@ -11,6 +11,7 @@ import java.io.File
 /**
  * Wraps Vosk model loading and streaming speech recognition.
  * Loads the model from assets and provides streaming recognition interface.
+ * Constructor is lightweight - heavy initialization happens in loadModel().
  */
 class VoskCaptionEngine(private val context: Context) {
     private var model: Model? = null
@@ -20,6 +21,11 @@ class VoskCaptionEngine(private val context: Context) {
         private const val TAG = "VoskCaptionEngine"
         private const val MODEL_PATH = "vosk-model-small-en-us"
         private const val SAMPLE_RATE = 16000
+    }
+
+    init {
+        // Lightweight constructor - no heavy initialization here
+        // Model loading happens in loadModel() method
     }
 
     /**
@@ -49,7 +55,12 @@ class VoskCaptionEngine(private val context: Context) {
             }
 
             // Load the model
-            model = Model(modelDir.absolutePath)
+            model = try {
+                Model(modelDir.absolutePath)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create Vosk model from: ${modelDir.absolutePath}", e)
+                null
+            }
             val success = model != null
             if (success) {
                 Log.d(TAG, "Vosk model loaded successfully")
@@ -74,37 +85,51 @@ class VoskCaptionEngine(private val context: Context) {
             val assets = context.assets.list(MODEL_PATH)
             if (assets == null || assets.isEmpty()) {
                 // Model directory not found in assets
+                Log.e(TAG, "Model directory not found in assets: $MODEL_PATH")
                 return false
             }
             
             // Create target directory
-            targetDir.mkdirs()
+            if (!targetDir.mkdirs()) {
+                Log.e(TAG, "Failed to create target directory: ${targetDir.absolutePath}")
+                return false
+            }
             
             for (asset in assets) {
                 val assetPath = "$MODEL_PATH/$asset"
                 val targetFile = File(targetDir, asset)
                 
-                copyAssetRecursively(assetPath, targetFile)
+                if (!copyAssetRecursively(assetPath, targetFile)) {
+                    Log.e(TAG, "Failed to copy asset: $assetPath")
+                    return false
+                }
             }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error extracting model from assets", e)
             false
         }
     }
 
     /**
      * Recursively copy asset file or directory.
+     * @return true if copy successful, false otherwise
      */
-    private fun copyAssetRecursively(assetPath: String, targetFile: File) {
-        try {
+    private fun copyAssetRecursively(assetPath: String, targetFile: File): Boolean {
+        return try {
             val contents = context.assets.list(assetPath)
             if (contents?.isNotEmpty() == true) {
                 // It's a directory
-                targetFile.mkdirs()
-                for (item in contents) {
-                    copyAssetRecursively("$assetPath/$item", File(targetFile, item))
+                if (!targetFile.mkdirs()) {
+                    Log.e(TAG, "Failed to create directory: ${targetFile.absolutePath}")
+                    return false
                 }
+                for (item in contents) {
+                    if (!copyAssetRecursively("$assetPath/$item", File(targetFile, item))) {
+                        return false
+                    }
+                }
+                true
             } else {
                 // It's a file
                 targetFile.parentFile?.mkdirs()
@@ -113,9 +138,11 @@ class VoskCaptionEngine(private val context: Context) {
                         input.copyTo(output)
                     }
                 }
+                true
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error copying asset: $assetPath", e)
+            false
         }
     }
 
@@ -129,7 +156,7 @@ class VoskCaptionEngine(private val context: Context) {
             recognizer = Recognizer(modelRef, SAMPLE_RATE.toFloat())
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to initialize Vosk recognizer", e)
             false
         }
     }
@@ -194,7 +221,7 @@ class VoskCaptionEngine(private val context: Context) {
         try {
             model?.close()
         } catch (e: Exception) {
-            // Ignore close errors
+            Log.e(TAG, "Error closing Vosk model", e)
         } finally {
             model = null
         }

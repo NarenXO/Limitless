@@ -12,6 +12,7 @@ import java.nio.FloatBuffer
 /**
  * Manages YAMNet (TFLite) model inference for environmental sound classification.
  * Detects emergency sounds: Siren, Fire Alarm, and Doorbell.
+ * Constructor is lightweight - heavy initialization happens in loadModel().
  */
 class SoundClassifier(private val context: Context) {
     private var interpreter: Interpreter? = null
@@ -37,6 +38,11 @@ class SoundClassifier(private val context: Context) {
             "Knock" to SoundType.DOORBELL,
             "Door knock" to SoundType.DOORBELL
         )
+    }
+
+    init {
+        // Lightweight constructor - no heavy initialization here
+        // Model loading happens in loadModel() method
     }
 
     /**
@@ -206,7 +212,11 @@ class SoundClassifier(private val context: Context) {
      * Release resources.
      */
     fun release() {
-        interpreter?.close()
+        try {
+            interpreter?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing TFLite interpreter", e)
+        }
         interpreter = null
         isModelLoaded = false
     }

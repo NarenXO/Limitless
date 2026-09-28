@@ -254,26 +254,57 @@ fun PersonaSelectScreen(
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
     DisposableEffect(Unit) {
         // SpeechRecognizer must be on UI thread — DisposableEffect runs on composition
-        recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
+        val recognizer = try {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create SpeechRecognizer", e)
+            null
+        }
+        recognizerRef = recognizer
 
-        val tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                ttsRef?.language = Locale.US
-                // Stage 1: welcome + listen for name
-                ttsRef?.speak(
-                    "Welcome to Limitless. What is your name?",
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "welcome"
-                )
+        val tts = try {
+            TextToSpeech(context) { status ->
+                try {
+                    if (status == TextToSpeech.SUCCESS) {
+                        try {
+                            ttsRef?.language = Locale.US
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to set TTS language", e)
+                        }
+                        // Stage 1: welcome + listen for name
+                        try {
+                            ttsRef?.speak(
+                                "Welcome to Limitless. What is your name?",
+                                TextToSpeech.QUEUE_FLUSH,
+                                null,
+                                "welcome"
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to speak welcome message", e)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "TTS initialization callback error", e)
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create TextToSpeech", e)
+            null
         }
         ttsRef = tts
 
         onDispose {
-            tts.stop()
-            tts.shutdown()
-            recognizerRef?.destroy()
+            try {
+                tts?.stop()
+                tts?.shutdown()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error shutting down TTS", e)
+            }
+            try {
+                recognizer?.destroy()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error destroying SpeechRecognizer", e)
+            }
             recognizerRef = null
             ttsRef = null
         }

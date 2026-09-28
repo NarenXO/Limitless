@@ -99,8 +99,16 @@ fun DeafHomeScreen(
 
     // Initialize models on first composition
     LaunchedEffect(Unit) {
-        captionViewModel.initialize(context)
-        soundAlertViewModel.initialize(context)
+        try {
+            captionViewModel.initialize(context)
+        } catch (e: Exception) {
+            // If caption initialization fails, app continues without captions
+        }
+        try {
+            soundAlertViewModel.initialize(context)
+        } catch (e: Exception) {
+            // If sound alert initialization fails, app continues without sound alerts
+        }
     }
 
     // Auto-scroll to bottom when new captions arrive

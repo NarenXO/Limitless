@@ -82,7 +82,12 @@ class DefaultWakeWordListener(
 
         val numClasses = if (outputShape.size > 1) outputShape[1] else 2
 
-        val preprocessor = AudioPreprocessor(inputShape = inputShape)
+        val preprocessor = try {
+            AudioPreprocessor(inputShape = inputShape)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create AudioPreprocessor", e)
+            return
+        }
         this.audioPreprocessor = preprocessor
 
         val coroutineScope = CoroutineScope(Dispatchers.Default + Job())

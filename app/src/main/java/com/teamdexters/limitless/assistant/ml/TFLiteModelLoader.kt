@@ -32,8 +32,18 @@ object TFLiteModelLoader {
                 startOffset,
                 declaredLength
             )
-            val options = Interpreter.Options()
-            Interpreter(modelBuffer, options)
+            val options = try {
+                Interpreter.Options()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create TFLite options for '$modelName'", e)
+                return null
+            }
+            try {
+                Interpreter(modelBuffer, options)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create TFLite interpreter for '$modelName'", e)
+                null
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load TFLite model '$modelName': ${e.message}")
             null

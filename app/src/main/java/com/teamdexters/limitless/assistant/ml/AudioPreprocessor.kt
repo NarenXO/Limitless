@@ -71,7 +71,14 @@ class AudioPreprocessor(
                 return
             }
 
-            audioRecord?.startRecording()
+            try {
+                audioRecord?.startRecording()
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "AudioRecord failed to start recording", e)
+                audioRecord?.release()
+                audioRecord = null
+                return
+            }
 
             recordingJob = scope.launch(Dispatchers.IO) {
                 val shortBuffer = ShortArray(1024)
