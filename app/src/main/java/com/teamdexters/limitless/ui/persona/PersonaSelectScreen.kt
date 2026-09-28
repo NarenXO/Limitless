@@ -1,5 +1,6 @@
 package com.teamdexters.limitless.ui.persona
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -78,10 +79,6 @@ import java.util.Locale
 
 private const val TAG = "PersonaSelectScreen"
 
-// Retains name and stage throughout the app session across nav backstack recreations
-private var persistentCapturedName: String = ""
-private var persistentHasCompletedNameStage: Boolean = false
-
 /**
  * Two-stage accessibility onboarding screen.
  *
@@ -104,11 +101,35 @@ fun PersonaSelectScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+    val prefs = remember { 
+        context.getSharedPreferences("limitless_user_session", Context.MODE_PRIVATE) 
+    }
+
+    // Read from disk: has the user completed the name stage?
+    val hasCompletedNameOnDisk = remember { 
+        prefs.getBoolean("has_completed_name_stage", false) 
+    }
+    val savedNameOnDisk = remember { 
+        prefs.getString("saved_user_name", "") ?: "" 
+    }
+
     // ── Stage tracking ──────────────────────────────────────────────────────
     // true  = Stage 1 (name capture)
     // false = Stage 2 (persona selection)
-    var isNameStage by rememberSaveable { mutableStateOf(!persistentHasCompletedNameStage) }
-    var capturedName by rememberSaveable { mutableStateOf(persistentCapturedName) }
+    var isNameStage by rememberSaveable { mutableStateOf(!hasCompletedNameOnDisk) }
+    var capturedName by rememberSaveable { mutableStateOf(savedNameOnDisk) }
+
+    fun completeNameStage(name: String) {
+        val finalName = name.ifBlank { "there" }
+        capturedName = finalName
+        isNameStage = false
+        
+        // WRITE SYNCHRONOUSLY TO DISK
+        prefs.edit()
+            .putBoolean("has_completed_name_stage", true)
+            .putString("saved_user_name", finalName)
+            .apply()
+    }
 
     // ── Speech-recognition UI state ─────────────────────────────────────────
     var isListening by remember { mutableStateOf(false) }
@@ -204,10 +225,7 @@ fun PersonaSelectScreen(
         val nameListener = makeRecognitionListener(
             onResult = { name ->
                 val enteredName = name.replaceFirstChar { it.uppercase() }
-                persistentCapturedName = enteredName
-                persistentHasCompletedNameStage = true
-                capturedName = enteredName
-                isNameStage = false
+                completeNameStage(enteredName)
             },
             onRetry = {
                 speakThenListen("I didn't catch that. What is your name?") {
@@ -215,17 +233,11 @@ fun PersonaSelectScreen(
                         makeRecognitionListener(
                             onResult = { name ->
                                 val enteredName = name.replaceFirstChar { it.uppercase() }
-                                persistentCapturedName = enteredName
-                                persistentHasCompletedNameStage = true
-                                capturedName = enteredName
-                                isNameStage = false
+                                completeNameStage(enteredName)
                             },
                             onRetry = {
                                 // Two strikes — skip name, proceed with placeholder
-                                persistentCapturedName = "there"
-                                persistentHasCompletedNameStage = true
-                                capturedName = "there"
-                                isNameStage = false
+                                completeNameStage("there")
                             }
                         )
                     )
@@ -311,7 +323,7 @@ fun PersonaSelectScreen(
         if (isNameStage) startNameCapture()
     }
 
-    val wasReturning = remember { persistentHasCompletedNameStage }
+    val wasReturning = remember { hasCompletedNameOnDisk }
 
     // ── Stage 2 auto-listen after name is captured ────────────────────────────
     LaunchedEffect(isNameStage, capturedName, ttsRef) {

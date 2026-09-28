@@ -23,24 +23,10 @@ fun LimitlessNavHost(
     database: LimitlessDatabase
 ) {
     val navigateBackToPersonaSelect: () -> Unit = {
-        android.util.Log.e("NAV_DEBUG", "navigateBackToPersonaSelect triggered! Current route: ${navController.currentBackStackEntry?.destination?.route}")
-        try {
-            // Attempt normal pop first
-            val popped = navController.popBackStack()
-            android.util.Log.e("NAV_DEBUG", "popBackStack result: $popped")
-            
-            // If not popped or still on same screen, force navigate to PersonaSelect
-            if (!popped || navController.currentBackStackEntry?.destination?.route != Screen.PersonaSelect.route) {
-                navController.navigate(Screen.PersonaSelect.route) {
-                    popUpTo(navController.graph.startDestinationId) {
-                        inclusive = false
-                    }
-                    launchSingleTop = true
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("NAV_DEBUG", "Error navigating back, forcing navigate", e)
+        val popped = navController.popBackStack(Screen.PersonaSelect.route, inclusive = false)
+        if (!popped) {
             navController.navigate(Screen.PersonaSelect.route) {
+                popUpTo(Screen.PersonaSelect.route) { inclusive = true }
                 launchSingleTop = true
             }
         }
