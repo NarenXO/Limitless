@@ -7,6 +7,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -105,12 +106,31 @@ fun PersonaSelectScreen(
         context.getSharedPreferences("limitless_user_session", Context.MODE_PRIVATE) 
     }
 
+    // Get current app version code
+    val packageInfo = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: Exception) { null }
+    }
+    val currentVersion = packageInfo?.let { 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            it.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            it.versionCode.toLong()
+        }
+    } ?: 1L
+    val savedVersion = prefs.getLong("onboarding_version", 0L)
+
+    // If app version changed (reinstall/update), reset onboarding
+    val isFreshInstall = currentVersion != savedVersion
+
     // Read from disk: has the user completed the name stage?
     val hasCompletedNameOnDisk = remember { 
-        prefs.getBoolean("has_completed_name_stage", false) 
+        prefs.getBoolean("has_completed_name_stage", false) && !isFreshInstall
     }
     val savedNameOnDisk = remember { 
-        prefs.getString("saved_user_name", "") ?: "" 
+        if (isFreshInstall) "" else prefs.getString("saved_user_name", "") ?: "" 
     }
 
     // ── Stage tracking ──────────────────────────────────────────────────────
@@ -118,6 +138,7 @@ fun PersonaSelectScreen(
     // false = Stage 2 (persona selection)
     var isNameStage by rememberSaveable { mutableStateOf(!hasCompletedNameOnDisk) }
     var capturedName by rememberSaveable { mutableStateOf(savedNameOnDisk) }
+    var nameStrikes by remember { mutableStateOf(0) }
 
     fun completeNameStage(name: String) {
         val finalName = name.ifBlank { "there" }
@@ -128,6 +149,7 @@ fun PersonaSelectScreen(
         prefs.edit()
             .putBoolean("has_completed_name_stage", true)
             .putString("saved_user_name", finalName)
+            .putLong("onboarding_version", currentVersion)
             .apply()
     }
 
@@ -135,19 +157,12 @@ fun PersonaSelectScreen(
     var isListening by remember { mutableStateOf(false) }
     var listeningHint by remember { mutableStateOf("") }
 
-    // ── TTS ──────────────────────────────────────────────────────────────────
+    // ── TTS & Speech State ───────────────────────────────────────────────────
+    var ttsFinished by remember { mutableStateOf(false) }
     var ttsRef: TextToSpeech? by remember { mutableStateOf(null) }
-    // SpeechRecognizer MUST be created on the UI thread
     var recognizerRef: SpeechRecognizer? by remember { mutableStateOf(null) }
 
     // ── Helper: build a fresh RecognitionListener ────────────────────────────
-    /**
-     * Creates a RecognitionListener that handles both the name-capture stage
-     * and the persona-selection stage.
-     *
-     * @param onResult Invoked with the best-match string on success.
-     * @param onRetry  Invoked when a recoverable error occurs (timeout / no match).
-     */
     fun makeRecognitionListener(
         onResult: (String) -> Unit,
         onRetry: () -> Unit
@@ -178,14 +193,7 @@ fun PersonaSelectScreen(
         override fun onError(error: Int) {
             isListening = false
             listeningHint = ""
-            val msg = when (error) {
-                SpeechRecognizer.ERROR_NO_MATCH       -> "ERROR_NO_MATCH"
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
-                SpeechRecognizer.ERROR_AUDIO          -> "ERROR_AUDIO"
-                SpeechRecognizer.ERROR_NETWORK        -> "ERROR_NETWORK"
-                else                                  -> "ERROR_$error"
-            }
-            Log.w(TAG, "SpeechRecognizer error: $msg (code=$error)")
+            Log.w(TAG, "SpeechRecognizer error code: $error")
             onRetry()
         }
         override fun onPartialResults(partial: Bundle?) {
@@ -208,16 +216,12 @@ fun PersonaSelectScreen(
         recognizer.startListening(intent)
     }
 
-    // ── Helper: TTS-then-listen (waits for TTS to finish before listening) ────
-    fun speakThenListen(utterance: String, onTtsDone: () -> Unit) {
-        val tts = ttsRef ?: run { onTtsDone(); return }
-        tts.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, null)
-        // Poll until TTS is no longer speaking, then fire callback
-        coroutineScope.launch {
-            while (tts.isSpeaking) delay(150)
-            delay(300) // brief pause before mic activates
-            withContext(Dispatchers.Main) { onTtsDone() }
-        }
+    // ── Helper: speak prompt ────────────────────────────────────────────────
+    fun speakPrompt(utterance: String) {
+        ttsFinished = false
+        isListening = false
+        listeningHint = "Speaking…"
+        ttsRef?.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, "prompt")
     }
 
     // ── Stage 1 name-retry loop ───────────────────────────────────────────────
@@ -228,19 +232,11 @@ fun PersonaSelectScreen(
                 completeNameStage(enteredName)
             },
             onRetry = {
-                speakThenListen("I didn't catch that. What is your name?") {
-                    startListening(
-                        makeRecognitionListener(
-                            onResult = { name ->
-                                val enteredName = name.replaceFirstChar { it.uppercase() }
-                                completeNameStage(enteredName)
-                            },
-                            onRetry = {
-                                // Two strikes — skip name, proceed with placeholder
-                                completeNameStage("there")
-                            }
-                        )
-                    )
+                nameStrikes++
+                if (nameStrikes >= 2) {
+                    completeNameStage("there")
+                } else {
+                    speakPrompt("I didn't catch that. What is your name?")
                 }
             }
         )
@@ -248,7 +244,7 @@ fun PersonaSelectScreen(
     }
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
-    fun startPersonaListening(saveFn: (String) -> Unit) {
+    fun startPersonaListening() {
         val personaListener = makeRecognitionListener(
             onResult = { spoken ->
                 val lower = spoken.lowercase()
@@ -260,17 +256,13 @@ fun PersonaSelectScreen(
                     else -> null
                 }
                 if (match != null) {
-                    saveFn(match)
+                    savePersonaAndNavigate(match, navController, database, coroutineScope)
                 } else {
-                    speakThenListen(
-                        "Sorry, I didn't recognise that. Please say Blind, Deaf, Speech, or Mobility."
-                    ) { startPersonaListening(saveFn) }
+                    speakPrompt("Sorry, I didn't recognise that. Please say Blind, Deaf, Speech, or Mobility.")
                 }
             },
             onRetry = {
-                speakThenListen(
-                    "I didn't catch that. Please say one of: Blind, Deaf, Speech, or Mobility."
-                ) { startPersonaListening(saveFn) }
+                speakPrompt("I didn't catch that. Please say one of: Blind, Deaf, Speech, or Mobility.")
             }
         )
         startListening(personaListener)
@@ -278,78 +270,63 @@ fun PersonaSelectScreen(
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
     DisposableEffect(Unit) {
-        // SpeechRecognizer must be on UI thread — DisposableEffect runs on composition
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
-
-        val tts = TextToSpeech(context) { status ->
+        var ttsInstance: TextToSpeech? = null
+        ttsInstance = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                ttsRef?.language = Locale.US
-                if (isNameStage) {
-                    // Stage 1: welcome + listen for name
-                    ttsRef?.speak(
-                        "Welcome to Limitless. What is your name?",
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "welcome"
-                    )
-                } else {
-                    // Stage 2: returning via back navigation
-                    ttsRef?.speak(
-                        "Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair.",
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "welcome"
-                    )
-                }
+                ttsInstance?.language = Locale.US
+                ttsInstance?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        ttsFinished = true
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        ttsFinished = true
+                    }
+                })
+                // Triggers the initial LaunchedEffect
+                ttsRef = ttsInstance
             }
         }
-        ttsRef = tts
 
         onDispose {
-            tts.stop()
-            tts.shutdown()
+            ttsInstance?.stop()
+            ttsInstance?.shutdown()
             recognizerRef?.destroy()
             recognizerRef = null
             ttsRef = null
         }
     }
 
-    // ── Stage 1 auto-listen after TTS welcome finishes ────────────────────────
-    LaunchedEffect(ttsRef) {
-        if (ttsRef == null) return@LaunchedEffect
-        // Wait for TTS to initialise and finish the welcome utterance
-        while (ttsRef?.isSpeaking != false) delay(200)
-        delay(400)
-        if (isNameStage) startNameCapture()
-    }
-
     val wasReturning = remember { hasCompletedNameOnDisk }
 
-    // ── Stage 2 auto-listen after name is captured ────────────────────────────
-    LaunchedEffect(isNameStage, capturedName, ttsRef) {
-        if (isNameStage || ttsRef == null) return@LaunchedEffect
-        // Wait for TTS to finish its initial greeting if returning or newly entered
-        while (ttsRef?.isSpeaking == true) delay(200)
-
-        // Only speak greeting if we just transitioned from Stage 1. 
-        // If we are returning via back navigation, the DisposableEffect already spoke the instruction.
-        val greeting = if (wasReturning) {
-            // Already returning, don't speak again
-            ""
-        } else {
-            "Hello $capturedName. Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
-        }
+    // ── Issue Prompts when Stage Changes ──────────────────────────────────────
+    LaunchedEffect(isNameStage, ttsRef) {
+        if (ttsRef == null) return@LaunchedEffect
+        delay(500) // Small delay for TTS engine to initialize or transition
         
-        if (greeting.isNotEmpty()) {
-            speakThenListen(greeting) {
-                startPersonaListening { persona ->
-                    savePersonaAndNavigate(persona, navController, database, coroutineScope)
-                }
-            }
+        if (isNameStage) {
+            nameStrikes = 0
+            speakPrompt("What is your name?")
         } else {
-            // Just listen
-            startPersonaListening { persona ->
-                savePersonaAndNavigate(persona, navController, database, coroutineScope)
+            val greeting = if (wasReturning) {
+                "Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+            } else {
+                "Hello $capturedName. Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+            }
+            speakPrompt(greeting)
+        }
+    }
+
+    // ── Open Mic Only After TTS Finishes ──────────────────────────────────────
+    LaunchedEffect(ttsFinished) {
+        if (ttsFinished) {
+            delay(300) // Brief pause after TTS ends to prevent feedback loop
+            if (isNameStage) {
+                startNameCapture()
+            } else {
+                startPersonaListening()
             }
         }
     }
