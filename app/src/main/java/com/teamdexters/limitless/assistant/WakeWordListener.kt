@@ -93,7 +93,7 @@ class DefaultWakeWordListener(
         val coroutineScope = CoroutineScope(Dispatchers.Default + Job())
         this.scope = coroutineScope
 
-        preprocessor.startRecording(coroutineScope) { floatChunk ->
+        preprocessor.startRecording(coroutineScope, context) { floatChunk ->
             if (!isListening) return@startRecording
 
             try {

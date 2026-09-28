@@ -171,15 +171,22 @@ fun PersonaSelectScreen(
 
     // ── Helper: start recognition ─────────────────────────────────────────────
     fun startListening(listener: RecognitionListener) {
-        val recognizer = recognizerRef ?: return
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        val recognizer = recognizerRef ?: run {
+            Log.w(TAG, "SpeechRecognizer not available, cannot start listening")
+            return
         }
-        recognizer.setRecognitionListener(listener)
-        recognizer.startListening(intent)
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            }
+            recognizer.setRecognitionListener(listener)
+            recognizer.startListening(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start speech recognition", e)
+        }
     }
 
     // ── Helper: TTS-then-listen (waits for TTS to finish before listening) ────
@@ -267,13 +274,13 @@ fun PersonaSelectScreen(
                 try {
                     if (status == TextToSpeech.SUCCESS) {
                         try {
-                            ttsRef?.language = Locale.US
+                            tts?.language = Locale.US
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to set TTS language", e)
                         }
                         // Stage 1: welcome + listen for name
                         try {
-                            ttsRef?.speak(
+                            tts?.speak(
                                 "Welcome to Limitless. What is your name?",
                                 TextToSpeech.QUEUE_FLUSH,
                                 null,

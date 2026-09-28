@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,8 +67,10 @@ import com.teamdexters.limitless.ui.navigation.Screen
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.util.NetworkStatus
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -161,14 +164,21 @@ fun HazelAssistantWrapper(
     val showToolsBar = currentRoute in personaHomeRoutes
 
     // App-wide network status tracker (register/unregister lifecycle-safe)
-    val networkStatusTracker = remember { NetworkStatusTracker(context) }
-    DisposableEffect(networkStatusTracker) {
-        networkStatusTracker.register()
-        onDispose {
-            networkStatusTracker.unregister()
+    val networkStatusTracker = remember { 
+        try {
+            NetworkStatusTracker(context)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to create NetworkStatusTracker", e)
+            null
         }
     }
-    val networkStatus by networkStatusTracker.statusFlow.collectAsState()
+    DisposableEffect(networkStatusTracker) {
+        networkStatusTracker?.register()
+        onDispose {
+            networkStatusTracker?.unregister()
+        }
+    }
+    val networkStatus by (networkStatusTracker?.statusFlow ?: MutableStateFlow(NetworkStatus.Offline)).collectAsState()
 
     // Hazel query handler with network status tracker integration
     val queryHandler = remember(networkStatusTracker) {
@@ -220,6 +230,7 @@ fun HazelAssistantWrapper(
             DefaultWakeWordListener(context)
         } catch (e: Exception) {
             // If wake word listener fails, app continues without it
+            Log.e("MainActivity", "Failed to create DefaultWakeWordListener", e)
             return@DisposableEffect onDispose {}
         }
         try {
@@ -228,6 +239,7 @@ fun HazelAssistantWrapper(
             }
         } catch (e: Exception) {
             // If wake word listening fails, app continues without it
+            Log.e("MainActivity", "Failed to start wake word listening", e)
         }
         onDispose {
             try {

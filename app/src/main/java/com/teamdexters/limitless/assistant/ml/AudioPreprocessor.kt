@@ -1,10 +1,13 @@
 package com.teamdexters.limitless.assistant.ml
 
-import android.annotation.SuppressLint
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,16 +41,30 @@ class AudioPreprocessor(
 
     /**
      * Starts audio recording and preprocessing loop on a background thread.
+     * Checks RECORD_AUDIO permission before attempting to access the microphone.
      *
      * @param scope CoroutineScope for running background audio capture.
+     * @param context Android context for permission checking.
      * @param onAudioChunkReady Callback invoked whenever a full input chunk is ready for inference.
      */
-    @SuppressLint("MissingPermission")
     fun startRecording(
         scope: CoroutineScope,
+        context: Context? = null,
         onAudioChunkReady: (FloatArray) -> Unit
     ) {
         if (recordingJob?.isActive == true) return
+
+        // Check RECORD_AUDIO permission before creating AudioRecord
+        if (context != null) {
+            val permissionGranted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!permissionGranted) {
+                Log.w(TAG, "RECORD_AUDIO permission not granted. Cannot start audio recording.")
+                return
+            }
+        }
 
         val minBufferSize = AudioRecord.getMinBufferSize(
             sampleRate,
@@ -75,6 +92,11 @@ class AudioPreprocessor(
                 audioRecord?.startRecording()
             } catch (e: IllegalStateException) {
                 Log.e(TAG, "AudioRecord failed to start recording", e)
+                audioRecord?.release()
+                audioRecord = null
+                return
+            } catch (e: SecurityException) {
+                Log.e(TAG, "SecurityException: RECORD_AUDIO permission not granted", e)
                 audioRecord?.release()
                 audioRecord = null
                 return
