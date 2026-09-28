@@ -78,6 +78,10 @@ import java.util.Locale
 
 private const val TAG = "PersonaSelectScreen"
 
+// Retains name and stage throughout the app session across nav backstack recreations
+private var persistentCapturedName: String = ""
+private var persistentHasCompletedNameStage: Boolean = false
+
 /**
  * Two-stage accessibility onboarding screen.
  *
@@ -103,8 +107,8 @@ fun PersonaSelectScreen(
     // ── Stage tracking ──────────────────────────────────────────────────────
     // true  = Stage 1 (name capture)
     // false = Stage 2 (persona selection)
-    var isNameStage by rememberSaveable { mutableStateOf(true) }
-    var capturedName by rememberSaveable { mutableStateOf("") }
+    var isNameStage by rememberSaveable { mutableStateOf(!persistentHasCompletedNameStage) }
+    var capturedName by rememberSaveable { mutableStateOf(persistentCapturedName) }
 
     // ── Speech-recognition UI state ─────────────────────────────────────────
     var isListening by remember { mutableStateOf(false) }
@@ -199,7 +203,10 @@ fun PersonaSelectScreen(
     fun startNameCapture() {
         val nameListener = makeRecognitionListener(
             onResult = { name ->
-                capturedName = name.replaceFirstChar { it.uppercase() }
+                val enteredName = name.replaceFirstChar { it.uppercase() }
+                persistentCapturedName = enteredName
+                persistentHasCompletedNameStage = true
+                capturedName = enteredName
                 isNameStage = false
             },
             onRetry = {
@@ -207,11 +214,16 @@ fun PersonaSelectScreen(
                     startListening(
                         makeRecognitionListener(
                             onResult = { name ->
-                                capturedName = name.replaceFirstChar { it.uppercase() }
+                                val enteredName = name.replaceFirstChar { it.uppercase() }
+                                persistentCapturedName = enteredName
+                                persistentHasCompletedNameStage = true
+                                capturedName = enteredName
                                 isNameStage = false
                             },
                             onRetry = {
                                 // Two strikes — skip name, proceed with placeholder
+                                persistentCapturedName = "there"
+                                persistentHasCompletedNameStage = true
                                 capturedName = "there"
                                 isNameStage = false
                             }
@@ -260,13 +272,23 @@ fun PersonaSelectScreen(
         val tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 ttsRef?.language = Locale.US
-                // Stage 1: welcome + listen for name
-                ttsRef?.speak(
-                    "Welcome to Limitless. What is your name?",
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "welcome"
-                )
+                if (isNameStage) {
+                    // Stage 1: welcome + listen for name
+                    ttsRef?.speak(
+                        "Welcome to Limitless. What is your name?",
+                        TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        "welcome"
+                    )
+                } else {
+                    // Stage 2: returning via back navigation
+                    ttsRef?.speak(
+                        "Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair.",
+                        TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        "welcome"
+                    )
+                }
             }
         }
         ttsRef = tts
@@ -289,13 +311,31 @@ fun PersonaSelectScreen(
         if (isNameStage) startNameCapture()
     }
 
+    val wasReturning = remember { persistentHasCompletedNameStage }
+
     // ── Stage 2 auto-listen after name is captured ────────────────────────────
-    LaunchedEffect(isNameStage, capturedName) {
-        if (isNameStage) return@LaunchedEffect
-        val greeting = "Hello $capturedName. " +
-                "Choose your assist mode: " +
-                "Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
-        speakThenListen(greeting) {
+    LaunchedEffect(isNameStage, capturedName, ttsRef) {
+        if (isNameStage || ttsRef == null) return@LaunchedEffect
+        // Wait for TTS to finish its initial greeting if returning or newly entered
+        while (ttsRef?.isSpeaking == true) delay(200)
+
+        // Only speak greeting if we just transitioned from Stage 1. 
+        // If we are returning via back navigation, the DisposableEffect already spoke the instruction.
+        val greeting = if (wasReturning) {
+            // Already returning, don't speak again
+            ""
+        } else {
+            "Hello $capturedName. Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+        }
+        
+        if (greeting.isNotEmpty()) {
+            speakThenListen(greeting) {
+                startPersonaListening { persona ->
+                    savePersonaAndNavigate(persona, navController, database, coroutineScope)
+                }
+            }
+        } else {
+            // Just listen
             startPersonaListening { persona ->
                 savePersonaAndNavigate(persona, navController, database, coroutineScope)
             }
