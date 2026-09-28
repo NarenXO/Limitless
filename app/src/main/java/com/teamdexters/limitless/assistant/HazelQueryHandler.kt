@@ -95,7 +95,7 @@ class HazelQueryHandler(
             val connectivityManager =
                 context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
             val activeNetwork = connectivityManager?.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+            val capabilities = connectivityManager?.getNetworkCapabilities(activeNetwork) ?: return false
             capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         } catch (e: Exception) {
             false

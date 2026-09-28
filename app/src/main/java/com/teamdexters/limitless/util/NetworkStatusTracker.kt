@@ -160,7 +160,7 @@ class NetworkStatusTracker(
     private fun checkActiveNetwork(): Boolean {
         return try {
             val activeNetwork = connectivityManager?.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+            val capabilities = connectivityManager?.getNetworkCapabilities(activeNetwork) ?: return false
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         } catch (e: Exception) {
             Log.e(TAG, "Error checking active network: ${e.message}", e)
