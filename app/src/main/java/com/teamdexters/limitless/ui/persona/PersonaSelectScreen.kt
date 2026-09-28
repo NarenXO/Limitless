@@ -274,13 +274,13 @@ fun PersonaSelectScreen(
                 try {
                     if (status == TextToSpeech.SUCCESS) {
                         try {
-                            tts?.language = Locale.US
+                            ttsRef?.language = Locale.US
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to set TTS language", e)
                         }
                         // Stage 1: welcome + listen for name
                         try {
-                            tts?.speak(
+                            ttsRef?.speak(
                                 "Welcome to Limitless. What is your name?",
                                 TextToSpeech.QUEUE_FLUSH,
                                 null,
