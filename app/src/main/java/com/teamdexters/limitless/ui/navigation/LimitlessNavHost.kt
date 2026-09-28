@@ -22,26 +22,26 @@ fun LimitlessNavHost(
     navController: NavHostController,
     database: LimitlessDatabase
 ) {
-    // Bulletproof back-navigation handler: guarantees the user always
-    // reaches PersonaSelect, even if the backstack entry was lost
-    // (process death, deep-link, or duplicate pop).
     val navigateBackToPersonaSelect: () -> Unit = {
-        android.util.Log.d("LimitlessNav", "navigateBackToPersonaSelect invoked")
-        // Strategy 1: Pop back to the existing PersonaSelect entry (non-inclusive).
-        val popped = navController.popBackStack(
-            Screen.PersonaSelect.route,
-            inclusive = false
-        )
-        if (!popped) {
-            // Strategy 2: Generic pop — maybe there is *some* entry to go back to.
-            val genericPopped = navController.popBackStack()
-            if (!genericPopped) {
-                // Strategy 3: Explicit navigate — clear entire stack, land on PersonaSelect.
-                android.util.Log.d("LimitlessNav", "Fallback: explicit navigate to PersonaSelect")
+        android.util.Log.e("NAV_DEBUG", "navigateBackToPersonaSelect triggered! Current route: ${navController.currentBackStackEntry?.destination?.route}")
+        try {
+            // Attempt normal pop first
+            val popped = navController.popBackStack()
+            android.util.Log.e("NAV_DEBUG", "popBackStack result: $popped")
+            
+            // If not popped or still on same screen, force navigate to PersonaSelect
+            if (!popped || navController.currentBackStackEntry?.destination?.route != Screen.PersonaSelect.route) {
                 navController.navigate(Screen.PersonaSelect.route) {
-                    popUpTo(0) { inclusive = true }
+                    popUpTo(navController.graph.startDestinationId) {
+                        inclusive = false
+                    }
                     launchSingleTop = true
                 }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("NAV_DEBUG", "Error navigating back, forcing navigate", e)
+            navController.navigate(Screen.PersonaSelect.route) {
+                launchSingleTop = true
             }
         }
     }

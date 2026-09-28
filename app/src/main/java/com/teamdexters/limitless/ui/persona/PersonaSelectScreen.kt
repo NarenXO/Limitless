@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,8 +103,8 @@ fun PersonaSelectScreen(
     // ── Stage tracking ──────────────────────────────────────────────────────
     // true  = Stage 1 (name capture)
     // false = Stage 2 (persona selection)
-    var isNameStage by remember { mutableStateOf(true) }
-    var capturedName by remember { mutableStateOf("") }
+    var isNameStage by rememberSaveable { mutableStateOf(true) }
+    var capturedName by rememberSaveable { mutableStateOf("") }
 
     // ── Speech-recognition UI state ─────────────────────────────────────────
     var isListening by remember { mutableStateOf(false) }

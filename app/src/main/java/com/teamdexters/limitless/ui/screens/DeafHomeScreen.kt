@@ -26,41 +26,56 @@ import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.TextPrimary
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.zIndex
+
 /**
  * Placeholder home screen for deaf and hard-of-hearing users.
  * This screen will be expanded with accessibility features in later phases.
  */
 @Composable
 fun DeafHomeScreen(onBack: () -> Unit = {}) {
+    // Intercept physical phone back gestures & hardware back buttons
+    BackHandler(enabled = true) {
+        android.util.Log.e("NAV_DEBUG", "System BackHandler triggered in DeafHomeScreen")
+        onBack()
+    }
+
     Scaffold(
         topBar = {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .zIndex(100f) // Guarantees touches are never intercepted by overlays
             ) {
-                IconButton(
-                    onClick = {
-                        android.util.Log.d("LimitlessNav", "Back button clicked in DeafHomeScreen")
-                        onBack()
-                    },
-                    modifier = Modifier.size(48.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Go back to persona selection",
-                        tint = TextPrimary
+                    IconButton(
+                        onClick = {
+                            android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
+                            onBack()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Go back to persona selection",
+                            tint = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Deaf & Hard-of-Hearing",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Deaf & Hard-of-Hearing",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
             }
         },
         containerColor = LimitlessBackground

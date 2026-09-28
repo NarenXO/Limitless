@@ -10,8 +10,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -253,36 +255,48 @@ fun SpeechHomeScreen(
         }
     }
 
+    // Intercept physical phone back gestures & hardware back buttons
+    BackHandler(enabled = true) {
+        android.util.Log.e("NAV_DEBUG", "System BackHandler triggered in SpeechHomeScreen")
+        onBack()
+    }
+
     // -- Main Layout ----------------------------------------------------------
     Scaffold(
         topBar = {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .zIndex(100f) // Guarantees touches are never intercepted by overlays
             ) {
-                IconButton(
-                    onClick = {
-                        android.util.Log.d("LimitlessNav", "Back button clicked in SpeechHomeScreen")
-                        onBack()
-                    },
-                    modifier = Modifier.size(48.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Go back to persona selection",
-                        tint = TextPrimary
+                    IconButton(
+                        onClick = {
+                            android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
+                            onBack()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Go back to persona selection",
+                            tint = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Speech & Communication",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Speech & Communication",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
             }
         },
         containerColor = LimitlessBackground
