@@ -98,7 +98,7 @@ class CaptionViewModel : ViewModel() {
                     val streamer = AudioStreamer()
                     audioStreamer = streamer
 
-                    val audioRecord = streamer.startRecording()
+                    val audioRecord = streamer.startRecording(context)
                     if (audioRecord == null) {
                         _errorMessage.value = "Failed to start audio recording"
                         _isListening.value = false
