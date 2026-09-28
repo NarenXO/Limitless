@@ -43,7 +43,7 @@ class PdrEngine(context: Context) : SensorEventListener {
     // Internal sensor state
     private var lastStepCount: Long = -1L
     private var lastAccStepTime: Long = 0L
-    private val strideLengthMeters: Float = 0.75f
+    private val strideLengthMeters: Float = 1.0f
 
     private val gravity = FloatArray(3)
     private val geomagnetic = FloatArray(3)
@@ -125,13 +125,13 @@ class PdrEngine(context: Context) : SensorEventListener {
                 hasGravity = true
                 updateHeading()
 
-                // Accelerometer peak detection step counting fallback (14.0 m/s^2 threshold, 450ms cadence)
+                // Accelerometer peak detection step counting fallback (11.5 m/s^2 threshold, 300ms cadence)
                 val x = event.values[0]
                 val y = event.values[1]
                 val z = event.values[2]
                 val magnitude = kotlin.math.sqrt(x * x + y * y + z * z)
                 val now = System.currentTimeMillis()
-                if (magnitude > 14.0f && (now - lastAccStepTime > 450)) {
+                if (magnitude > 11.5f && (now - lastAccStepTime > 300)) {
                     lastAccStepTime = now
                     advanceStep()
                 }

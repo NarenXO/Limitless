@@ -2,7 +2,9 @@ package com.teamdexters.limitless.routing.indoor
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +16,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -95,6 +98,8 @@ fun QrScannerSection(
     }
 
     var scannedMessage by remember { mutableStateOf<String?>(null) }
+    var activeScannedUrl by remember { mutableStateOf<String?>(null) }
+    var activeScannedText by remember { mutableStateOf<String?>(null) }
     var lastScannedTime by remember { mutableStateOf(0L) }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -193,9 +198,8 @@ fun QrScannerSection(
                                         barcodeScanner.process(inputImage)
                                             .addOnSuccessListener { barcodes ->
                                                 for (barcode in barcodes) {
-                                                    val rawPayload = barcode.rawValue ?: continue
+                                                    val rawPayload = barcode.rawValue?.trim() ?: continue
                                                     val cleanPayload = rawPayload
-                                                        .trim()
                                                         .replace("\n", "")
                                                         .replace("\r", "")
                                                         .replace("\t", "")
@@ -208,23 +212,49 @@ fun QrScannerSection(
                                                     val now = System.currentTimeMillis()
                                                     if (now - lastScannedTime > 3000) { // Throttle scans to 3s
                                                         lastScannedTime = now
-                                                        val matchedWaypoint = kcgIndoorWaypoints.find { it.qrPayload.uppercase() == cleanPayload }
+                                                        val matchedWaypoint = kcgIndoorWaypoints.find { 
+                                                            it.qrPayload.uppercase() == cleanPayload || 
+                                                            it.id.uppercase() == cleanPayload ||
+                                                            cleanPayload.contains(it.id.uppercase())
+                                                        }
                                                         
                                                         android.util.Log.e("QR_DEBUG", "Match found: ${matchedWaypoint?.name ?: "NONE"}")
 
                                                         if (matchedWaypoint != null) {
                                                             pdrEngine.resetPosition(matchedWaypoint)
                                                             scannedMessage = "Verified: ${matchedWaypoint.name}"
+                                                            activeScannedUrl = null
+                                                            activeScannedText = null
                                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                             tts?.speak(
-                                                                matchedWaypoint.description,
+                                                                "Location updated: ${matchedWaypoint.description}",
                                                                 TextToSpeech.QUEUE_FLUSH,
                                                                 null,
-                                                                matchedWaypoint.id
+                                                                "waypoint_utterance"
                                                             )
                                                             onWaypointScanned(matchedWaypoint)
+                                                        } else if (rawPayload.startsWith("http://", ignoreCase = true) || rawPayload.startsWith("https://", ignoreCase = true)) {
+                                                            scannedMessage = null
+                                                            activeScannedText = null
+                                                            activeScannedUrl = rawPayload
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            tts?.speak(
+                                                                "Scanned link: $rawPayload",
+                                                                TextToSpeech.QUEUE_FLUSH,
+                                                                null,
+                                                                "qr_link_utterance"
+                                                            )
                                                         } else {
-                                                            scannedMessage = "Unknown QR code: $cleanPayload"
+                                                            scannedMessage = null
+                                                            activeScannedUrl = null
+                                                            activeScannedText = rawPayload
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            tts?.speak(
+                                                                "Scanned QR text: $rawPayload",
+                                                                TextToSpeech.QUEUE_FLUSH,
+                                                                null,
+                                                                "qr_text_utterance"
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -298,6 +328,55 @@ fun QrScannerSection(
                     .weight(0.35f)
                     .padding(12.dp)
             ) {
+                if (activeScannedUrl != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFFDBDF), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = activeScannedUrl!!,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(PersonaMobility, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(activeScannedUrl))
+                                    context.startActivity(intent)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Open Link",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                } else if (activeScannedText != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFFDBDF), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = activeScannedText!!,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 val cardinalHeading = getCardinalDirection(pdrEngine.headingDegrees)
                 val lastWp = pdrEngine.lastScannedWaypoint
 
