@@ -53,17 +53,38 @@ class HazelQueryHandler(
     ) {
         val lowerQuery = rawQuery.lowercase().trim()
         val isGreeting = listOf("hi", "hello", "hey", "good morning", "hazel", "hey hazel").any { lowerQuery == it || lowerQuery.startsWith("$it ") }
+        val isAppQuestion = listOf("what can you do", "help", "who are you").any { lowerQuery.contains(it) }
+        val isScannerQuery = listOf("scan", "building", "audit").any { lowerQuery.contains(it) }
+        val isCommunityQuery = listOf("community", "reports", "obstacle").any { lowerQuery.contains(it) }
+        val isNavQuery = listOf("blind", "deaf", "speech", "mobility", "wheelchair").any { lowerQuery.contains(it) }
 
-        if (isGreeting) {
-            val responseText = "Hello there! How can I assist you today?"
-            onResponseReady(responseText)
-            speakResponse(tts, responseText)
+        val localResponse = when {
+            isGreeting -> "Hello! How can I assist you today?"
+            isAppQuestion -> "I am Hazel, your accessibility assistant. Ask me to open the scanner, check community reports, or switch disability modes."
+            isScannerQuery -> "Opening Accessibility Scanner for you."
+            isCommunityQuery -> "Opening Community Reports for you."
+            isNavQuery -> "Switching assist mode for you."
+            else -> null
+        }
+
+        if (localResponse != null) {
+            scope.launch(Dispatchers.Main) {
+                onResponseReady(localResponse)
+                speakResponse(tts, localResponse)
+            }
             return
         }
 
         scope.launch {
-            val result = geminiClient.queryGemini(rawQuery)
-            val responseText = result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
+            val isOnline = isNetworkAvailable()
+            val hasKey = isApiKeyPresent()
+
+            val responseText = if (isOnline && hasKey) {
+                val result = geminiClient.queryGemini(rawQuery)
+                result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
+            } else {
+                "Here is what I know about $rawQuery: You can explore this using our accessibility tools or ask me for specific app actions."
+            }
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
@@ -156,9 +177,9 @@ class HazelQueryHandler(
 
     private fun speakResponse(tts: TextToSpeech?, text: String) {
         try {
-            Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
+            Log.d("LIMITLESS_TRACE", "[Hazel] Answer spoken aloud via TTS: $text")
             tts?.language = Locale.US
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hazel_response_${System.currentTimeMillis()}")
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAZEL_RESPONSE")
         } catch (e: Exception) {
             Log.e(TAG, "TextToSpeech speaking error: ${e.message}", e)
         }

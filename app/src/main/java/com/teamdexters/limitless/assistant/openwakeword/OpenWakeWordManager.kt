@@ -34,7 +34,7 @@ class OpenWakeWordManager(
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    private val bufferSize = maxOf(minBufferSize, sampleRate * 2) // 1 second buffer
+    private val bufferSize = maxOf(minBufferSize, 2048) // min bytes for 1024 shorts
 
     private var hasModel = false
     
@@ -79,7 +79,8 @@ class OpenWakeWordManager(
                 }
 
                 audioRecord?.startRecording()
-                val buffer = ShortArray(bufferSize)
+                val readSize = 1024 // 64ms at 16kHz
+                val buffer = ShortArray(readSize)
 
                 while (isActive && !isPaused) {
                     val readResult = audioRecord?.read(buffer, 0, buffer.size) ?: 0
@@ -96,23 +97,21 @@ class OpenWakeWordManager(
     }
 
     private suspend fun processAudioBlock(buffer: ShortArray, size: Int) {
-        // If ONNX model is present, we'd run inference here.
-        // For the fallback, we just check RMS energy + simple heuristics to simulate a detection
-        
         val rms = calculateRMS(buffer, size)
+        val zcr = calculateZCR(buffer, size)
         
         // Very naive fallback check: if volume spikes highly, simulate detection 
-        // (In a real scenario, ONNX returns probability >= 0.7f)
-        val threshold = if (hasModel) 0.7f else 2500f // Fallback amplitude threshold
+        val threshold = if (hasModel) 0.7f else 350.0f // Fallback amplitude threshold
+        
         val isDetected = if (hasModel) {
             // Simulated ONNX run, pretend we detect occasionally for testing if needed
             false 
         } else {
-            rms > threshold
+            rms > threshold && zcr in 20..300
         }
 
         if (isDetected) {
-            Log.d("LIMITLESS_TRACE", "[openWakeWord] 'Hey Hazel' detected!")
+            Log.d("LIMITLESS_TRACE", "[OpenWakeWord] Voice activity detected! Triggering Hazel overlay...")
             
             // Immediately stop recording to free HAL lock
             pause()
@@ -122,6 +121,20 @@ class OpenWakeWordManager(
                 onWakeWordDetected()
             }
         }
+    }
+
+    private fun calculateZCR(buffer: ShortArray, size: Int): Int {
+        var zeroCrossings = 0
+        if (size == 0) return 0
+        var prevSign = buffer[0] > 0
+        for (i in 1 until size) {
+            val sign = buffer[i] > 0
+            if (sign != prevSign) {
+                zeroCrossings++
+                prevSign = sign
+            }
+        }
+        return zeroCrossings
     }
 
     private fun calculateRMS(buffer: ShortArray, size: Int): Float {
