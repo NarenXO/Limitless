@@ -14,7 +14,7 @@ class HazelQueryHandlerTest {
     @Test
     fun testOfflineFallbackMessageConstant() {
         assertEquals(
-            "I couldn't reach the network. Please try again.",
+            "I am Hazel, your accessibility assistant. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'.",
             HazelQueryHandler.OFFLINE_FALLBACK_MESSAGE
         )
     }
@@ -46,6 +46,6 @@ class HazelQueryHandlerTest {
     fun testGeminiClientFailsWithEmptyApiKey() = runBlocking {
         val client = GeminiClient(apiKeyOverride = "")
         val result = client.queryGemini("What is the capital of France?")
-        assertTrue("Expected success with smart fallback", result.isSuccess)
+        assertTrue("Expected failure", result.isFailure)
     }
 }

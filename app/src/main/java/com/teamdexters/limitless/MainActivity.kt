@@ -53,7 +53,8 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
-import com.teamdexters.limitless.assistant.DefaultWakeWordListener
+import com.teamdexters.limitless.assistant.GlobalSpeechManager
+import com.teamdexters.limitless.assistant.SpeechState
 import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
@@ -192,26 +193,48 @@ fun HazelAssistantWrapper(
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
-    // Initialize wake-word detection pipeline (only when mic is granted)
-    val wakeWordListener = remember(context) { DefaultWakeWordListener(context) }
-    
-    LaunchedEffect(micGranted, isHazelListening) {
+    // Initialize global speech manager (only when mic is granted)
+    val globalSpeechManager = remember(context, micGranted) {
         if (micGranted) {
-            if (isHazelListening) {
-                wakeWordListener.stopListening() // Pause background listening
-            } else {
-                wakeWordListener.startListening {
-                    isHazelListening = true
+            GlobalSpeechManager(
+                context = context,
+                intentRouter = intentRouter,
+                onStateChange = { state ->
+                    isHazelListening = state == SpeechState.ACTIVE_COMMAND
+                    if (state == SpeechState.IDLE_WAKEWORD) {
+                        transcribedText = ""
+                    }
+                },
+                onPartialText = { text ->
+                    transcribedText = text
+                },
+                onIntentResult = { intent ->
+                    handleHazelIntent(
+                        intent = intent,
+                        navController = navController,
+                        queryHandler = queryHandler,
+                        scope = coroutineScope,
+                        tts = ttsRef,
+                        onShowBanner = { text ->
+                            responseBannerText = text
+                            isBannerVisible = true
+                        },
+                        onHandled = {
+                            // state managed internally
+                        }
+                    )
+                },
+                onPlayChime = {
+                    ttsRef?.language = Locale.US
+                    ttsRef?.speak("Yes?", TextToSpeech.QUEUE_FLUSH, null, "chime")
                 }
-            }
-        } else {
-            wakeWordListener.stopListening()
-        }
+            )
+        } else null
     }
     
-    DisposableEffect(context) {
+    DisposableEffect(globalSpeechManager) {
         onDispose {
-            wakeWordListener.stopListening()
+            globalSpeechManager?.destroy()
         }
     }
 
@@ -220,7 +243,7 @@ fun HazelAssistantWrapper(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == HazelAccessibilityService.ACTION_OPEN_HAZEL) {
-                    isHazelListening = true
+                    globalSpeechManager?.triggerActiveCommand()
                 }
             }
         }
@@ -298,8 +321,7 @@ fun HazelAssistantWrapper(
                 ) {
                     HazelFloatingMicButton(
                         onClick = {
-                            isHazelListening = true
-                            transcribedText = ""
+                            globalSpeechManager?.triggerActiveCommand()
                         }
                     )
                 }
@@ -316,25 +338,9 @@ fun HazelAssistantWrapper(
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
                     onDismiss = {
-                        isHazelListening = false
+                        globalSpeechManager?.revertToWakeWord()
                     },
-                    onIntentResult = { intent ->
-                        handleHazelIntent(
-                            intent = intent,
-                            navController = navController,
-                            queryHandler = queryHandler,
-                            scope = coroutineScope,
-                            tts = ttsRef,
-                            onShowBanner = { text ->
-                                responseBannerText = text
-                                isBannerVisible = true
-                            },
-                            onHandled = {
-                                isHazelListening = false
-                            }
-                        )
-                    },
-                    intentRouter = intentRouter
+                    transcribedText = transcribedText
                 )
             }
         }

@@ -107,7 +107,7 @@ class GeminiClient(
     }
 
     private fun getSmartFallbackResponse(prompt: String): Result<String> {
-        return Result.success("I couldn't reach the network. Please try again.")
+        return Result.failure(Exception("Offline or invalid API key"))
     }
 
     /**
