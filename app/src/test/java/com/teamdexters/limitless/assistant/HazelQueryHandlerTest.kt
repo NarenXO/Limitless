@@ -12,14 +12,6 @@ import org.junit.Test
 class HazelQueryHandlerTest {
 
     @Test
-    fun testOfflineFallbackMessageConstant() {
-        assertEquals(
-            "I am Hazel, your accessibility assistant. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'.",
-            HazelQueryHandler.OFFLINE_FALLBACK_MESSAGE
-        )
-    }
-
-    @Test
     fun testGeminiResponseParsingSuccess() {
         val jsonResponse = """
             {
@@ -47,6 +39,6 @@ class HazelQueryHandlerTest {
         val client = GeminiClient(apiKeyOverride = "")
         val result = client.queryGemini("What is the capital of France?")
         assertTrue("Expected success with fallback", result.isSuccess)
-        assertTrue("Expected offline fallback text", result.getOrNull()?.contains("offline") == true)
+        assertTrue("Expected offline fallback text", result.getOrNull()?.contains("trouble processing") == true)
     }
 }

@@ -162,7 +162,7 @@ class NetworkStatusTrackerTest {
         val client = GeminiClient(apiKeyOverride = "")
         val result = client.queryGemini("What is the capital of France?")
         assertTrue("Expected success with fallback", result.isSuccess)
-        assertTrue("Expected offline fallback text", result.getOrNull()?.contains("offline") == true)
+        assertTrue("Expected offline fallback text", result.getOrNull()?.contains("trouble processing") == true)
     }
 
     @Test
@@ -214,14 +214,6 @@ class NetworkStatusTrackerTest {
     // These tests inject FakeNetworkStatusTracker (implements NetworkStatusProvider)
     // to verify isNetworkAvailable() reads from the reactive cache — not Android APIs.
     // ─────────────────────────────────────────────────────────────────────────
-
-    @Test
-    fun testOfflineFallbackMessageConstant() {
-        assertEquals(
-            "I am Hazel, your accessibility assistant. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'.",
-            HazelQueryHandler.OFFLINE_FALLBACK_MESSAGE
-        )
-    }
 
     /**
      * Verifies: [FakeNetworkStatusTracker] correctly implements [NetworkStatusProvider] such that

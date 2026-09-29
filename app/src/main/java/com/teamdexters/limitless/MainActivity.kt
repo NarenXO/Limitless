@@ -195,6 +195,25 @@ fun HazelAssistantWrapper(
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
+    // PcmWakeWordSpotter integration
+    val wakeWordSpotter = remember {
+        com.teamdexters.limitless.assistant.PcmWakeWordSpotter(
+            context = context,
+            onWakeWordDetected = {
+                android.util.Log.d("LIMITLESS_TRACE", "[PcmWakeWord] 'Hey Hazel' detected hands-free! Opening overlay...")
+                isHazelListening = true
+            }
+        )
+    }
+
+    LaunchedEffect(micGranted, isHazelListening, currentRoute) {
+        val isOnboardingComplete = currentRoute in personaHomeRoutes
+        if (micGranted && !isHazelListening && isOnboardingComplete) {
+            wakeWordSpotter.start()
+        } else {
+            wakeWordSpotter.pause()
+        }
+    }
 
     
     // Register BroadcastReceiver for accessibility service action

@@ -215,31 +215,51 @@ fun PersonaSelectScreen(
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
     fun startPersonaListening(saveFn: (String) -> Unit) {
-        recognizerRef?.destroy()
-        recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
+        var retryCount = 0
         
-        val personaListener = makeRecognitionListener(
-            onResult = { spoken ->
-                val lower = spoken.lowercase()
-                val match = when {
-                    lower.contains("blind") || lower.contains("vision")    -> "BLIND"
-                    lower.contains("deaf")  || lower.contains("hearing")   -> "DEAF"
-                    lower.contains("speech") || lower.contains("talk")     -> "SPEECH"
-                    lower.contains("mobility") || lower.contains("wheelchair") -> "MOBILITY"
-                    else -> null
+        fun attemptListen() {
+            recognizerRef?.destroy()
+            recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
+            
+            val personaListener = makeRecognitionListener(
+                onResult = { spoken ->
+                    val lower = spoken.lowercase()
+                    val match = when {
+                        lower.contains("blind") || lower.contains("vision") || lower.contains("one") || lower.contains("first") -> "BLIND"
+                        lower.contains("deaf") || lower.contains("hearing") || lower.contains("hear") || lower.contains("two") || lower.contains("second") -> "DEAF"
+                        lower.contains("speech") || lower.contains("talk") || lower.contains("speak") || lower.contains("three") || lower.contains("third") -> "SPEECH"
+                        lower.contains("mobility") || lower.contains("wheelchair") || lower.contains("wheel") || lower.contains("chair") || lower.contains("four") || lower.contains("fourth") -> "MOBILITY"
+                        else -> null
+                    }
+                    if (match != null) {
+                        Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
+                        saveFn(match)
+                    } else {
+                        if (retryCount < 3) {
+                            retryCount++
+                            Log.d("LIMITLESS_TRACE", "[Stage 2] No match, auto-retrying mic listening...")
+                            coroutineScope.launch {
+                                delay(300)
+                                attemptListen()
+                            }
+                        }
+                    }
+                },
+                onRetry = {
+                    if (retryCount < 3) {
+                        retryCount++
+                        Log.d("LIMITLESS_TRACE", "[Stage 2] No match, auto-retrying mic listening...")
+                        coroutineScope.launch {
+                            delay(300)
+                            attemptListen()
+                        }
+                    }
                 }
-                if (match != null) {
-                    Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
-                    saveFn(match)
-                } else {
-                    // Do NOT auto-retry. Just stop and wait for tap.
-                }
-            },
-            onRetry = {
-                // Do NOT auto-retry. Just stop and wait for tap.
-            }
-        )
-        startListening(personaListener)
+            )
+            startListening(personaListener)
+        }
+        
+        attemptListen()
     }
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
@@ -269,7 +289,7 @@ fun PersonaSelectScreen(
                                 delay(800)
                                 startNameCapture()
                             } else {
-                                delay(500)
+                                delay(400)
                                 currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
@@ -305,10 +325,8 @@ fun PersonaSelectScreen(
     // ── Stage 2 auto-listen after name is captured ────────────────────────────
     LaunchedEffect(isNameStage, capturedName) {
         if (isNameStage) return@LaunchedEffect
-        Log.d("LIMITLESS_TRACE", "[Stage 2] Persona Select started for user: $capturedName")
-        val greeting = "Hello $capturedName. " +
-                "Choose your assist mode: " +
-                "Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+        Log.d("LIMITLESS_TRACE", "[Stage 2] Short TTS prompt started")
+        val greeting = "Hello $capturedName. Say Blind, Deaf, Speech, or Mobility."
         speakThenListen(greeting) {
             startPersonaListening { persona ->
                 savePersonaAndNavigate(persona, navController, database, coroutineScope)

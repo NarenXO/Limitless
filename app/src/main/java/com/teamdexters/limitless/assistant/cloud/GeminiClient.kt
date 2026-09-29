@@ -25,7 +25,7 @@ class GeminiClient(
 ) {
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        private const val SYSTEM_INSTRUCTION = "You are Hazel, a friendly accessibility AI assistant. Answer the user's question directly, accurately, and naturally in 1-2 conversational sentences suitable for speech synthesis."
+        private const val SYSTEM_INSTRUCTION = "You are Hazel, a friendly accessibility AI assistant. Answer the user's question directly, accurately, and naturally in 1-2 conversational sentences suitable for speech synthesis. Do NOT mention you are an AI, do NOT mention offline mode, hackathons, or team names."
         private const val TIMEOUT_MS = 5000
     }
 
@@ -109,11 +109,10 @@ class GeminiClient(
     private fun getSmartFallbackResponse(prompt: String): Result<String> {
         val lower = prompt.lowercase()
         val response = when {
-            lower.contains("scan") || lower.contains("camera") -> "I'm currently offline, but you can say 'Open Scanner' to use the on-device accessibility scanner."
-            lower.contains("report") || lower.contains("community") -> "I'm offline right now, but you can still access downloaded reports by saying 'Open Community'."
-            lower.contains("blind") || lower.contains("vision") -> "I'm operating offline, but I can still switch you to Blind mode if you say 'Blind mode'."
-            lower.contains("hello") || lower.contains("hi") -> "Hello! I'm operating in offline mode right now, but I can still help you navigate."
-            else -> "I'm currently offline, so I can't search the web right now. You can still ask me to open tools like the Scanner or Community map."
+            lower.contains("scan") || lower.contains("camera") -> "You can say 'Open Scanner' to use the on-device accessibility scanner."
+            lower.contains("report") || lower.contains("community") -> "You can access community reports by saying 'Open Community'."
+            lower.contains("blind") || lower.contains("vision") -> "I can switch you to Blind mode if you say 'Blind mode'."
+            else -> "I'm having trouble processing that right now. How can I help you today?"
         }
         return Result.success(response)
     }

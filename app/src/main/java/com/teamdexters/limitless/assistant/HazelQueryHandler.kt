@@ -30,7 +30,6 @@ class HazelQueryHandler(
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
-        const val OFFLINE_FALLBACK_MESSAGE = "I am Hazel, your accessibility assistant. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'."
     }
 
     /**
@@ -52,11 +51,19 @@ class HazelQueryHandler(
         tts: TextToSpeech?,
         onResponseReady: (String) -> Unit
     ) {
+        val lowerQuery = rawQuery.lowercase().trim()
+        val isGreeting = listOf("hi", "hello", "hey", "good morning", "hazel", "hey hazel").any { lowerQuery == it || lowerQuery.startsWith("$it ") }
 
+        if (isGreeting) {
+            val responseText = "Hello there! How can I assist you today?"
+            onResponseReady(responseText)
+            speakResponse(tts, responseText)
+            return
+        }
 
         scope.launch {
             val result = geminiClient.queryGemini(rawQuery)
-            val responseText = result.getOrDefault(OFFLINE_FALLBACK_MESSAGE)
+            val responseText = result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
@@ -116,7 +123,7 @@ class HazelQueryHandler(
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
-            val offlineFallback = OFFLINE_FALLBACK_MESSAGE
+            val offlineFallback = "I'm having trouble connecting right now. You can try asking me to open a specific tool like the Scanner or Community map."
             
             val responseText = if (isOnline && isApiKeyPresent()) {
                 val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
