@@ -82,6 +82,11 @@ import java.util.concurrent.Executors
 @Composable
 fun QrScannerSection(
     pdrEngine: PdrEngine,
+    userX: Float,
+    userY: Float,
+    userHeading: Float,
+    currentFloor: Int,
+    lastScannedWaypoint: IndoorWaypoint?,
     tts: TextToSpeech?,
     onWaypointScanned: (IndoorWaypoint) -> Unit,
     modifier: Modifier = Modifier
@@ -377,15 +382,15 @@ fun QrScannerSection(
                     }
                 }
 
-                val cardinalHeading = getCardinalDirection(pdrEngine.headingDegrees)
-                val lastWp = pdrEngine.lastScannedWaypoint
+                val cardinalHeading = getCardinalDirection(userHeading)
+                val lastWp = lastScannedWaypoint
 
                 val positionText = if (lastWp != null) {
-                    val dx = (pdrEngine.xMeters - lastWp.xMeters).toInt()
-                    val dy = (pdrEngine.yMeters - lastWp.yMeters).toInt()
+                    val dx = (userX - lastWp.xMeters).toInt()
+                    val dy = (userY - lastWp.yMeters).toInt()
                     "Position: ${dx}m East, ${dy}m North of ${lastWp.name}"
                 } else {
-                    "Position: (${pdrEngine.xMeters.toInt()}m, ${pdrEngine.yMeters.toInt()}m) Floor ${pdrEngine.currentFloor}"
+                    "Position: (${userX.toInt()}m, ${userY.toInt()}m) Floor $currentFloor"
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -407,7 +412,7 @@ fun QrScannerSection(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Facing: $cardinalHeading (${pdrEngine.headingDegrees.toInt()}°)",
+                    text = "Facing: $cardinalHeading (${userHeading.toInt()}°)",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary

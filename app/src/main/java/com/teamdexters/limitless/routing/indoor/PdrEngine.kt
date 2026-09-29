@@ -5,40 +5,32 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.cos
 import kotlin.math.sin
 
-/**
- * Pedestrian Dead-Reckoning (PDR) engine combining Step Counter and Orientation Sensors
- * for relative indoor positioning.
- *
- * QR waypoint scans trigger [resetPosition] to eliminate sensor drift.
- */
+data class PdrPosition(val x: Float, val y: Float, val heading: Float)
+
 class PdrEngine(context: Context) : SensorEventListener {
 
-    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val appContext = context.applicationContext
+    private val sensorManager = appContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
     private val stepCounterSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
     private val stepDetectorSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
     private val accelerometerSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val magnetometerSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
 
-    // Position & Orientation State (Observable by Compose)
-    var xMeters by mutableFloatStateOf(0f)
-        private set
-    var yMeters by mutableFloatStateOf(0f)
-        private set
-    var currentFloor by mutableIntStateOf(0)
-        private set
-    var headingDegrees by mutableFloatStateOf(0f)
-        private set
-    var lastScannedWaypoint by mutableStateOf<IndoorWaypoint?>(null)
-        private set
+    private val _positionFlow = MutableStateFlow(PdrPosition(0f, 0f, 0f))
+    val positionFlow: StateFlow<PdrPosition> = _positionFlow.asStateFlow()
+
+    private val _currentFloor = MutableStateFlow(0)
+    val currentFloor: StateFlow<Int> = _currentFloor.asStateFlow()
+
+    private val _lastScannedWaypoint = MutableStateFlow<IndoorWaypoint?>(null)
+    val lastScannedWaypoint: StateFlow<IndoorWaypoint?> = _lastScannedWaypoint.asStateFlow()
 
     // Internal sensor state
     private var lastStepCount: Long = -1L
@@ -71,27 +63,22 @@ class PdrEngine(context: Context) : SensorEventListener {
         }
     }
 
-    fun stop() {
+    fun stopSensors() {
         sensorManager.unregisterListener(this)
     }
 
-    /**
-     * Hard-resets estimated position to a verified QR code waypoint location (Drift Correction).
-     */
     fun resetPosition(waypoint: IndoorWaypoint) {
-        xMeters = waypoint.xMeters
-        yMeters = waypoint.yMeters
-        currentFloor = waypoint.floor
-        lastScannedWaypoint = waypoint
+        _positionFlow.value = PdrPosition(waypoint.xMeters, waypoint.yMeters, _positionFlow.value.heading)
+        _currentFloor.value = waypoint.floor
+        _lastScannedWaypoint.value = waypoint
     }
 
-    /**
-     * Simulates step advance (used for testing or manual step triggers).
-     */
     fun advanceStep() {
-        val rad = Math.toRadians(headingDegrees.toDouble())
-        xMeters += (strideLengthMeters * sin(rad)).toFloat()
-        yMeters += (strideLengthMeters * cos(rad)).toFloat()
+        val current = _positionFlow.value
+        val rad = Math.toRadians(current.heading.toDouble())
+        val newX = current.x + (strideLengthMeters * sin(rad)).toFloat()
+        val newY = current.y + (strideLengthMeters * cos(rad)).toFloat()
+        _positionFlow.value = current.copy(x = newX, y = newY)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -108,16 +95,17 @@ class PdrEngine(context: Context) : SensorEventListener {
                     val deltaSteps = (totalSteps - lastStepCount).coerceAtLeast(0L)
                     if (deltaSteps > 0) {
                         val distance = deltaSteps * strideLengthMeters
-                        val rad = Math.toRadians(headingDegrees.toDouble())
-                        xMeters += (distance * sin(rad)).toFloat()
-                        yMeters += (distance * cos(rad)).toFloat()
+                        val current = _positionFlow.value
+                        val rad = Math.toRadians(current.heading.toDouble())
+                        val newX = current.x + (distance * sin(rad)).toFloat()
+                        val newY = current.y + (distance * cos(rad)).toFloat()
+                        _positionFlow.value = current.copy(x = newX, y = newY)
                     }
                 }
                 lastStepCount = totalSteps
             }
 
             Sensor.TYPE_ACCELEROMETER -> {
-                // Low-pass filter for gravity vector
                 val alphaGrav = 0.8f
                 gravity[0] = alphaGrav * gravity[0] + (1 - alphaGrav) * event.values[0]
                 gravity[1] = alphaGrav * gravity[1] + (1 - alphaGrav) * event.values[1]
@@ -125,7 +113,6 @@ class PdrEngine(context: Context) : SensorEventListener {
                 hasGravity = true
                 updateHeading()
 
-                // Accelerometer peak detection step counting fallback (11.5 m/s^2 threshold, 300ms cadence)
                 val x = event.values[0]
                 val y = event.values[1]
                 val z = event.values[2]
@@ -138,7 +125,6 @@ class PdrEngine(context: Context) : SensorEventListener {
             }
 
             Sensor.TYPE_MAGNETIC_FIELD -> {
-                // Low-pass filter for geomagnetic vector
                 val alphaMag = 0.8f
                 geomagnetic[0] = alphaMag * geomagnetic[0] + (1 - alphaMag) * event.values[0]
                 geomagnetic[1] = alphaMag * geomagnetic[1] + (1 - alphaMag) * event.values[1]
@@ -153,7 +139,7 @@ class PdrEngine(context: Context) : SensorEventListener {
         if (!hasGravity || !hasGeomagnetic) return
 
         val now = System.currentTimeMillis()
-        if (now - lastUiUpdateTime < 200) return // Throttle UI updates to max 5 Hz (200ms)
+        if (now - lastUiUpdateTime < 200) return
         lastUiUpdateTime = now
 
         val success = SensorManager.getRotationMatrix(rotationMatrix, null, gravity, geomagnetic)
@@ -163,17 +149,16 @@ class PdrEngine(context: Context) : SensorEventListener {
             var azimuthDeg = Math.toDegrees(azimuthRad.toDouble()).toFloat()
             if (azimuthDeg < 0f) azimuthDeg += 360f
 
-            // Low-pass filter smoothing: 0.85 * old + 0.15 * new
             var diff = azimuthDeg - internalHeading
             while (diff < -180f) diff += 360f
             while (diff > 180f) diff -= 360f
             internalHeading = (internalHeading + 0.15f * diff + 360f) % 360f
 
-            // 3-degree hysteresis
-            var headingDiff = kotlin.math.abs(internalHeading - headingDegrees)
+            val current = _positionFlow.value
+            var headingDiff = kotlin.math.abs(internalHeading - current.heading)
             if (headingDiff > 180f) headingDiff = 360f - headingDiff
             if (headingDiff > 3.0f) {
-                headingDegrees = internalHeading
+                _positionFlow.value = current.copy(heading = internalHeading)
             }
         }
     }

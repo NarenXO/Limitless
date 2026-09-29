@@ -62,6 +62,14 @@ import kotlin.math.hypot
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.CancellationException
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
 
 /**
  * Main Indoor Navigation Screen for KCG Main Building.
@@ -89,7 +97,46 @@ fun IndoorNavScreen() {
     val pdrEngine = remember { PdrEngine(context) }
     DisposableEffect(Unit) {
         pdrEngine.start()
-        onDispose { pdrEngine.stop() }
+        onDispose { pdrEngine.stopSensors() }
+    }
+
+    // -- UI State -------------------------------------------------------------
+    var userX by remember { mutableFloatStateOf(0f) }
+    var userY by remember { mutableFloatStateOf(0f) }
+    var userHeading by remember { mutableFloatStateOf(0f) }
+    var currentFloor by remember { mutableIntStateOf(0) }
+    var lastScannedWp by remember { mutableStateOf<IndoorWaypoint?>(null) }
+
+    @OptIn(FlowPreview::class)
+    LaunchedEffect(Unit) {
+        try {
+            pdrEngine.positionFlow
+                .conflate()
+                .sample(200L)
+                .collect { pos ->
+                    userX = pos.x
+                    userY = pos.y
+                    userHeading = pos.heading
+                }
+        } catch (e: CancellationException) {
+            throw e
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            pdrEngine.currentFloor.collect { currentFloor = it }
+        } catch (e: CancellationException) {
+            throw e
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            pdrEngine.lastScannedWaypoint.collect { lastScannedWp = it }
+        } catch (e: CancellationException) {
+            throw e
+        }
     }
 
     // -- Shared TextToSpeech Engine -------------------------------------------
@@ -117,25 +164,49 @@ fun IndoorNavScreen() {
 
     // Distance & Direction Calculation
     val target = targetWaypoint
-    val dx = (target?.xMeters ?: 0f) - pdrEngine.xMeters
-    val dy = (target?.yMeters ?: 0f) - pdrEngine.yMeters
-    val distanceToTargetMeters = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+    val distanceToTargetMeters by remember(target, userX, userY) {
+        derivedStateOf {
+            val dx = (target?.xMeters ?: 0f) - userX
+            val dy = (target?.yMeters ?: 0f) - userY
+            hypot(dx.toDouble(), dy.toDouble()).toFloat()
+        }
+    }
 
-    val relativeAngleDeg = calculateRelativeAngle(dx, dy, pdrEngine.headingDegrees)
-    val clockDirectionText = getRelativeDirectionPrompt(relativeAngleDeg)
+    val relativeAngleDeg by remember(target, userX, userY, userHeading) {
+        derivedStateOf {
+            val dx = (target?.xMeters ?: 0f) - userX
+            val dy = (target?.yMeters ?: 0f) - userY
+            calculateRelativeAngle(dx, dy, userHeading)
+        }
+    }
 
+    val clockDirectionText by remember(relativeAngleDeg) {
+        derivedStateOf { getRelativeDirectionPrompt(relativeAngleDeg) }
+    }
+
+    val isAtTarget by remember(distanceToTargetMeters) {
+        derivedStateOf { distanceToTargetMeters <= 3.0f }
+    }
+    
+    val ttsInstance = tts.value
+    val updatedTtsReady by rememberUpdatedState(ttsReady)
+    
     // Arrival Notification Check (within 3 meters)
-    LaunchedEffect(distanceToTargetMeters, target) {
-        if (target != null && distanceToTargetMeters <= 3.0f && !hasAnnouncedArrival) {
-            hasAnnouncedArrival = true
-            if (ttsReady) {
-                tts.value?.speak(
-                    "You have arrived at ${target.name}.",
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "arrival_${target.id}"
-                )
+    LaunchedEffect(isAtTarget, target) {
+        try {
+            if (target != null && isAtTarget && !hasAnnouncedArrival) {
+                hasAnnouncedArrival = true
+                if (updatedTtsReady && ttsInstance != null) {
+                    ttsInstance.speak(
+                        "You have arrived at ${target.name}.",
+                        TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        "arrival_${target.id}"
+                    )
+                }
             }
+        } catch (e: CancellationException) {
+            throw e
         }
     }
 
@@ -227,6 +298,11 @@ fun IndoorNavScreen() {
         ) {
             QrScannerSection(
                 pdrEngine = pdrEngine,
+                userX = userX,
+                userY = userY,
+                userHeading = userHeading,
+                currentFloor = currentFloor,
+                lastScannedWaypoint = lastScannedWp,
                 tts = tts.value,
                 onWaypointScanned = { scannedWp ->
                     if (targetWaypoint?.id == scannedWp.id) {
@@ -246,9 +322,9 @@ fun IndoorNavScreen() {
                 .height(250.dp)
         ) {
             IndoorMapView(
-                userX = pdrEngine.xMeters,
-                userY = pdrEngine.yMeters,
-                headingDegrees = pdrEngine.headingDegrees,
+                userX = userX,
+                userY = userY,
+                headingDegrees = userHeading,
                 waypoints = kcgIndoorWaypoints,
                 targetWaypoint = targetWaypoint,
                 modifier = Modifier.fillMaxSize()

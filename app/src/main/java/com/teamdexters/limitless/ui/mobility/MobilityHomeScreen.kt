@@ -53,6 +53,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -160,29 +164,39 @@ fun MobilityHomeScreen(
         }
     }
 
+    var isComputing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
     // Function to calculate route using AccessibleRouter
     fun calculateRoute() {
-        val filter = AccessibilityFilter(
-            requireRamp = requireRamp,
-            requireLift = requireLift,
-            requireWideDoorway = requireWideDoorway,
-            requireAccessibleWashroom = requireAccessibleWashroom
-        )
-        val computed = router.findRoute(
-            startNodeId = selectedOriginId,
-            destinationNodeId = selectedDestId,
-            filter = filter
-        )
-        currentRoute = computed
-
-        val summaryPrompt = buildString {
-            append("Route found. Total distance ${computed.totalDistanceMeters} meters, ")
-            append("estimated travel time ${computed.estimatedTimeSeconds / 60} minutes.")
-            computed.fallbackWarning?.let { warning ->
-                append(" $warning")
+        if (isComputing) return
+        isComputing = true
+        coroutineScope.launch {
+            val filter = AccessibilityFilter(
+                requireRamp = requireRamp,
+                requireLift = requireLift,
+                requireWideDoorway = requireWideDoorway,
+                requireAccessibleWashroom = requireAccessibleWashroom
+            )
+            val computed = withContext(Dispatchers.Default) {
+                router.findRoute(
+                    startNodeId = selectedOriginId,
+                    destinationNodeId = selectedDestId,
+                    filter = filter
+                )
             }
+            currentRoute = computed
+            isComputing = false
+
+            val summaryPrompt = buildString {
+                append("Route found. Total distance ${computed.totalDistanceMeters} meters, ")
+                append("estimated travel time ${computed.estimatedTimeSeconds / 60} minutes.")
+                computed.fallbackWarning?.let { warning ->
+                    append(" $warning")
+                }
+            }
+            speak(summaryPrompt)
         }
-        speak(summaryPrompt)
     }
 
     // Auto-calculate initial route on screen load
@@ -443,12 +457,14 @@ fun MobilityHomeScreen(
                     role = Role.Button
                     contentDescription = "Find accessible route button"
                     onClick(label = "Find accessible route") {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        calculateRoute()
+                        if (!isComputing) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            calculateRoute()
+                        }
                         true
                     }
                 }
-                .clickable {
+                .clickable(enabled = !isComputing) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     calculateRoute()
                 }
@@ -457,19 +473,34 @@ fun MobilityHomeScreen(
             contentAlignment = Alignment.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Route,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Find Accessible Route",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+                if (isComputing) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = TextPrimary,
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Computing Route...",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Route,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Find Accessible Route",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
             }
         }
 
