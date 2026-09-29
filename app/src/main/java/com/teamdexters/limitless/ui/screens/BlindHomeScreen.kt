@@ -689,7 +689,7 @@ fun BlindHomeScreen() {
                     contentColor = TextPrimary
                 ),
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(2.dp, android.graphics.Color.parseColor("#1F1F1F"))
+                border = BorderStroke(2.dp, TextPrimary)
             ) {
                 Text(
                     text = "Start Navigation",
@@ -742,8 +742,8 @@ fun BlindHomeScreen() {
                                                 ttsManager.speak("Place tagged: $landmarkName")
                                                 landmarkName = ""
                                                 showTaggingDialog = false
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
+                                                scope.launch {
+                                                    delay(6000)
                                                     showResultBanner = false
                                                 }
                                             },
@@ -751,8 +751,8 @@ fun BlindHomeScreen() {
                                                 resultText = "Failed to tag place"
                                                 showResultBanner = true
                                                 ttsManager.speak("Failed to tag place")
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
+                                                scope.launch {
+                                                    delay(6000)
                                                     showResultBanner = false
                                                 }
                                             }
@@ -761,8 +761,8 @@ fun BlindHomeScreen() {
                                         resultText = "Failed to tag place"
                                         showResultBanner = true
                                         ttsManager.speak("Failed to tag place")
-                                        kotlinx.coroutines.launch {
-                                            kotlinx.coroutines.delay(6000)
+                                        scope.launch {
+                                            delay(6000)
                                             showResultBanner = false
                                         }
                                     } finally {
@@ -855,7 +855,7 @@ private fun ActionButton(
             contentColor = TextPrimary
         ),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(2.dp, android.graphics.Color.parseColor("#1F1F1F"))
+        border = BorderStroke(2.dp, TextPrimary)
     ) {
         if (isProcessing) {
             CircularProgressIndicator(
