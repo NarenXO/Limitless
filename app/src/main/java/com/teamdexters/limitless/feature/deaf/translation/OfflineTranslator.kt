@@ -10,6 +10,10 @@ import com.google.mlkit.translate.TranslatorOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.resume
+import kotlinx.coroutines.resumeWithException
+import com.google.android.gms.tasks.Task
 
 /**
  * Offline translator using Google ML Kit Translation.
@@ -115,6 +119,7 @@ class OfflineTranslator(private val context: Context) {
                     return true
                 } catch (e: Exception) {
                     _downloadStatus.value = DownloadStatus.Error
+                    _isReady.value = false
                     return false
                 }
             }
@@ -251,6 +256,13 @@ class OfflineTranslator(private val context: Context) {
 /**
  * Extension function to await Task result in coroutine.
  */
-private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T {
-    return kotlinx.coroutines.tasks.await()
+private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { continuation ->
+    addOnSuccessListener { result ->
+        continuation.resume(result)
+    }
+    addOnFailureListener { exception ->
+        continuation.resumeWithException(exception)
+    }
 }
+
+
