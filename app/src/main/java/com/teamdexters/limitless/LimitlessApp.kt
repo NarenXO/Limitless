@@ -17,6 +17,8 @@ class LimitlessApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        android.util.Log.d("LIMITLESS_TRACE", "=================== APP COLD START ===================")
+        android.util.Log.d("LIMITLESS_TRACE", "Hilt initialization complete. Triggering database auto-seeding.")
         CoroutineScope(Dispatchers.IO).launch {
             DatabaseSeeder.seedIfEmpty(userReportDao, this@LimitlessApp)
         }

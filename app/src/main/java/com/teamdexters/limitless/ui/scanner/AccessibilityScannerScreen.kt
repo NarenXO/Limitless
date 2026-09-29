@@ -111,6 +111,7 @@ fun AccessibilityScannerScreen(
                                     val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
                                     try {
                                         cameraProvider.unbindAll()
+                                        android.util.Log.d("LIMITLESS_TRACE", "Scanner camera preview bound to lifecycle")
                                         cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                                     } catch (exc: Exception) {
                                         // Handle errors
@@ -257,6 +258,7 @@ fun AccessibilityScannerScreen(
 
                 Button(
                     onClick = { 
+                        android.util.Log.d("LIMITLESS_TRACE", "Scanner score calculation triggered and saved")
                         viewModel.saveScan { insertedId ->
                             navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))
                         }

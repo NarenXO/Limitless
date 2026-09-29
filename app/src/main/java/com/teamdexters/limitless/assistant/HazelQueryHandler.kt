@@ -149,6 +149,7 @@ class HazelQueryHandler(
 
     private fun speakResponse(tts: TextToSpeech?, text: String) {
         try {
+            Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
             tts?.language = Locale.US
             tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hazel_response_${System.currentTimeMillis()}")
         } catch (e: Exception) {

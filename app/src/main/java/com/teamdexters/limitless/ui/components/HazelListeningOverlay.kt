@@ -101,16 +101,19 @@ fun HazelListeningOverlay(
             Log.d(TAG, "Overlay opened. Checking RECORD_AUDIO permission: $granted")
             
             if (granted) {
+                Log.d("LIMITLESS_TRACE", "[Hazel] Overlay opened. Starting mic...")
                 // Must be main thread for SpeechRecognizer
                 val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
                 recognizerRef = recognizer
                 
                 recognizer.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
+                        Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onReadyForSpeech")
                         Log.d(TAG, "onReadyForSpeech: Mic hardware active and ready")
                     }
 
                     override fun onBeginningOfSpeech() {
+                        Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onBeginningOfSpeech")
                         Log.d(TAG, "onBeginningOfSpeech: User voice detected!")
                         statusText = "Status: Voice detected..."
                     }
@@ -147,6 +150,7 @@ fun HazelListeningOverlay(
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         val capturedText = matches?.firstOrNull()?.trim() ?: ""
+                        Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onResults (Captured text: \"$capturedText\")")
                         Log.d(TAG, "onResults: Captured -> $capturedText")
                         statusText = "Status: Heard -> $capturedText"
                         

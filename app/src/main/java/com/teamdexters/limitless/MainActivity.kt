@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
      */
     private val micPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            android.util.Log.d("LIMITLESS_TRACE", "RECORD_AUDIO permission result: micGranted: $isGranted")
             micGranted.value = isGranted
         }
 
@@ -102,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
         // Request on cold start if not yet granted
         if (!micGranted.value) {
+            android.util.Log.d("LIMITLESS_TRACE", "Requesting RECORD_AUDIO permission on cold start")
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
 
@@ -160,6 +162,9 @@ fun HazelAssistantWrapper(
         }
     }
     val networkStatus by networkStatusTracker.statusFlow.collectAsState()
+    LaunchedEffect(networkStatus) {
+        android.util.Log.d("LIMITLESS_TRACE", "Network status changed: ${if(networkStatus is com.teamdexters.limitless.util.NetworkStatus.Online) "ONLINE" else "OFFLINE"}")
+    }
 
     // Hazel query handler with network status tracker integration
     val queryHandler = remember(networkStatusTracker) {
@@ -197,6 +202,7 @@ fun HazelAssistantWrapper(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == HazelAccessibilityService.ACTION_OPEN_HAZEL) {
+                    android.util.Log.d("LIMITLESS_TRACE", "Physical Volume shortcut triggered (ACTION_OPEN_HAZEL)")
                     isHazelListening = true
                 }
             }
@@ -275,6 +281,7 @@ fun HazelAssistantWrapper(
                 ) {
                     HazelFloatingMicButton(
                         onClick = {
+                            android.util.Log.d("LIMITLESS_TRACE", "Hazel floating mic FAB tapped")
                             isHazelListening = true
                         }
                     )
@@ -373,9 +380,25 @@ private fun handleHazelIntent(
     onHandled: () -> Unit
 ) {
     fun speak(text: String) {
+        android.util.Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
         tts?.language = java.util.Locale.US
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "intent_feedback")
     }
+
+    val intentName = intent.javaClass.simpleName
+    val targetRoute = when (intent) {
+        is HazelIntent.NavigateTo -> intent.route
+        is HazelIntent.OpenScanner -> Screen.Scanner.route
+        is HazelIntent.OpenCommunity -> Screen.Community.route
+        is HazelIntent.OpenPhraseCards -> Screen.SpeechHome.route
+        is HazelIntent.OpenNavigation -> Screen.MobilityHome.route
+        is HazelIntent.BlindAssist -> Screen.BlindHome.route
+        is HazelIntent.DeafAssist -> Screen.DeafHome.route
+        is HazelIntent.SpeechAssist -> Screen.SpeechHome.route
+        is HazelIntent.MobilityAssist -> Screen.MobilityHome.route
+        else -> "dynamic_query"
+    }
+    android.util.Log.d("LIMITLESS_TRACE", "IntentRouter classified: $intentName -> Target Route: $targetRoute")
 
     when (intent) {
         is HazelIntent.NavigateTo    -> { 

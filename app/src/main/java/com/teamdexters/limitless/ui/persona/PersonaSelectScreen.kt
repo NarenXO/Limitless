@@ -127,10 +127,12 @@ fun PersonaSelectScreen(
         onRetry: () -> Unit
     ): RecognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
+            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onReadyForSpeech")
             isListening = true
             listeningHint = "Listening…"
         }
         override fun onBeginningOfSpeech() {
+            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onBeginningOfSpeech")
             listeningHint = "Hearing you…"
         }
         override fun onRmsChanged(rmsdB: Float) {}
@@ -143,6 +145,7 @@ fun PersonaSelectScreen(
             listeningHint = ""
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val best = matches?.firstOrNull()?.trim() ?: ""
+            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onResults (Captured: \"$best\")")
             if (best.isNotEmpty()) {
                 onResult(best)
             } else {
@@ -159,6 +162,7 @@ fun PersonaSelectScreen(
                 SpeechRecognizer.ERROR_NETWORK        -> "ERROR_NETWORK"
                 else                                  -> "ERROR_$error"
             }
+            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onError ($msg)")
             Log.w(TAG, "SpeechRecognizer error: $msg (code=$error)")
             onRetry()
         }
@@ -196,6 +200,7 @@ fun PersonaSelectScreen(
 
     // ── Stage 1 name-retry loop ───────────────────────────────────────────────
     fun startNameCapture() {
+        Log.d("LIMITLESS_TRACE", "[Stage 1] Name Capture started")
         val nameListener = makeRecognitionListener(
             onResult = { name ->
                 capturedName = name.replaceFirstChar { it.uppercase() }
@@ -224,6 +229,7 @@ fun PersonaSelectScreen(
                     else -> null
                 }
                 if (match != null) {
+                    Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
                     saveFn(match)
                 } else {
                     // Do NOT auto-retry. Just stop and wait for tap.
@@ -245,8 +251,19 @@ fun PersonaSelectScreen(
             if (status == TextToSpeech.SUCCESS) {
                 ttsRef?.language = Locale.US
                 ttsRef?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
+                    override fun onStart(utteranceId: String?) {
+                        if (utteranceId == "welcome") {
+                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' STARTED")
+                        } else {
+                            Log.d("LIMITLESS_TRACE", "TTS greeting STARTED")
+                        }
+                    }
                     override fun onDone(utteranceId: String?) {
+                        if (utteranceId == "welcome") {
+                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' DONE")
+                        } else {
+                            Log.d("LIMITLESS_TRACE", "TTS greeting DONE")
+                        }
                         coroutineScope.launch(Dispatchers.Main) {
                             if (utteranceId == "welcome" && isNameStage) {
                                 delay(800)
@@ -288,6 +305,7 @@ fun PersonaSelectScreen(
     // ── Stage 2 auto-listen after name is captured ────────────────────────────
     LaunchedEffect(isNameStage, capturedName) {
         if (isNameStage) return@LaunchedEffect
+        Log.d("LIMITLESS_TRACE", "[Stage 2] Persona Select started for user: $capturedName")
         val greeting = "Hello $capturedName. " +
                 "Choose your assist mode: " +
                 "Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."

@@ -95,6 +95,7 @@ fun CommunityReportScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    android.util.Log.d("LIMITLESS_TRACE", "Community Obstacle report submitted: $obstacleDescription")
                     viewModel.submitObstacleReport(obstacleDescription)
                     showObstacleDialog = false
                     obstacleDescription = ""
@@ -120,7 +121,10 @@ fun CommunityReportScreen(
                 val searchQuery by viewModel.searchQuery.collectAsState()
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    onValueChange = { 
+                        android.util.Log.d("LIMITLESS_TRACE", "Community Search query updated: $it")
+                        viewModel.updateSearchQuery(it) 
+                    },
                     placeholder = { Text("Search places in Chennai...") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -133,7 +137,10 @@ fun CommunityReportScreen(
                     items(filterOptions) { filter ->
                         FilterChip(
                             selected = filterCategory == filter,
-                            onClick = { viewModel.updateFilterCategory(filter) },
+                            onClick = { 
+                                android.util.Log.d("LIMITLESS_TRACE", "Community Filter chip tapped: $filter")
+                                viewModel.updateFilterCategory(filter) 
+                            },
                             label = { Text(filter) }
                         )
                     }
@@ -262,7 +269,10 @@ fun CommunityReportScreen(
                                     }
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Button(
-                                        onClick = { viewModel.confirmReport(report.id) },
+                                        onClick = { 
+                                            android.util.Log.d("LIMITLESS_TRACE", "Community Report upvoted (Confirm Location) ID: ${report.id}")
+                                            viewModel.confirmReport(report.id) 
+                                        },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0F2F4), contentColor = Color(0xFF1F1F1F))
                                     ) {
