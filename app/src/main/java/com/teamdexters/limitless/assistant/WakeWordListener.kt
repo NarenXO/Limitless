@@ -7,6 +7,8 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 
 interface WakeWordListener {
     fun startListening(onWakeWordDetected: () -> Unit)
@@ -28,6 +30,8 @@ class DefaultWakeWordListener(
     private var isListening = false
     private var speechRecognizer: SpeechRecognizer? = null
     private var onWakeWordDetectedCallback: (() -> Unit)? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var restartRunnable: Runnable? = null
 
     override fun startListening(onWakeWordDetected: () -> Unit) {
         if (isListening || context == null) return
@@ -57,6 +61,7 @@ class DefaultWakeWordListener(
 
     override fun stopListening() {
         isListening = false
+        restartRunnable?.let { handler.removeCallbacks(it) }
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
@@ -69,18 +74,28 @@ class DefaultWakeWordListener(
     override fun onBufferReceived(buffer: ByteArray?) {}
     override fun onEndOfSpeech() {}
     
+    private fun scheduleRestart(delayMs: Long) {
+        if (!isListening) return
+        restartRunnable?.let { handler.removeCallbacks(it) }
+        restartRunnable = Runnable {
+            if (isListening) {
+                speechRecognizer?.cancel()
+                startListeningInternal()
+            }
+        }
+        handler.postDelayed(restartRunnable!!, delayMs)
+    }
+    
     override fun onError(error: Int) {
         if (isListening) {
-            // Restart listener on error to keep it continuous
-            speechRecognizer?.cancel()
-            startListeningInternal()
+            scheduleRestart(4000L)
         }
     }
 
     override fun onResults(results: Bundle?) {
         handleResults(results)
         if (isListening) {
-            startListeningInternal()
+            scheduleRestart(4000L)
         }
     }
 
@@ -97,12 +112,7 @@ class DefaultWakeWordListener(
             if (combined.contains("hey hazel", ignoreCase = true)) {
                 Log.i(TAG, "Wake word 'Hey Hazel' detected!")
                 onWakeWordDetectedCallback?.invoke()
-                
-                // Briefly restart to avoid multiple rapid triggers
-                speechRecognizer?.cancel()
-                if (isListening) {
-                    startListeningInternal()
-                }
+                stopListening()
             }
         }
     }

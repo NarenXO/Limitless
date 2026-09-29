@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import com.google.accompanist.permissions.*
@@ -111,75 +112,63 @@ fun CommunityReportScreen(
                             colors = CardDefaults.cardColors(containerColor = Color.White)
                         ) {
                             Column {
-                                // Image Header
+                                // Header: Avatar, Name, Time, Rating
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(Color(0xFFF791A9), androidx.compose.foundation.shape.CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "C",
+                                            color = Color.White,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Community User",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                            color = Color(0xFF1F1F1F)
+                                        )
+                                        Text(
+                                            text = timeString,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    Row {
+                                        (1..5).forEach { star ->
+                                            Icon(
+                                                imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFFC107),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Image
                                 if (!report.photoUri.isNullOrEmpty()) {
                                     Image(
                                         painter = rememberAsyncImagePainter(model = report.photoUri),
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxWidth().height(140.dp)
-                                    )
-                                } else {
-                                    Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(140.dp)
-                                            .background(Color(0xFFE0F2F4)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.LocationOn,
-                                            contentDescription = null,
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                    }
+                                            .height(200.dp)
+                                            .padding(horizontal = 16.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                    )
                                 }
 
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    // Header: Avatar, Name, Time
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .background(Color(0xFFF791A9), androidx.compose.foundation.shape.CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = report.locationName.take(1).uppercase(),
-                                                color = Color.White,
-                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = report.locationName,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                                color = Color(0xFF1F1F1F)
-                                            )
-                                            Text(
-                                                text = timeString,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color.Gray
-                                            )
-                                        }
-                                        Row {
-                                            (1..5).forEach { star ->
-                                                Icon(
-                                                    imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFFFFC107),
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
                                     // Tags and Description
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically
@@ -196,14 +185,20 @@ fun CommunityReportScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Trust Score: ${report.trustScore}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.Gray
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFFFFDBDF), RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Trust Score: ${report.trustScore}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF1F1F1F)
+                                            )
+                                        }
                                     }
                                     if (!report.description.startsWith("Rating:")) {
-                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Spacer(modifier = Modifier.height(12.dp))
                                         Text(
                                             text = report.description,
                                             style = MaterialTheme.typography.bodyMedium,

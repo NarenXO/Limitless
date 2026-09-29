@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -192,12 +193,23 @@ fun HazelAssistantWrapper(
     var isBannerVisible by remember { mutableStateOf(false) }
 
     // Initialize wake-word detection pipeline (only when mic is granted)
-    DisposableEffect(context, micGranted) {
-        if (!micGranted) return@DisposableEffect onDispose {}
-        val wakeWordListener = DefaultWakeWordListener(context)
-        wakeWordListener.startListening {
-            isHazelListening = true
+    val wakeWordListener = remember(context) { DefaultWakeWordListener(context) }
+    
+    LaunchedEffect(micGranted, isHazelListening) {
+        if (micGranted) {
+            if (isHazelListening) {
+                wakeWordListener.stopListening() // Pause background listening
+            } else {
+                wakeWordListener.startListening {
+                    isHazelListening = true
+                }
+            }
+        } else {
+            wakeWordListener.stopListening()
         }
+    }
+    
+    DisposableEffect(context) {
         onDispose {
             wakeWordListener.stopListening()
         }

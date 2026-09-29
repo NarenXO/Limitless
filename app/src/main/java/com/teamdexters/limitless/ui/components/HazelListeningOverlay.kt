@@ -64,6 +64,13 @@ fun HazelListeningOverlay(
     val context = androidx.compose.ui.platform.LocalContext.current
     var localTranscribedText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     
+    androidx.compose.runtime.LaunchedEffect(isVisible) {
+        if (isVisible) {
+            kotlinx.coroutines.delay(10000L)
+            onDismiss()
+        }
+    }
+    
     androidx.compose.runtime.DisposableEffect(isVisible) {
         if (isVisible) {
             localTranscribedText = ""
@@ -72,6 +79,9 @@ fun HazelListeningOverlay(
                 putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.US.toLanguageTag())
                 putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 10000L)
             }
             
             fun startListening() {
@@ -155,7 +165,7 @@ fun HazelListeningOverlay(
             
             // Listening status
             Text(
-                text = "Hazel is listening...",
+                text = "Listening… speak now",
                 style = LimitlessTypography.bodyMedium,
                 color = TextPrimary,
                 fontWeight = FontWeight.Medium
