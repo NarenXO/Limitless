@@ -94,8 +94,7 @@ private const val TAG = "PersonaSelectScreen"
 @Composable
 fun PersonaSelectScreen(
     navController: NavController,
-    database: LimitlessDatabase,
-    globalSpeechManager: com.teamdexters.limitless.assistant.GlobalSpeechManager? = null
+    database: LimitlessDatabase
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -152,7 +151,7 @@ fun PersonaSelectScreen(
         }
         override fun onError(error: Int) {
             isListening = false
-            listeningHint = ""
+            listeningHint = "Tap mic to speak"
             val msg = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH       -> "ERROR_NO_MATCH"
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
@@ -201,26 +200,9 @@ fun PersonaSelectScreen(
             onResult = { name ->
                 capturedName = name.replaceFirstChar { it.uppercase() }
                 isNameStage = false
-                globalSpeechManager?.resume()
             },
             onRetry = {
-                speakThenListen("I didn't catch that. What is your name?") {
-                    startListening(
-                        makeRecognitionListener(
-                            onResult = { name ->
-                                capturedName = name.replaceFirstChar { it.uppercase() }
-                                isNameStage = false
-                                globalSpeechManager?.resume()
-                            },
-                            onRetry = {
-                                // Two strikes — skip name, proceed with placeholder
-                                capturedName = "there"
-                                isNameStage = false
-                                globalSpeechManager?.resume()
-                            }
-                        )
-                    )
-                }
+                // Do NOT loop or flash the mic. The UI will say "Tap mic to speak".
             }
         )
         startListening(nameListener)
@@ -241,15 +223,11 @@ fun PersonaSelectScreen(
                 if (match != null) {
                     saveFn(match)
                 } else {
-                    speakThenListen(
-                        "Sorry, I didn't recognise that. Please say Blind, Deaf, Speech, or Mobility."
-                    ) { startPersonaListening(saveFn) }
+                    // Do NOT auto-retry. Just stop and wait for tap.
                 }
             },
             onRetry = {
-                speakThenListen(
-                    "I didn't catch that. Please say one of: Blind, Deaf, Speech, or Mobility."
-                ) { startPersonaListening(saveFn) }
+                // Do NOT auto-retry. Just stop and wait for tap.
             }
         )
         startListening(personaListener)
@@ -257,7 +235,6 @@ fun PersonaSelectScreen(
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
     DisposableEffect(Unit) {
-        globalSpeechManager?.pause()
         // SpeechRecognizer must be on UI thread — DisposableEffect runs on composition
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
 
@@ -268,7 +245,7 @@ fun PersonaSelectScreen(
                     override fun onStart(utteranceId: String?) {}
                     override fun onDone(utteranceId: String?) {
                         coroutineScope.launch {
-                            delay(500) // Ensure 500ms delay after TTS finishes to prevent hardware echo
+                            delay(800) // Wait 800ms
                             withContext(Dispatchers.Main) {
                                 if (utteranceId == "welcome" && isNameStage) {
                                     startNameCapture()
@@ -300,7 +277,6 @@ fun PersonaSelectScreen(
         ttsRef = tts
 
         onDispose {
-            globalSpeechManager?.resume()
             tts.stop()
             tts.shutdown()
             recognizerRef?.destroy()
@@ -343,13 +319,19 @@ fun PersonaSelectScreen(
             if (nameStage) {
                 NameCaptureStage(
                     isListening = isListening,
-                    listeningHint = listeningHint
+                    listeningHint = listeningHint,
+                    onMicTap = { startNameCapture() }
                 )
             } else {
                 PersonaSelectionStage(
                     capturedName = capturedName,
                     isListening = isListening,
                     listeningHint = listeningHint,
+                    onMicTap = {
+                        startPersonaListening { persona ->
+                            savePersonaAndNavigate(persona, navController, database, coroutineScope)
+                        }
+                    },
                     onPersonaSelected = { persona ->
                         savePersonaAndNavigate(persona, navController, database, coroutineScope)
                     }
@@ -370,7 +352,8 @@ fun PersonaSelectScreen(
 @Composable
 private fun NameCaptureStage(
     isListening: Boolean,
-    listeningHint: String
+    listeningHint: String,
+    onMicTap: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -411,7 +394,7 @@ private fun NameCaptureStage(
         Spacer(modifier = Modifier.height(40.dp))
 
         // Mic status indicator
-        MicStatusIndicator(isListening = isListening, hint = listeningHint)
+        MicStatusIndicator(isListening = isListening, hint = listeningHint, onMicTap = onMicTap)
     }
 }
 
@@ -428,6 +411,7 @@ private fun PersonaSelectionStage(
     capturedName: String,
     isListening: Boolean,
     listeningHint: String,
+    onMicTap: () -> Unit,
     onPersonaSelected: (String) -> Unit
 ) {
     Column(
@@ -503,7 +487,7 @@ private fun PersonaSelectionStage(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Mic status indicator
-        MicStatusIndicator(isListening = isListening, hint = listeningHint)
+        MicStatusIndicator(isListening = isListening, hint = listeningHint, onMicTap = onMicTap)
     }
 }
 
@@ -512,46 +496,38 @@ private fun PersonaSelectionStage(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pulsing mic icon with a hint label — shown while the SpeechRecognizer is active.
- * Disappears when not listening.
+ * Pulsing mic icon with a hint label. Tap to retry.
  */
 @Composable
-private fun MicStatusIndicator(isListening: Boolean, hint: String) {
-    AnimatedVisibility(
-        visible = isListening,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.semantics {
-                contentDescription = if (hint.isNotEmpty()) hint else "Microphone active"
-            }
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(LimitlessPrimary, CircleShape)
-                    .padding(12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            if (hint.isNotEmpty()) {
-                Text(
-                    text = hint,
-                    fontSize = 13.sp,
-                    color = TextPrimary.copy(alpha = 0.75f),
-                    textAlign = TextAlign.Center
-                )
-            }
+private fun MicStatusIndicator(isListening: Boolean, hint: String, onMicTap: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.semantics {
+            contentDescription = if (hint.isNotEmpty()) hint else "Microphone active"
         }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .background(LimitlessPrimary, CircleShape)
+                .clickable { onMicTap() }
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = null,
+                tint = TextPrimary,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+        Text(
+            text = hint,
+            fontSize = 13.sp,
+            color = TextPrimary.copy(alpha = 0.75f),
+            textAlign = TextAlign.Center
+        )
     }
 }
 

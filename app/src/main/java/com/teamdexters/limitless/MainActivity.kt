@@ -54,7 +54,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
 import com.teamdexters.limitless.assistant.GlobalSpeechManager
-import com.teamdexters.limitless.assistant.SpeechState
 import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
@@ -199,9 +198,9 @@ fun HazelAssistantWrapper(
             GlobalSpeechManager(
                 context = context,
                 intentRouter = intentRouter,
-                onStateChange = { state ->
-                    isHazelListening = state == SpeechState.ACTIVE_COMMAND
-                    if (state == SpeechState.IDLE_WAKEWORD) {
+                onStateChange = { isActive ->
+                    isHazelListening = isActive
+                    if (isActive) {
                         transcribedText = ""
                     }
                 },
@@ -223,10 +222,6 @@ fun HazelAssistantWrapper(
                             // state managed internally
                         }
                     )
-                },
-                onPlayChime = {
-                    ttsRef?.language = Locale.US
-                    ttsRef?.speak("Yes?", TextToSpeech.QUEUE_FLUSH, null, "chime")
                 }
             )
         } else null
@@ -293,8 +288,7 @@ fun HazelAssistantWrapper(
             ) {
                 LimitlessNavHost(
                     navController = navController,
-                    database = database,
-                    globalSpeechManager = globalSpeechManager
+                    database = database
                 )
 
                 // ── Network status badge: top-right corner, unobtrusive ──────
@@ -339,7 +333,7 @@ fun HazelAssistantWrapper(
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
                     onDismiss = {
-                        globalSpeechManager?.revertToWakeWord()
+                        globalSpeechManager?.stopListening()
                     },
                     transcribedText = transcribedText,
                     onMicTap = {
