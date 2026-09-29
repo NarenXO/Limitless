@@ -53,7 +53,6 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
-import com.teamdexters.limitless.assistant.GlobalSpeechManager
 import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
@@ -188,57 +187,17 @@ fun HazelAssistantWrapper(
 
     // Hazel state management
     var isHazelListening by remember { mutableStateOf(false) }
-    var transcribedText by remember { mutableStateOf("") }
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
-    // Initialize global speech manager (only when mic is granted)
-    val globalSpeechManager = remember(context, micGranted) {
-        if (micGranted) {
-            GlobalSpeechManager(
-                context = context,
-                intentRouter = intentRouter,
-                onStateChange = { isActive ->
-                    isHazelListening = isActive
-                    if (isActive) {
-                        transcribedText = ""
-                    }
-                },
-                onPartialText = { text ->
-                    transcribedText = text
-                },
-                onIntentResult = { intent ->
-                    handleHazelIntent(
-                        intent = intent,
-                        navController = navController,
-                        queryHandler = queryHandler,
-                        scope = coroutineScope,
-                        tts = ttsRef,
-                        onShowBanner = { text ->
-                            responseBannerText = text
-                            isBannerVisible = true
-                        },
-                        onHandled = {
-                            // state managed internally
-                        }
-                    )
-                }
-            )
-        } else null
-    }
-    
-    DisposableEffect(globalSpeechManager) {
-        onDispose {
-            globalSpeechManager?.destroy()
-        }
-    }
+
 
     // Register BroadcastReceiver for accessibility service action
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == HazelAccessibilityService.ACTION_OPEN_HAZEL) {
-                    globalSpeechManager?.triggerActiveCommand()
+                    isHazelListening = true
                 }
             }
         }
@@ -316,7 +275,7 @@ fun HazelAssistantWrapper(
                 ) {
                     HazelFloatingMicButton(
                         onClick = {
-                            globalSpeechManager?.triggerActiveCommand()
+                            isHazelListening = true
                         }
                     )
                 }
@@ -333,11 +292,22 @@ fun HazelAssistantWrapper(
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
                     onDismiss = {
-                        globalSpeechManager?.stopListening()
+                        isHazelListening = false
                     },
-                    transcribedText = transcribedText,
-                    onMicTap = {
-                        globalSpeechManager?.triggerActiveCommand()
+                    intentRouter = intentRouter,
+                    onIntentResult = { intent ->
+                        handleHazelIntent(
+                            intent = intent,
+                            navController = navController,
+                            queryHandler = queryHandler,
+                            scope = coroutineScope,
+                            tts = ttsRef,
+                            onShowBanner = { text ->
+                                responseBannerText = text
+                                isBannerVisible = true
+                            },
+                            onHandled = {}
+                        )
                     }
                 )
             }
