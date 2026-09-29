@@ -190,27 +190,7 @@ fun HazelAssistantWrapper(
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
-    val wakeWordManager = remember(context) {
-        com.teamdexters.limitless.assistant.WakeWordManager(context) {
-            isHazelListening = true
-        }
-    }
-    
-    val isStartOnboardingComplete = currentRoute != null && currentRoute != Screen.PersonaSelect.route
-    
-    LaunchedEffect(isStartOnboardingComplete, isHazelListening) {
-        if (isStartOnboardingComplete && !isHazelListening) {
-            wakeWordManager.startListening()
-        } else {
-            wakeWordManager.stopListening()
-        }
-    }
-    
-    DisposableEffect(wakeWordManager) {
-        onDispose {
-            wakeWordManager.stopListening()
-        }
-    }
+
     
     // Register BroadcastReceiver for accessibility service action
     DisposableEffect(context) {

@@ -210,14 +210,17 @@ fun PersonaSelectScreen(
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
     fun startPersonaListening(saveFn: (String) -> Unit) {
+        recognizerRef?.destroy()
+        recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
+        
         val personaListener = makeRecognitionListener(
             onResult = { spoken ->
                 val lower = spoken.lowercase()
                 val match = when {
                     lower.contains("blind") || lower.contains("vision")    -> "BLIND"
-                    lower.contains("deaf")  || lower.contains("hear")      -> "DEAF"
-                    lower.contains("speech") || lower.contains("speak")    -> "SPEECH"
-                    lower.contains("mobility") || lower.contains("wheel")  -> "MOBILITY"
+                    lower.contains("deaf")  || lower.contains("hearing")   -> "DEAF"
+                    lower.contains("speech") || lower.contains("talk")     -> "SPEECH"
+                    lower.contains("mobility") || lower.contains("wheelchair") -> "MOBILITY"
                     else -> null
                 }
                 if (match != null) {
@@ -244,23 +247,20 @@ fun PersonaSelectScreen(
                 ttsRef?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
                     override fun onDone(utteranceId: String?) {
-                        coroutineScope.launch {
-                            delay(800) // Wait 800ms
-                            withContext(Dispatchers.Main) {
-                                if (utteranceId == "welcome" && isNameStage) {
-                                    startNameCapture()
-                                } else {
-                                    currentOnTtsDone.getAndSet(null)?.invoke()
-                                }
+                        coroutineScope.launch(Dispatchers.Main) {
+                            if (utteranceId == "welcome" && isNameStage) {
+                                delay(800)
+                                startNameCapture()
+                            } else {
+                                delay(500)
+                                currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
                     }
                     override fun onError(utteranceId: String?) {
-                        coroutineScope.launch {
-                            withContext(Dispatchers.Main) {
-                                if (utteranceId != "welcome") {
-                                    currentOnTtsDone.getAndSet(null)?.invoke()
-                                }
+                        coroutineScope.launch(Dispatchers.Main) {
+                            if (utteranceId != "welcome") {
+                                currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
                     }

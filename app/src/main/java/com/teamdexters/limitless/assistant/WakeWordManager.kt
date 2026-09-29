@@ -61,9 +61,7 @@ class WakeWordManager(
                 override fun onEndOfSpeech() {}
                 
                 override fun onError(error: Int) {
-                    if (!isListening) return
                     Log.d(TAG, "Recognizer error: $error")
-                    restartListeningWithDelay()
                 }
 
                 override fun onResults(results: Bundle?) {
@@ -98,7 +96,7 @@ class WakeWordManager(
             stopListening()
             onWakeWordDetected()
         } else {
-            restartListeningWithDelay()
+            Log.d(TAG, "No wake word detected, not restarting loop.")
         }
     }
 
@@ -116,22 +114,10 @@ class WakeWordManager(
             recognizer?.startListening(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start listening", e)
-            restartListeningWithDelay()
         }
     }
 
     private fun restartListeningWithDelay() {
-        if (!isListening) return
-        recognizer?.cancel()
-        
-        scope.launch {
-            delay(1000L) // 1000ms backoff delay to prevent rapid looping
-            if (isListening) {
-                recognizer?.destroy()
-                recognizer = null
-                initRecognizer()
-                startRecognizerIntent()
-            }
-        }
+        // Loop disabled to eliminate RECOGNIZER_BUSY errors
     }
 }
