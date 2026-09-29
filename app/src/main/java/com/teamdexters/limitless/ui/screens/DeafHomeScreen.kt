@@ -986,8 +986,7 @@ private fun EnrollmentDialog(
                     colors = TextFieldDefaults.outlinedTextFieldColors(
                         focusedBorderColor = PersonaDeaf,
                         unfocusedBorderColor = SurfaceTint,
-                        cursorColor = PersonaDeaf,
-                        textColor = TextPrimary
+                        cursorColor = PersonaDeaf
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )

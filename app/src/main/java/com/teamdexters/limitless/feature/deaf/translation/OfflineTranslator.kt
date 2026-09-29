@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.resume
-import kotlinx.coroutines.resumeWithException
+import kotlin.coroutines.resumeWithException
 import com.google.android.gms.tasks.Task
 
 /**
