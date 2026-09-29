@@ -144,7 +144,7 @@ fun HazelListeningOverlay(
                             else -> "UNKNOWN_$error"
                         }
                         Log.e(TAG, "onError: Code $error ($errorName)")
-                        statusText = "Status: Error ($errorName) - Tap mic to retry"
+                        statusText = "Status: Tap mic to speak"
                     }
 
                     override fun onResults(results: Bundle?) {
@@ -173,7 +173,7 @@ fun HazelListeningOverlay(
                 })
                 
                 coroutineScope.launch {
-                    delay(200L) // Allow UI overlay animation to settle
+                    delay(500L) // Allow UI overlay animation to settle
                     Log.d(TAG, "Auto-starting microphone on overlay open...")
                     startListening()
                 }

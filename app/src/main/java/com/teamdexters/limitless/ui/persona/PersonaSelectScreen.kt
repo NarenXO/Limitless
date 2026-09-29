@@ -154,7 +154,7 @@ fun PersonaSelectScreen(
         }
         override fun onError(error: Int) {
             isListening = false
-            listeningHint = "Tap mic to speak your name"
+            listeningHint = if (isNameStage) "Tap mic to speak your name" else "Tap card below or tap mic to speak mode"
             val msg = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH       -> "ERROR_NO_MATCH"
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
@@ -164,6 +164,10 @@ fun PersonaSelectScreen(
             }
             Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onError ($msg)")
             Log.w(TAG, "SpeechRecognizer error: $msg (code=$error)")
+            if (!isNameStage) {
+                Log.e("LIMITLESS_TRACE", "[Stage 2] SpeechRecognizer onError: Code $error")
+                recognizerRef?.destroy()
+            }
             onRetry()
         }
         override fun onPartialResults(partial: Bundle?) {
@@ -269,7 +273,8 @@ fun PersonaSelectScreen(
                                 delay(600)
                                 startNameCapture()
                             } else {
-                                delay(600)
+                                delay(1500)
+                                Log.d("LIMITLESS_TRACE", "[Stage 2] 1500ms hardware unlock buffer complete. Opening mic...")
                                 currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
@@ -306,7 +311,7 @@ fun PersonaSelectScreen(
     LaunchedEffect(isNameStage, capturedName) {
         if (isNameStage) return@LaunchedEffect
         Log.d("LIMITLESS_TRACE", "[Stage 2] Short TTS prompt started")
-        val greeting = "Hello $capturedName. Say Blind, Deaf, Speech, or Mobility."
+        val greeting = "Hello $capturedName. Select your assist mode."
         speakThenListen(greeting) {
             startPersonaListening { persona ->
                 savePersonaAndNavigate(persona, navController, database, coroutineScope)
