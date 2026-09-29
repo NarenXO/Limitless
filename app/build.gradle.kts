@@ -97,7 +97,7 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.0")
     
     // Google ML Kit Translation
-    implementation("com.google.mlkit:translate:17.0.2")
+    implementation("com.google.mlkit:translate:17.0.3")
     
     // osmdroid (offline map tiles)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
