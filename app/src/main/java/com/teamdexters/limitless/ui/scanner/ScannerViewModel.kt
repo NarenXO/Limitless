@@ -45,6 +45,15 @@ class ScannerViewModel @Inject constructor(
     // Expose real-time Flow of all scores from Room DAO
     val scores: kotlinx.coroutines.flow.Flow<List<AccessibilityScoreEntity>> = scoreDao.getAllScores()
     
+    private val _selectedScore = MutableStateFlow<AccessibilityScoreEntity?>(null)
+    val selectedScore: StateFlow<AccessibilityScoreEntity?> = _selectedScore
+    
+    fun fetchScoreById(id: Long) {
+        viewModelScope.launch {
+            _selectedScore.value = scoreDao.getScoreById(id)
+        }
+    }
+
     private val _photoUri = MutableStateFlow<String?>(null)
 
     fun onDoorWidthSelected(width: String) {

@@ -90,17 +90,20 @@ fun AccessibilityScannerScreen(
                                     
                                 var lastAnalyzeTime = 0L
                                 analysis.setAnalyzer(executor) { imageProxy ->
-                                    val currentTime = System.currentTimeMillis()
-                                    if (!isScanning && (currentTime - lastAnalyzeTime >= 1500)) {
-                                        lastAnalyzeTime = currentTime
-                                        @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
-                                        val mediaImage = imageProxy.image
-                                        if (mediaImage != null) {
-                                            val bitmap = imageProxy.toBitmap()
-                                            viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
+                                    try {
+                                        val currentTime = System.currentTimeMillis()
+                                        if (!isScanning && (currentTime - lastAnalyzeTime >= 1500)) {
+                                            lastAnalyzeTime = currentTime
+                                            @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+                                            val mediaImage = imageProxy.image
+                                            if (mediaImage != null) {
+                                                val bitmap = imageProxy.toBitmap()
+                                                viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
+                                            }
                                         }
+                                    } finally {
+                                        imageProxy.close()
                                     }
-                                    imageProxy.close()
                                 }
                                 
                                 val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
@@ -116,15 +119,37 @@ fun AccessibilityScannerScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(HighlightBox),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("Camera permission required", color = Color.White)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
-                            Text("Grant Permission")
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.CameraAlt,
+                                contentDescription = "Camera Permission Required",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Camera permission required to scan building accessibility",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { cameraPermissionState.launchPermissionRequest() },
+                                colors = ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = HighlightBox)
+                            ) {
+                                Text("Grant Camera Permission")
+                            }
                         }
                     }
                 }

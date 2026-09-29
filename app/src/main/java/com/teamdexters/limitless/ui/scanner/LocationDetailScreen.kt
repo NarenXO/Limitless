@@ -17,21 +17,40 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+
 @Composable
 fun LocationDetailScreen(
     locationId: Long = 1L,
     onBackClick: () -> Unit = {},
-    locationTitle: String = "Location",
-    isVerified: Boolean = false,
-    overallScore: Int = 0,
-    objectScore: Float = 0f,
-    ocrScore: Float = 0f,
-    brightnessScore: Float = 0f,
-    checklistScore: Float = 0f,
-    photoUri: String? = null,
-    timestamp: Long = 0L,
-    coordinates: String = ""
+    viewModel: ScannerViewModel = hiltViewModel()
 ) {
+    LaunchedEffect(locationId) {
+        viewModel.fetchScoreById(locationId)
+    }
+    
+    val scoreEntity by viewModel.selectedScore.collectAsState()
+
+    if (scoreEntity == null) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F1EE)), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFFF791A9))
+        }
+        return
+    }
+
+    val locationTitle = scoreEntity?.buildingName ?: "Location"
+    val isVerified = scoreEntity?.isTeamVerified ?: false
+    val overallScore = scoreEntity?.overallScore ?: 0
+    val objectScore = if (scoreEntity?.rampDetected == true || scoreEntity?.stairsDetected == true) 30f else 0f
+    val ocrScore = 20f // Mocked based on structure
+    val brightnessScore = (scoreEntity?.lightingScore ?: 0f) * 100f
+    val checklistScore = (scoreEntity?.doorWidthScore ?: 0f) * 100f
+    val photoUri = scoreEntity?.photoUri
+    val timestamp = scoreEntity?.timestamp ?: 0L
+    val coordinates = "Not recorded"
     Scaffold(
         containerColor = Color(0xFFF7F1EE)
     ) { innerPadding ->
