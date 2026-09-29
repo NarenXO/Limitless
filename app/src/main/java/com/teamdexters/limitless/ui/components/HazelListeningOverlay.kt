@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -56,7 +57,8 @@ import com.teamdexters.limitless.ui.theme.TextPrimary
 fun HazelListeningOverlay(
     isVisible: Boolean,
     onDismiss: () -> Unit,
-    transcribedText: String
+    transcribedText: String,
+    onMicTap: () -> Unit
 ) {
     if (!isVisible) return
     
@@ -121,13 +123,26 @@ fun HazelListeningOverlay(
                 WaveformBlock(color = PersonaSpeech, height = 30.dp)
             }
             
-            // Mic icon
-            Icon(
-                imageVector = Icons.Default.Mic,
-                contentDescription = "Microphone listening",
-                tint = TextPrimary,
-                modifier = Modifier.size(48.dp)
-            )
+            // Mic icon (clickable)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clickable { onMicTap() }
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Tap to speak again",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tap to speak again",
+                    style = LimitlessTypography.labelMedium,
+                    color = TextPrimary
+                )
+            }
             
             // Transcribed text display
             if (transcribedText.isNotEmpty()) {

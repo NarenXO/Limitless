@@ -32,6 +32,7 @@ class GlobalSpeechManager(
     private var currentState = SpeechState.IDLE_WAKEWORD
     private val handler = Handler(Looper.getMainLooper())
     private var isDestroyed = false
+    private var commandListenStartTime: Long = 0L
 
     init {
         initRecognizer()
@@ -62,6 +63,9 @@ class GlobalSpeechManager(
         }
         try {
             speechRecognizer?.startListening(intent)
+            if (currentState == SpeechState.ACTIVE_COMMAND) {
+                commandListenStartTime = System.currentTimeMillis()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error starting speech recognizer", e)
         }
@@ -70,11 +74,13 @@ class GlobalSpeechManager(
     fun triggerActiveCommand() {
         handler.removeCallbacksAndMessages(null)
         speechRecognizer?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         
         handler.postDelayed({
+            initRecognizer()
             currentState = SpeechState.ACTIVE_COMMAND
             onStateChange(currentState)
-            onPlayChime()
             startListening()
             
             // Auto-revert after 8 seconds
@@ -83,7 +89,7 @@ class GlobalSpeechManager(
                     revertToWakeWord()
                 }
             }, 8000L)
-        }, 400L)
+        }, 800L)
     }
 
     fun revertToWakeWord() {
@@ -106,11 +112,37 @@ class GlobalSpeechManager(
     override fun onBeginningOfSpeech() {}
     override fun onRmsChanged(rmsdB: Float) {}
     override fun onBufferReceived(buffer: ByteArray?) {}
-    override fun onEndOfSpeech() {}
+    override fun onEndOfSpeech() {
+        if (isDestroyed || currentState != SpeechState.ACTIVE_COMMAND) return
+        
+        if ((System.currentTimeMillis() - commandListenStartTime) < 2000L) {
+            Log.w(TAG, "Ignoring premature onEndOfSpeech (Mic Shield)")
+            handler.post {
+                speechRecognizer?.cancel()
+                startListening()
+            }
+        }
+    }
 
     override fun onError(error: Int) {
         if (isDestroyed) return
         Log.e(TAG, "Speech error: $error")
+        
+        if (currentState == SpeechState.ACTIVE_COMMAND) {
+            if ((System.currentTimeMillis() - commandListenStartTime) < 2000L &&
+                (error == SpeechRecognizer.ERROR_NO_MATCH || 
+                 error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || 
+                 error == SpeechRecognizer.ERROR_CLIENT)) {
+                
+                Log.w(TAG, "Ignoring premature error: $error (Mic Shield)")
+                handler.post {
+                    speechRecognizer?.cancel()
+                    startListening()
+                }
+                return
+            }
+        }
+        
         handler.postDelayed({
             if (!isDestroyed) {
                 if (currentState == SpeechState.ACTIVE_COMMAND) {
@@ -154,8 +186,18 @@ class GlobalSpeechManager(
                 if (best.isNotEmpty()) {
                     val intent = intentRouter.routeIntent(best)
                     onIntentResult(intent)
+                    revertToWakeWord()
+                } else {
+                    if ((System.currentTimeMillis() - commandListenStartTime) < 2000L) {
+                        Log.w(TAG, "Ignoring premature empty result (Mic Shield)")
+                        handler.post {
+                            speechRecognizer?.cancel()
+                            startListening()
+                        }
+                    } else {
+                        revertToWakeWord()
+                    }
                 }
-                revertToWakeWord()
             }
         }
     }

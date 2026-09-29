@@ -340,7 +340,10 @@ fun HazelAssistantWrapper(
                     onDismiss = {
                         globalSpeechManager?.revertToWakeWord()
                     },
-                    transcribedText = transcribedText
+                    transcribedText = transcribedText,
+                    onMicTap = {
+                        globalSpeechManager?.triggerActiveCommand()
+                    }
                 )
             }
         }

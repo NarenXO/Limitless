@@ -115,10 +115,12 @@ class DefaultWakeWordListener(
                 combined.contains("he hazel")) {
                 Log.i(TAG, "Wake word detected!")
                 speechRecognizer?.cancel()
+                speechRecognizer?.destroy()
+                speechRecognizer = null
                 handler.postDelayed({
                     onWakeWordDetectedCallback?.invoke()
                     stopListening()
-                }, 400L)
+                }, 800L)
             }
         }
     }
