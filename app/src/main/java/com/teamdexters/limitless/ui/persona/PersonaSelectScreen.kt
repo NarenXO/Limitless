@@ -94,7 +94,8 @@ private const val TAG = "PersonaSelectScreen"
 @Composable
 fun PersonaSelectScreen(
     navController: NavController,
-    database: LimitlessDatabase
+    database: LimitlessDatabase,
+    globalSpeechManager: com.teamdexters.limitless.assistant.GlobalSpeechManager? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -200,6 +201,7 @@ fun PersonaSelectScreen(
             onResult = { name ->
                 capturedName = name.replaceFirstChar { it.uppercase() }
                 isNameStage = false
+                globalSpeechManager?.resume()
             },
             onRetry = {
                 speakThenListen("I didn't catch that. What is your name?") {
@@ -208,11 +210,13 @@ fun PersonaSelectScreen(
                             onResult = { name ->
                                 capturedName = name.replaceFirstChar { it.uppercase() }
                                 isNameStage = false
+                                globalSpeechManager?.resume()
                             },
                             onRetry = {
                                 // Two strikes — skip name, proceed with placeholder
                                 capturedName = "there"
                                 isNameStage = false
+                                globalSpeechManager?.resume()
                             }
                         )
                     )
@@ -253,6 +257,7 @@ fun PersonaSelectScreen(
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
     DisposableEffect(Unit) {
+        globalSpeechManager?.pause()
         // SpeechRecognizer must be on UI thread — DisposableEffect runs on composition
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
 
@@ -295,6 +300,7 @@ fun PersonaSelectScreen(
         ttsRef = tts
 
         onDispose {
+            globalSpeechManager?.resume()
             tts.stop()
             tts.shutdown()
             recognizerRef?.destroy()

@@ -293,7 +293,8 @@ fun HazelAssistantWrapper(
             ) {
                 LimitlessNavHost(
                     navController = navController,
-                    database = database
+                    database = database,
+                    globalSpeechManager = globalSpeechManager
                 )
 
                 // ── Network status badge: top-right corner, unobtrusive ──────

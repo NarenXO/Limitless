@@ -32,6 +32,7 @@ class GlobalSpeechManager(
     private var currentState = SpeechState.IDLE_WAKEWORD
     private val handler = Handler(Looper.getMainLooper())
     private var isDestroyed = false
+    private var isPaused = false
     private var commandListenStartTime: Long = 0L
 
     init {
@@ -47,7 +48,7 @@ class GlobalSpeechManager(
     }
 
     private fun startListening() {
-        if (isDestroyed) return
+        if (isDestroyed || isPaused) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -72,13 +73,11 @@ class GlobalSpeechManager(
     }
 
     fun triggerActiveCommand() {
+        if (isPaused) return
         handler.removeCallbacksAndMessages(null)
         speechRecognizer?.cancel()
-        speechRecognizer?.destroy()
-        speechRecognizer = null
         
         handler.postDelayed({
-            initRecognizer()
             currentState = SpeechState.ACTIVE_COMMAND
             onStateChange(currentState)
             startListening()
@@ -89,7 +88,18 @@ class GlobalSpeechManager(
                     revertToWakeWord()
                 }
             }, 8000L)
-        }, 800L)
+        }, 300L)
+    }
+
+    fun pause() {
+        isPaused = true
+        handler.removeCallbacksAndMessages(null)
+        speechRecognizer?.cancel()
+    }
+
+    fun resume() {
+        isPaused = false
+        startListening()
     }
 
     fun revertToWakeWord() {
@@ -139,6 +149,19 @@ class GlobalSpeechManager(
                     speechRecognizer?.cancel()
                     startListening()
                 }
+                return
+            }
+
+            if (error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                handler.postDelayed({
+                    speechRecognizer?.cancel()
+                    startListening()
+                }, 1000L)
+                return
+            }
+
+            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                // Do NOT revert to wake word! Leave the overlay open, wait for the user to tap.
                 return
             }
         }
@@ -195,7 +218,8 @@ class GlobalSpeechManager(
                             startListening()
                         }
                     } else {
-                        revertToWakeWord()
+                        // Do NOT revert, let user tap to speak again
+                        return
                     }
                 }
             }

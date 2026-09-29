@@ -23,7 +23,8 @@ import com.teamdexters.limitless.ui.scanner.LocationDetailScreen
 @Composable
 fun LimitlessNavHost(
     navController: NavHostController,
-    database: LimitlessDatabase
+    database: LimitlessDatabase,
+    globalSpeechManager: com.teamdexters.limitless.assistant.GlobalSpeechManager? = null
 ) {
     NavHost(
         navController = navController,
@@ -33,7 +34,8 @@ fun LimitlessNavHost(
         composable(Screen.PersonaSelect.route) {
             PersonaSelectScreen(
                 navController = navController,
-                database = database
+                database = database,
+                globalSpeechManager = globalSpeechManager
             )
         }
         
