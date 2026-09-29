@@ -154,7 +154,7 @@ fun PersonaSelectScreen(
         }
         override fun onError(error: Int) {
             isListening = false
-            listeningHint = "Tap mic to speak"
+            listeningHint = "Tap mic to speak your name"
             val msg = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH       -> "ERROR_NO_MATCH"
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
@@ -215,51 +215,31 @@ fun PersonaSelectScreen(
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
     fun startPersonaListening(saveFn: (String) -> Unit) {
-        var retryCount = 0
+        recognizerRef?.destroy()
+        recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
         
-        fun attemptListen() {
-            recognizerRef?.destroy()
-            recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
-            
-            val personaListener = makeRecognitionListener(
-                onResult = { spoken ->
-                    val lower = spoken.lowercase()
-                    val match = when {
-                        lower.contains("blind") || lower.contains("vision") || lower.contains("one") || lower.contains("first") -> "BLIND"
-                        lower.contains("deaf") || lower.contains("hearing") || lower.contains("hear") || lower.contains("two") || lower.contains("second") -> "DEAF"
-                        lower.contains("speech") || lower.contains("talk") || lower.contains("speak") || lower.contains("three") || lower.contains("third") -> "SPEECH"
-                        lower.contains("mobility") || lower.contains("wheelchair") || lower.contains("wheel") || lower.contains("chair") || lower.contains("four") || lower.contains("fourth") -> "MOBILITY"
-                        else -> null
-                    }
-                    if (match != null) {
-                        Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
-                        saveFn(match)
-                    } else {
-                        if (retryCount < 3) {
-                            retryCount++
-                            Log.d("LIMITLESS_TRACE", "[Stage 2] No match, auto-retrying mic listening...")
-                            coroutineScope.launch {
-                                delay(300)
-                                attemptListen()
-                            }
-                        }
-                    }
-                },
-                onRetry = {
-                    if (retryCount < 3) {
-                        retryCount++
-                        Log.d("LIMITLESS_TRACE", "[Stage 2] No match, auto-retrying mic listening...")
-                        coroutineScope.launch {
-                            delay(300)
-                            attemptListen()
-                        }
-                    }
+        val personaListener = makeRecognitionListener(
+            onResult = { spoken ->
+                val lower = spoken.lowercase()
+                val match = when {
+                    lower.contains("blind") || lower.contains("vision") || lower.contains("one") || lower.contains("first") -> "BLIND"
+                    lower.contains("deaf") || lower.contains("hearing") || lower.contains("hear") || lower.contains("two") || lower.contains("second") -> "DEAF"
+                    lower.contains("speech") || lower.contains("talk") || lower.contains("speak") || lower.contains("three") || lower.contains("third") -> "SPEECH"
+                    lower.contains("mobility") || lower.contains("wheelchair") || lower.contains("wheel") || lower.contains("chair") || lower.contains("four") || lower.contains("fourth") -> "MOBILITY"
+                    else -> null
                 }
-            )
-            startListening(personaListener)
-        }
-        
-        attemptListen()
+                if (match != null) {
+                    Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
+                    saveFn(match)
+                } else {
+                    // Do NOT auto-retry. Just stop and wait for tap.
+                }
+            },
+            onRetry = {
+                // Do NOT auto-retry. Just stop and wait for tap.
+            }
+        )
+        startListening(personaListener)
     }
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
@@ -286,10 +266,10 @@ fun PersonaSelectScreen(
                         }
                         coroutineScope.launch(Dispatchers.Main) {
                             if (utteranceId == "welcome" && isNameStage) {
-                                delay(800)
+                                delay(600)
                                 startNameCapture()
                             } else {
-                                delay(400)
+                                delay(600)
                                 currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
