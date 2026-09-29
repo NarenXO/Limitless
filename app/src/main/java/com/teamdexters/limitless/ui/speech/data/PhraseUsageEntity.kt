@@ -6,7 +6,12 @@ import androidx.room.PrimaryKey
 /**
  * Room entity tracking local phrase usage for on-device phrase prediction.
  *
- * @param phraseText         The phrase text string (primary key).
+ * The primary key is a composite string "languageCode:phraseText" so that
+ * Tamil and Hindi usage records are completely independent from English ones.
+ *
+ * @param id                 Composite key: "$languageCode:$phraseText".
+ * @param phraseText         The phrase text string.
+ * @param languageCode       ISO language code ("en", "ta", "hi").
  * @param usageCount         Total number of times this phrase has been selected.
  * @param lastUsedTimestamp  Epoch timestamp (millis) of the last usage.
  * @param timeOfDaySlot      Coarse time slot when last used ("morning", "afternoon", "evening", "night").
@@ -14,7 +19,9 @@ import androidx.room.PrimaryKey
  */
 @Entity(tableName = "phrase_usage")
 data class PhraseUsageEntity(
-    @PrimaryKey val phraseText: String,
+    @PrimaryKey val id: String,           // "$languageCode:$phraseText"
+    val phraseText: String,
+    val languageCode: String = "en",
     val usageCount: Int = 0,
     val lastUsedTimestamp: Long = 0L,
     val timeOfDaySlot: String = "morning",

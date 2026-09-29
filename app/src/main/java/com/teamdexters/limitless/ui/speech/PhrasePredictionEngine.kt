@@ -13,6 +13,9 @@ import java.util.Calendar
  * - Time bonus     : +5 if timeOfDaySlot matches current time slot
  * - Recency bonus  : +2 if lastUsedTimestamp is within the last 24 hours
  * - Location bonus : +4 if lastLocationTag matches current location tag
+ *
+ * All methods accept a [languageCode] so that Tamil and Hindi predictions
+ * are fully isolated from English records.
  */
 class PhrasePredictionEngine(
     private val dao: PhraseUsageDao
@@ -70,23 +73,24 @@ class PhrasePredictionEngine(
     }
 
     /**
-     * Returns true if any phrase usage data exists in the local DB.
+     * Returns true if any phrase usage data exists in the local DB for [languageCode].
      */
-    suspend fun hasUsageData(): Boolean {
-        return dao.getCount() > 0
+    suspend fun hasUsageData(languageCode: String = "en"): Boolean {
+        return dao.getCount(languageCode) > 0
     }
 
     /**
-     * Gets adaptive phrase recommendations ranked by score.
+     * Gets adaptive phrase recommendations ranked by score, scoped to [languageCode].
      *
      * Cold-Start Behavior:
-     * If local phrase DB is empty, returns original hardcoded phrases in default order.
+     * If local phrase DB is empty for this language, returns original hardcoded phrases in default order.
      */
     suspend fun getPredictedPhrases(
         defaultPhrases: List<String>,
-        limit: Int = 10
+        limit: Int = 10,
+        languageCode: String = "en"
     ): List<String> {
-        val dbRecords = dao.getAllPhrases().associateBy { it.phraseText }
+        val dbRecords = dao.getAllPhrases(languageCode).associateBy { it.phraseText }
 
         // Cold-start check: return static default list if no usage records exist
         if (dbRecords.isEmpty()) {
@@ -101,7 +105,7 @@ class PhrasePredictionEngine(
             val entity = dbRecords[phrase]
             val score = if (entity != null) calculateScore(entity) else 0
             val lastUsed = entity?.lastUsedTimestamp ?: 0L
-            
+
             // Primary sort: Score DESC
             // Secondary sort: Last used DESC
             // Tertiary sort: Default order ASC
@@ -117,12 +121,16 @@ class PhrasePredictionEngine(
 
     /**
      * Increments usage statistics for a phrase card when tapped.
+     * Records are scoped by [languageCode] using a composite key.
      */
-    suspend fun recordUsage(phraseText: String) {
-        val existing = dao.getPhrase(phraseText)
+    suspend fun recordUsage(phraseText: String, languageCode: String = "en") {
+        val id = "$languageCode:$phraseText"
+        val existing = dao.getPhrase(id)
         val newUsageCount = (existing?.usageCount ?: 0) + 1
         val updatedEntity = PhraseUsageEntity(
+            id = id,
             phraseText = phraseText,
+            languageCode = languageCode,
             usageCount = newUsageCount,
             lastUsedTimestamp = System.currentTimeMillis(),
             timeOfDaySlot = getCurrentTimeOfDaySlot(),
