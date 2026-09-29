@@ -59,11 +59,11 @@ class ScannerViewModel @Inject constructor(
         _hasWashroom.value = hasIt
     }
 
-    fun startScan(bitmap: Bitmap) {
+    fun startScan(bitmap: Bitmap, rotationDegrees: Int) {
         viewModelScope.launch {
             _isScanning.value = true
             
-            val (objects, text, lighting) = analyzer.analyzeFrame(bitmap)
+            val (objects, text, lighting) = analyzer.analyzeFrame(bitmap, rotationDegrees)
             
             _scanObjects.value = objects
             _signageText.value = text
@@ -76,15 +76,17 @@ class ScannerViewModel @Inject constructor(
     fun saveScan(onSuccess: (Long) -> Unit) {
         viewModelScope.launch {
             try {
-                // Calculate sub-scores based on requirements
-                val objectsFound = _scanObjects.value.count {
-                    it.confidence > 0.5f && (it.label.equals("ramp", ignoreCase = true) || it.label.equals("stairs", ignoreCase = true) || it.label.equals("handrail", ignoreCase = true))
-                }
-                val objectScore = (objectsFound * 25f).coerceIn(0f, 100f)
-
-                val ocrScore = (_signageText.value.size * 20f).coerceIn(0f, 100f)
-
-                val brightnessScore = _lightingScore.value.toFloat()
+                val computedScore = ScoreCalculator.calculateCombinedScore(
+                    _scanObjects.value,
+                    _signageText.value,
+                    _doorWidth.value,
+                    _hasBraille.value,
+                    _hasWashroom.value,
+                    _lightingScore.value
+                )
+                
+                // TODO(Naren): AccessibilityScoreEntity needs an isTeamVerified: Boolean field (default false)
+                val isVerified = computedScore >= 70
 
                 val doorWidthScoreVal = when (_doorWidth.value) {
                     "Narrow" -> 0f
@@ -92,16 +94,6 @@ class ScannerViewModel @Inject constructor(
                     "Wide" -> 100f
                     else -> 0f
                 }
-                val brailleScoreVal = if (_hasBraille.value) 100f else 0f
-                val washroomScoreVal = if (_hasWashroom.value) 100f else 0f
-                val checklistScore = (doorWidthScoreVal + brailleScoreVal + washroomScoreVal) / 3f
-
-                val computedScore = ScoreCalculator.calculateCombinedScore(
-                    objectScore, ocrScore, brightnessScore, checklistScore
-                )
-                
-                // TODO(Naren): AccessibilityScoreEntity needs an isTeamVerified: Boolean field (default false)
-                val isVerified = computedScore >= 70
 
                 val entity = AccessibilityScoreEntity(
                     buildingName = "Scanned Location",
@@ -110,7 +102,7 @@ class ScannerViewModel @Inject constructor(
                     stairsDetected = _scanObjects.value.any { it.label.equals("stairs", ignoreCase = true) },
                     handrailsDetected = _scanObjects.value.any { it.label.equals("handrail", ignoreCase = true) },
                     doorWidthScore = doorWidthScoreVal / 100f,
-                    lightingScore = brightnessScore / 100f,
+                    lightingScore = _lightingScore.value / 100f,
                     brailleSignagePresent = _hasBraille.value,
                     accessibleWashroomPresent = _hasWashroom.value,
                     photoUri = _photoUri.value,

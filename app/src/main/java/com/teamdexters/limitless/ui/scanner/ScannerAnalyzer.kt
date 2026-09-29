@@ -11,9 +11,9 @@ data class ScanObjectResult(val label: String, val confidence: Float)
 
 class ScannerAnalyzer {
     
-    suspend fun analyzeFrame(bitmap: Bitmap): Triple<List<ScanObjectResult>, List<String>, Int> = withContext(Dispatchers.Default) {
-        val objectsDeferred = async { detectObjects(bitmap) }
-        val textDeferred = async { recognizeSignageText(bitmap) }
+    suspend fun analyzeFrame(bitmap: Bitmap, rotationDegrees: Int): Triple<List<ScanObjectResult>, List<String>, Int> = withContext(Dispatchers.Default) {
+        val objectsDeferred = async { detectObjects(bitmap, rotationDegrees) }
+        val textDeferred = async { recognizeSignageText(bitmap, rotationDegrees) }
         val lightingDeferred = async { calculateLightingScore(bitmap) }
         
         // Wait for all analyses to complete in parallel
@@ -24,17 +24,14 @@ class ScannerAnalyzer {
         Triple(objects, text, lighting)
     }
 
-    suspend fun detectObjects(bitmap: Bitmap): List<ScanObjectResult> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
-        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+    suspend fun detectObjects(bitmap: Bitmap, rotationDegrees: Int): List<ScanObjectResult> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, rotationDegrees)
         val labeler = com.google.mlkit.vision.label.ImageLabeling.getClient(
             com.google.mlkit.vision.label.defaults.ImageLabelerOptions.DEFAULT_OPTIONS
         )
         labeler.process(image)
             .addOnSuccessListener { labels ->
-                val possibleLabels = listOf("ramp", "stairs", "handrail", "wheelchair", "door", "entrance")
-                val results = labels.filter { label -> 
-                    possibleLabels.any { it.equals(label.text, ignoreCase = true) } 
-                }.map { ScanObjectResult(it.text, it.confidence) }
+                val results = labels.map { ScanObjectResult(it.text, it.confidence) }
                 continuation.resume(results, null)
             }
             .addOnFailureListener {
@@ -42,23 +39,15 @@ class ScannerAnalyzer {
             }
     }
 
-    suspend fun recognizeSignageText(bitmap: Bitmap): List<String> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
-        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+    suspend fun recognizeSignageText(bitmap: Bitmap, rotationDegrees: Int): List<String> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, rotationDegrees)
         val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
             com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
         )
         recognizer.process(image)
             .addOnSuccessListener { visionText ->
-                val keywordsToFind = listOf("accessible", "wheelchair", "ramp", "lift", "elevator", "braille", "restroom", "disabled")
-                val foundKeywords = mutableListOf<String>()
-                val textLower = visionText.text.lowercase()
-                
-                for (keyword in keywordsToFind) {
-                    if (textLower.contains(keyword)) {
-                        foundKeywords.add(keyword)
-                    }
-                }
-                continuation.resume(foundKeywords, null)
+                val allText = visionText.textBlocks.map { it.text }
+                continuation.resume(allText, null)
             }
             .addOnFailureListener {
                 continuation.resume(emptyList(), null)

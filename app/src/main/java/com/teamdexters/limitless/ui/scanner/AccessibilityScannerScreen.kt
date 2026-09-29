@@ -23,6 +23,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.teamdexters.limitless.ui.theme.HighlightBox
+import com.teamdexters.limitless.ui.theme.TextPrimary
 
 @OptIn(ExperimentalMaterial3Api::class, com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 @Composable
@@ -91,8 +93,12 @@ fun AccessibilityScannerScreen(
                                     val currentTime = System.currentTimeMillis()
                                     if (!isScanning && (currentTime - lastAnalyzeTime >= 1500)) {
                                         lastAnalyzeTime = currentTime
-                                        val bitmap = imageProxy.toBitmap()
-                                        viewModel.startScan(bitmap)
+                                        @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+                                        val mediaImage = imageProxy.image
+                                        if (mediaImage != null) {
+                                            val bitmap = imageProxy.toBitmap()
+                                            viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
+                                        }
                                     }
                                     imageProxy.close()
                                 }
@@ -138,50 +144,37 @@ fun AccessibilityScannerScreen(
                 }
             }
 
-            // Results Card
+            // Live Detection Chips
             if (scanObjects.isNotEmpty() || signageText.isNotEmpty() || lightingScore > 0) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .semantics { contentDescription = "Scan Results Card" },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Analysis Results", style = MaterialTheme.typography.titleMedium, color = Color(0xFF1F1F1F))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text("Detected Objects:", style = MaterialTheme.typography.bodyMedium)
-                        if (scanObjects.isEmpty()) {
-                            Text("- No accessibility structures detected in frame", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        } else {
-                            scanObjects.forEach { obj ->
-                                Text("- ${obj.label} (${(obj.confidence * 100).toInt()}%)", style = MaterialTheme.typography.bodySmall)
-                            }
+                    if (scanObjects.isNotEmpty()) {
+                        item {
+                            androidx.compose.material3.SuggestionChip(
+                                onClick = {},
+                                label = { Text("Objects Detected", color = TextPrimary) },
+                                colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                            )
                         }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Signage Keywords:", style = MaterialTheme.typography.bodyMedium)
-                        if (signageText.isEmpty()) Text("- None found", style = MaterialTheme.typography.bodySmall)
-                        else Text("- ${signageText.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Lighting Score:", style = MaterialTheme.typography.bodyMedium)
-                        val lightStatus = if (lightingScore > 60) "Good Lighting" else "Dim Lighting"
-                        Text("- $lightingScore/100 - $lightStatus", style = MaterialTheme.typography.bodySmall)
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { 
-                                viewModel.saveScan { insertedId ->
-                                    navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
-                        ) {
-                            Text("GENERATE SCORE", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    }
+                    if (signageText.isNotEmpty()) {
+                        item {
+                            androidx.compose.material3.SuggestionChip(
+                                onClick = {},
+                                label = { Text("Text Detected", color = TextPrimary) },
+                                colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                            )
                         }
+                    }
+                    item {
+                        val lightStatus = if (lightingScore > 60) "Lighting: Good" else "Lighting: Dim"
+                        androidx.compose.material3.SuggestionChip(
+                            onClick = {},
+                            label = { Text(lightStatus, color = TextPrimary) },
+                            colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                        )
                     }
                 }
             }
@@ -242,7 +235,17 @@ fun AccessibilityScannerScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // The save button was moved to the GENERATE SCORE button in the Results Card
+                Button(
+                    onClick = { 
+                        viewModel.saveScan { insertedId ->
+                            navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                ) {
+                    Text("GENERATE SCORE", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
             }
         }
     }

@@ -54,15 +54,16 @@ class HazelQueryHandler(
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
+            val offlineFallback = "I heard: $rawQuery. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'."
             val responseText = if (isOnline && isApiKeyPresent()) {
                 val result = geminiClient.queryGemini(rawQuery)
                 result.getOrElse { e ->
                     Log.w(TAG, "Gemini API query failed or timed out: ${e.message}. Falling back to offline message.")
-                    OFFLINE_FALLBACK_MESSAGE
+                    offlineFallback
                 }
             } else {
                 Log.i(TAG, "Device is offline or Gemini API key is missing. Using offline fallback.")
-                OFFLINE_FALLBACK_MESSAGE
+                offlineFallback
             }
 
             withContext(Dispatchers.Main) {
