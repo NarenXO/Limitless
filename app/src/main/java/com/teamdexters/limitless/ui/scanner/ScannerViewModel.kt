@@ -73,7 +73,7 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun saveScan() {
+    fun saveScan(onSuccess: (Long) -> Unit) {
         viewModelScope.launch {
             try {
                 // Calculate sub-scores based on requirements
@@ -118,8 +118,11 @@ class ScannerViewModel @Inject constructor(
                     isTeamVerified = isVerified
                 )
                 
-                scoreDao.insertScore(entity)
+                val insertedId = scoreDao.insertScore(entity)
                 _saveResult.value = true
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onSuccess(insertedId)
+                }
             } catch (e: Exception) {
                 _saveResult.value = false
             }

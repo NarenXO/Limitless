@@ -86,8 +86,11 @@ fun AccessibilityScannerScreen(
                                     .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                     .build()
                                     
+                                var lastAnalyzeTime = 0L
                                 analysis.setAnalyzer(executor) { imageProxy ->
-                                    if (!isScanning) {
+                                    val currentTime = System.currentTimeMillis()
+                                    if (!isScanning && (currentTime - lastAnalyzeTime >= 1500)) {
+                                        lastAnalyzeTime = currentTime
                                         val bitmap = imageProxy.toBitmap()
                                         viewModel.startScan(bitmap)
                                     }
@@ -170,8 +173,9 @@ fun AccessibilityScannerScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { 
-                                viewModel.saveScan()
-                                navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(1L))
+                                viewModel.saveScan { insertedId ->
+                                    navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))
+                                }
                             },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))

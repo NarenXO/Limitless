@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MicOff
@@ -232,7 +233,8 @@ fun HazelAssistantWrapper(
                             if (currentRoute != route) {
                                 navController.navigate(route) { launchSingleTop = true }
                             }
-                        }
+                        },
+                        modifier = Modifier.statusBarsPadding().padding(top = 12.dp)
                     )
                 }
             },
