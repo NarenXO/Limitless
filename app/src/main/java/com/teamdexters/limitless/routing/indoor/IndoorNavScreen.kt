@@ -64,7 +64,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.sample
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -111,7 +110,6 @@ fun IndoorNavScreen() {
     LaunchedEffect(Unit) {
         try {
             pdrEngine.positionFlow
-                .conflate()
                 .sample(200L)
                 .collect { pos ->
                     userX = pos.x
