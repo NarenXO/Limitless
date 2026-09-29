@@ -25,7 +25,7 @@ class GeminiClient(
 ) {
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        private const val SYSTEM_INSTRUCTION = "You are Hazel, an AI assistant. Provide a helpful, direct, 1-2 sentence response to the user's query."
+        private const val SYSTEM_INSTRUCTION = "You are Hazel, an AI assistant. Answer the user's question directly, concisely, and naturally in 1-2 conversational sentences suitable for speech synthesis."
         private const val TIMEOUT_MS = 5000
     }
 
@@ -107,7 +107,15 @@ class GeminiClient(
     }
 
     private fun getSmartFallbackResponse(prompt: String): Result<String> {
-        return Result.failure(Exception("Offline or invalid API key"))
+        val lower = prompt.lowercase()
+        val response = when {
+            lower.contains("scan") || lower.contains("camera") -> "I'm currently offline, but you can say 'Open Scanner' to use the on-device accessibility scanner."
+            lower.contains("report") || lower.contains("community") -> "I'm offline right now, but you can still access downloaded reports by saying 'Open Community'."
+            lower.contains("blind") || lower.contains("vision") -> "I'm operating offline, but I can still switch you to Blind mode if you say 'Blind mode'."
+            lower.contains("hello") || lower.contains("hi") -> "Hello! I'm operating in offline mode right now, but I can still help you navigate."
+            else -> "I'm currently offline, so I can't search the web right now. You can still ask me to open tools like the Scanner or Community map."
+        }
+        return Result.success(response)
     }
 
     /**

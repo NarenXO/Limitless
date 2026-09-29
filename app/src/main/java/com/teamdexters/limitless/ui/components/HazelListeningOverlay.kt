@@ -166,7 +166,11 @@ fun HazelListeningOverlay(
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
                 
-                startListening()
+                coroutineScope.launch {
+                    delay(200L) // Allow UI overlay animation to settle
+                    Log.d(TAG, "Auto-starting microphone on overlay open...")
+                    startListening()
+                }
             } else {
                 statusText = "Status: Error (INSUFFICIENT_PERMISSIONS) - Tap mic to retry"
             }

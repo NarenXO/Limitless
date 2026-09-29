@@ -380,23 +380,23 @@ private fun handleHazelIntent(
     when (intent) {
         is HazelIntent.NavigateTo    -> { 
             when (intent.route) {
-                Screen.BlindHome.route -> speak("Switching to Blind and Low Vision mode")
-                Screen.DeafHome.route -> speak("Switching to Deaf and Hard of Hearing mode")
-                Screen.SpeechHome.route -> speak("Switching to Speech Impaired mode")
-                Screen.MobilityHome.route -> speak("Switching to Mobility and Wheelchair mode")
-                Screen.PersonaSelect.route -> speak("Opening main menu")
+                Screen.BlindHome.route -> speak("Navigating to Blind and Low Vision mode for you.")
+                Screen.DeafHome.route -> speak("Navigating to Deaf and Hard of Hearing mode for you.")
+                Screen.SpeechHome.route -> speak("Navigating to Speech Impaired mode for you.")
+                Screen.MobilityHome.route -> speak("Navigating to Mobility and Wheelchair mode for you.")
+                Screen.PersonaSelect.route -> speak("Navigating to the main menu for you.")
             }
             navController.navigate(intent.route)
             onHandled()
         }
-        is HazelIntent.OpenScanner   -> { speak("Opening Accessibility Scanner"); navController.navigate(Screen.Scanner.route); onHandled() }
-        is HazelIntent.OpenCommunity -> { speak("Opening Community Reports"); navController.navigate(Screen.Community.route); onHandled() }
-        is HazelIntent.OpenPhraseCards -> { speak("Switching to Speech Impaired mode"); navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.OpenNavigation  -> { speak("Switching to Mobility and Wheelchair mode"); navController.navigate(Screen.MobilityHome.route); onHandled() }
-        is HazelIntent.BlindAssist   -> { speak("Switching to Blind and Low Vision mode"); navController.navigate(Screen.BlindHome.route); onHandled() }
-        is HazelIntent.DeafAssist    -> { speak("Switching to Deaf and Hard of Hearing mode"); navController.navigate(Screen.DeafHome.route); onHandled() }
-        is HazelIntent.SpeechAssist  -> { speak("Switching to Speech Impaired mode"); navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.MobilityAssist-> { speak("Switching to Mobility and Wheelchair mode"); navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.OpenScanner   -> { speak("Opening Accessibility Scanner for you."); navController.navigate(Screen.Scanner.route); onHandled() }
+        is HazelIntent.OpenCommunity -> { speak("Opening Community Reports for you."); navController.navigate(Screen.Community.route); onHandled() }
+        is HazelIntent.OpenPhraseCards -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.OpenNavigation  -> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.BlindAssist   -> { speak("Navigating to Blind and Low Vision mode for you."); navController.navigate(Screen.BlindHome.route); onHandled() }
+        is HazelIntent.DeafAssist    -> { speak("Navigating to Deaf and Hard of Hearing mode for you."); navController.navigate(Screen.DeafHome.route); onHandled() }
+        is HazelIntent.SpeechAssist  -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.MobilityAssist-> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
         is HazelIntent.GeneralQuery  -> {
             onHandled()
             queryHandler.handleGeneralQuery(

@@ -161,7 +161,8 @@ class NetworkStatusTrackerTest {
     fun testGeminiClientFailsWithEmptyApiKeyOffline() = runBlocking {
         val client = GeminiClient(apiKeyOverride = "")
         val result = client.queryGemini("What is the capital of France?")
-        assertTrue("Expected failure", result.isFailure)
+        assertTrue("Expected success with fallback", result.isSuccess)
+        assertTrue("Expected offline fallback text", result.getOrNull()?.contains("offline") == true)
     }
 
     @Test

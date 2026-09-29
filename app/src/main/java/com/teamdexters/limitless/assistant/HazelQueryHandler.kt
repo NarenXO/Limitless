@@ -52,40 +52,11 @@ class HazelQueryHandler(
         tts: TextToSpeech?,
         onResponseReady: (String) -> Unit
     ) {
-        val lower = rawQuery.lowercase()
-        val localResponse = when {
-            lower.contains("what can you do") || lower.contains("help") || lower.contains("who are you") || lower.contains("features") ->
-                "I am Hazel, your accessibility assistant. You can ask me to open the scanner, check community reports, or switch to blind, deaf, speech, or mobility modes."
-            lower.contains("how to scan") || lower.contains("scan") || lower.contains("check building") ->
-                "You can tap Scan at the top or say Open Scanner to evaluate building ramps, doors, and lighting."
-            lower.contains("community") || lower.contains("reviews") || lower.contains("how to report") ->
-                "Tap Community at the top to view accessibility reports, search locations, or report obstacles."
-            lower.contains("blind mode") || lower.contains("deaf mode") || lower.contains("wheelchair") || lower.contains("speech") ->
-                "Use the bottom dashboard tabs to switch between Blind, Deaf, Speech, and Mobility modes instantly."
-            lower.contains("hello") || lower.contains("hi") || lower.contains("how are you") || lower.contains("good morning") ->
-                "Hello! I am Hazel. How can I assist you today?"
-            else -> null
-        }
 
-        if (localResponse != null) {
-            onResponseReady(localResponse)
-            speakResponse(tts, localResponse)
-            return
-        }
 
         scope.launch {
-            val isOnline = isNetworkAvailable()
-            val hasApiKey = isApiKeyPresent()
-
-            val responseText = if (isOnline && hasApiKey) {
-                val result = geminiClient.queryGemini(rawQuery)
-                result.getOrElse { e ->
-                    Log.w(TAG, "Gemini API query failed or timed out: ${e.message}.")
-                    OFFLINE_FALLBACK_MESSAGE
-                }
-            } else {
-                OFFLINE_FALLBACK_MESSAGE
-            }
+            val result = geminiClient.queryGemini(rawQuery)
+            val responseText = result.getOrDefault(OFFLINE_FALLBACK_MESSAGE)
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
