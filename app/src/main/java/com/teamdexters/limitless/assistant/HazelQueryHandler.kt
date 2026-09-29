@@ -146,9 +146,9 @@ class HazelQueryHandler(
 
     private fun speakResponse(tts: TextToSpeech?, text: String) {
         try {
-            Log.d("LIMITLESS_TRACE", "[Hazel] Answer spoken aloud via TTS: $text")
+            Log.d("LIMITLESS_TRACE", "[Hazel] Speaking response aloud: $text")
             tts?.language = Locale.US
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAZEL_RESPONSE")
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAZEL_SPEECH_ID")
         } catch (e: Exception) {
             Log.e(TAG, "TextToSpeech speaking error: ${e.message}", e)
         }

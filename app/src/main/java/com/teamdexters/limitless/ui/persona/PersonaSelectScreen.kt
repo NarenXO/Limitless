@@ -129,7 +129,7 @@ fun PersonaSelectScreen(
         override fun onReadyForSpeech(params: Bundle?) {
             Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onReadyForSpeech")
             isListening = true
-            listeningHint = "Listening…"
+            listeningHint = if (isNameStage) "Listening…" else "Listening... Say Blind, Deaf, Speech, or Mobility"
         }
         override fun onBeginningOfSpeech() {
             Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onBeginningOfSpeech")
@@ -274,7 +274,7 @@ fun PersonaSelectScreen(
                                 startNameCapture()
                             } else {
                                 delay(1500)
-                                Log.d("LIMITLESS_TRACE", "[Stage 2] 1500ms hardware unlock buffer complete. Opening mic...")
+                                Log.d("LIMITLESS_TRACE", "[Stage 2] Auto-starting persona selection mic hands-free...")
                                 currentOnTtsDone.getAndSet(null)?.invoke()
                             }
                         }
