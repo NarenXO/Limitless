@@ -55,8 +55,8 @@ class GlobalSpeechManager(
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 100000L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 100000L)
             } else {
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 5000L)
             }
         }
@@ -69,18 +69,21 @@ class GlobalSpeechManager(
 
     fun triggerActiveCommand() {
         handler.removeCallbacksAndMessages(null)
-        currentState = SpeechState.ACTIVE_COMMAND
-        onStateChange(currentState)
-        onPlayChime()
         speechRecognizer?.cancel()
-        startListening()
         
-        // Auto-revert after 5 seconds
         handler.postDelayed({
-            if (currentState == SpeechState.ACTIVE_COMMAND) {
-                revertToWakeWord()
-            }
-        }, 5000L)
+            currentState = SpeechState.ACTIVE_COMMAND
+            onStateChange(currentState)
+            onPlayChime()
+            startListening()
+            
+            // Auto-revert after 8 seconds
+            handler.postDelayed({
+                if (currentState == SpeechState.ACTIVE_COMMAND) {
+                    revertToWakeWord()
+                }
+            }, 8000L)
+        }, 400L)
     }
 
     fun revertToWakeWord() {
@@ -117,7 +120,7 @@ class GlobalSpeechManager(
                     startListening()
                 }
             }
-        }, 1000L)
+        }, 1500L)
     }
 
     override fun onResults(results: Bundle?) {

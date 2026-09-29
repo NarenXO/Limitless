@@ -88,7 +88,7 @@ class DefaultWakeWordListener(
     
     override fun onError(error: Int) {
         if (isListening) {
-            scheduleRestart(4000L)
+            scheduleRestart(1500L)
         }
     }
 
@@ -114,8 +114,11 @@ class DefaultWakeWordListener(
                 combined.contains("hey hazle") || 
                 combined.contains("he hazel")) {
                 Log.i(TAG, "Wake word detected!")
-                onWakeWordDetectedCallback?.invoke()
-                stopListening()
+                speechRecognizer?.cancel()
+                handler.postDelayed({
+                    onWakeWordDetectedCallback?.invoke()
+                    stopListening()
+                }, 400L)
             }
         }
     }
