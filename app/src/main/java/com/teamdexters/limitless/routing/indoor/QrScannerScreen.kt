@@ -36,7 +36,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -98,9 +103,33 @@ fun QrScannerSection(
     }
 
     var scannedMessage by remember { mutableStateOf<String?>(null) }
-    var activeScannedUrl by remember { mutableStateOf<String?>(null) }
-    var activeScannedText by remember { mutableStateOf<String?>(null) }
-    var lastScannedTime by remember { mutableStateOf(0L) }
+    var currentScannedContent by remember { mutableStateOf("") }
+    var isUrlContent by remember { mutableStateOf(false) }
+    var lastScanTimestamp by remember { mutableStateOf(0L) }
+    var lastScannedPayload by remember { mutableStateOf("") }
+
+    var ttsInstance by remember { mutableStateOf<TextToSpeech?>(null) }
+    var isTtsReady by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val localTts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsInstance?.language = java.util.Locale.US
+                isTtsReady = true
+            }
+        }
+        ttsInstance = localTts
+        onDispose {
+            localTts.stop()
+            localTts.shutdown()
+        }
+    }
+
+    fun speakText(text: String) {
+        if (isTtsReady && ttsInstance != null) {
+            ttsInstance?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "qr_speech_${System.currentTimeMillis()}")
+        }
+    }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val barcodeScanner = remember {
@@ -198,64 +227,47 @@ fun QrScannerSection(
                                         barcodeScanner.process(inputImage)
                                             .addOnSuccessListener { barcodes ->
                                                 for (barcode in barcodes) {
-                                                    val rawPayload = barcode.rawValue?.trim() ?: continue
-                                                    val cleanPayload = rawPayload
-                                                        .replace("\n", "")
-                                                        .replace("\r", "")
-                                                        .replace("\t", "")
-                                                        .replace("\\uFEFF", "")
-                                                        .uppercase()
+                                                    val rawText = barcode.rawValue?.trim() ?: continue
+                                                    if (rawText.isBlank()) continue
 
-                                                    android.util.Log.e("QR_DEBUG", "Raw payload bytes: ${rawPayload.toByteArray().toList()}")
-                                                    android.util.Log.e("QR_DEBUG", "Clean payload: '$cleanPayload'")
-
+                                                    // Debounce duplicate scans within 2 seconds
                                                     val now = System.currentTimeMillis()
-                                                    if (now - lastScannedTime > 3000) { // Throttle scans to 3s
-                                                        lastScannedTime = now
-                                                        val matchedWaypoint = kcgIndoorWaypoints.find { 
-                                                            it.qrPayload.uppercase() == cleanPayload || 
-                                                            it.id.uppercase() == cleanPayload ||
-                                                            cleanPayload.contains(it.id.uppercase())
-                                                        }
-                                                        
-                                                        android.util.Log.e("QR_DEBUG", "Match found: ${matchedWaypoint?.name ?: "NONE"}")
+                                                    if (now - lastScanTimestamp < 2000L && rawText == lastScannedPayload) continue
+                                                    lastScanTimestamp = now
+                                                    lastScannedPayload = rawText
 
-                                                        if (matchedWaypoint != null) {
-                                                            pdrEngine.resetPosition(matchedWaypoint)
-                                                            scannedMessage = "Verified: ${matchedWaypoint.name}"
-                                                            activeScannedUrl = null
-                                                            activeScannedText = null
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            tts?.speak(
-                                                                "Location updated: ${matchedWaypoint.description}",
-                                                                TextToSpeech.QUEUE_FLUSH,
-                                                                null,
-                                                                "waypoint_utterance"
-                                                            )
-                                                            onWaypointScanned(matchedWaypoint)
-                                                        } else if (rawPayload.startsWith("http://", ignoreCase = true) || rawPayload.startsWith("https://", ignoreCase = true)) {
-                                                            scannedMessage = null
-                                                            activeScannedText = null
-                                                            activeScannedUrl = rawPayload
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            tts?.speak(
-                                                                "Scanned link: $rawPayload",
-                                                                TextToSpeech.QUEUE_FLUSH,
-                                                                null,
-                                                                "qr_link_utterance"
-                                                            )
-                                                        } else {
-                                                            scannedMessage = null
-                                                            activeScannedUrl = null
-                                                            activeScannedText = rawPayload
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            tts?.speak(
-                                                                "Scanned QR text: $rawPayload",
-                                                                TextToSpeech.QUEUE_FLUSH,
-                                                                null,
-                                                                "qr_text_utterance"
-                                                            )
-                                                        }
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                                                    val upperText = rawText.uppercase()
+
+                                                    // Check for waypoint keywords
+                                                    val matchedWaypoint = when {
+                                                        upperText.contains("ENTRANCE") -> kcgIndoorWaypoints.find { it.id.contains("entrance", ignoreCase = true) }
+                                                        upperText.contains("LIFT") || upperText.contains("ELEVATOR") -> kcgIndoorWaypoints.find { it.id.contains("lift", ignoreCase = true) }
+                                                        upperText.contains("RESTROOM") || upperText.contains("WASHROOM") || upperText.contains("TOILET") -> kcgIndoorWaypoints.find { it.id.contains("restroom", ignoreCase = true) }
+                                                        upperText.contains("RAMP") -> kcgIndoorWaypoints.find { it.id.contains("ramp", ignoreCase = true) }
+                                                        upperText.contains("WARD") || upperText.contains("ADMIN") -> kcgIndoorWaypoints.find { it.id.contains("ward", ignoreCase = true) }
+                                                        upperText.contains("RECEPTION") -> kcgIndoorWaypoints.find { it.id.contains("reception", ignoreCase = true) }
+                                                        else -> kcgIndoorWaypoints.find { it.qrPayload.equals(upperText, ignoreCase = true) || it.id.equals(upperText, ignoreCase = true) }
+                                                    }
+
+                                                    if (matchedWaypoint != null) {
+                                                        // 1. WAYPOINT DETECTED
+                                                        pdrEngine.resetPosition(matchedWaypoint)
+                                                        currentScannedContent = "Waypoint: ${matchedWaypoint.name}\n${matchedWaypoint.description}"
+                                                        isUrlContent = false
+                                                        speakText("Location updated to ${matchedWaypoint.name}. ${matchedWaypoint.description}")
+                                                        onWaypointScanned(matchedWaypoint)
+                                                    } else if (rawText.startsWith("http://", ignoreCase = true) || rawText.startsWith("https://", ignoreCase = true)) {
+                                                        // 2. WEBSITE URL DETECTED
+                                                        currentScannedContent = rawText
+                                                        isUrlContent = true
+                                                        speakText("Scanned website link: $rawText")
+                                                    } else {
+                                                        // 3. GENERAL TEXT DETECTED
+                                                        currentScannedContent = rawText
+                                                        isUrlContent = false
+                                                        speakText("Scanned QR content: $rawText")
                                                     }
                                                 }
                                             }
@@ -328,53 +340,41 @@ fun QrScannerSection(
                     .weight(0.35f)
                     .padding(12.dp)
             ) {
-                if (activeScannedUrl != null) {
-                    Column(
+                if (currentScannedContent.isNotEmpty()) {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFFFDBDF), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBDF)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(
-                            text = activeScannedUrl!!,
-                            fontSize = 13.sp,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .background(PersonaMobility, RoundedCornerShape(8.dp))
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(activeScannedUrl))
-                                    context.startActivity(intent)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Open Link",
-                                fontSize = 13.sp,
+                                text = "Scanned QR Content",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = currentScannedContent,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextPrimary
+                            )
+                            if (isUrlContent) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentScannedContent))
+                                        context.startActivity(intent)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = PersonaMobility)
+                                ) {
+                                    Text("Open in Browser", color = TextPrimary, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else if (activeScannedText != null) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFFFDBDF), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            text = activeScannedText!!,
-                            fontSize = 13.sp,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 val cardinalHeading = getCardinalDirection(pdrEngine.headingDegrees)

@@ -96,8 +96,8 @@ fun IndoorMapView(
             val canvasWidth = size.width
             val canvasHeight = size.height
 
-            // Scale meters to canvas pixels: 1 meter = 12dp
-            val scale = 12f * density
+            // Scale meters to canvas pixels: 1 meter = 30dp
+            val scale = 30f * density
 
             fun toMapX(xMeters: Float): Float = xMeters * scale
             // Y is inverted: map origin is bottom-left, canvas origin is top-left
@@ -138,7 +138,7 @@ fun IndoorMapView(
                     val isTarget = targetWaypoint?.id == wp.id
 
                     val markerColor = if (isTarget) PersonaMobility else TextPrimary.copy(alpha = 0.70f)
-                    val radius = if (isTarget) 14f else 10f
+                    val radius = if (isTarget) 18f else 12f
 
                     drawCircle(
                         color = markerColor,
@@ -169,16 +169,16 @@ fun IndoorMapView(
                     )
                 }
 
-                // 3. Draw User Position Dot (PersonaMobility)
+                // 3. Draw User Position Dot — PersonaMobility fill + dark outline
                 drawCircle(
                     color = PersonaMobility,
                     center = Offset(userMapX, userMapY),
-                    radius = 16f
+                    radius = 14f
                 )
                 drawCircle(
                     color = TextPrimary,
                     center = Offset(userMapX, userMapY),
-                    radius = 16f,
+                    radius = 14f,
                     style = Stroke(width = 4f)
                 )
 
