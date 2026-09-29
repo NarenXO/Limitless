@@ -38,7 +38,7 @@ class ObjectDetector(private val context: Context) {
             
             val options = ObjectDetectorOptions.builder()
                 .setMaxResults(10)
-                .setScoreThreshold(0.5f)
+                .setScoreThreshold(0.35f)
                 .build()
 
             detector = ObjectDetector.createFromBufferAndOptions(modelFile, options)
@@ -55,24 +55,39 @@ class ObjectDetector(private val context: Context) {
 
     /**
      * Detect objects in the given bitmap.
-     * Filters to keep only objects with confidence >= 0.50 and returns top 3 most confident.
+     * Filters to keep only objects with confidence >= 0.35 and returns top 4 most confident.
      * @param bitmap The image to analyze
+     * @param rotationDegrees The rotation of the image in degrees (0, 90, 180, 270)
      * @return List of detected objects with their properties, or empty list if detection fails
      */
-    fun detectObjects(bitmap: Bitmap): List<DetectedObject> {
+    fun detectObjects(bitmap: Bitmap, rotationDegrees: Int = 0): List<DetectedObject> {
         if (!isInitialized || detector == null) {
             // Return empty list if not initialized
             return emptyList()
         }
 
         return try {
-            val tensorImage = TensorImage.fromBitmap(bitmap)
+            // Handle rotation before passing to MediaPipe
+            val processedBitmap = if (rotationDegrees != 0 && rotationDegrees != 360) {
+                val matrix = android.graphics.Matrix()
+                matrix.postRotate(rotationDegrees.toFloat())
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            } else {
+                bitmap
+            }
+
+            val tensorImage = TensorImage.fromBitmap(processedBitmap)
             val results: List<Detection> = detector?.detect(tensorImage) ?: emptyList()
             
-            // Filter by confidence >= 0.50 and map to DetectedObject
+            // Clean up rotated bitmap if we created one
+            if (processedBitmap != bitmap) {
+                processedBitmap.recycle()
+            }
+            
+            // Filter by confidence >= 0.35 and map to DetectedObject
             val filteredResults = results.mapNotNull { detection ->
                 val confidence = detection.categories.firstOrNull()?.score ?: 0f
-                if (confidence >= 0.50f) {
+                if (confidence >= 0.35f) {
                     val boundingBoxRect = Rect()
                     detection.boundingBox.round(boundingBoxRect)
 
@@ -86,8 +101,8 @@ class ObjectDetector(private val context: Context) {
                 }
             }
             
-            // Sort by confidence (descending) and take top 3
-            filteredResults.sortedByDescending { it.confidence }.take(3)
+            // Sort by confidence (descending) and take top 4
+            filteredResults.sortedByDescending { it.confidence }.take(4)
         } catch (_: Exception) {
             emptyList()
         }

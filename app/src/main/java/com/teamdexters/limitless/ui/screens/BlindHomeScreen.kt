@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
@@ -308,7 +309,7 @@ fun BlindHomeScreen() {
                         modifier = Modifier.weight(1f)
                     )
                     ModeChip(
-                        text = "Path",
+                        text = "Path & Hazards",
                         isActive = currentMode == "path",
                         onClick = { currentMode = "path" },
                         modifier = Modifier.weight(1f)
@@ -392,7 +393,7 @@ fun BlindHomeScreen() {
                     "ocr" -> "Read Text Aloud"
                     "color" -> "Announce Color"
                     "describe" -> "Describe Surroundings"
-                    "path" -> "Detect Path Features"
+                    "path" -> "Scan Path & Hazards"
                     "tag" -> "Tag This Place"
                     "recognize" -> "Recognize Place"
                     else -> "Read Text Aloud"
@@ -425,26 +426,17 @@ fun BlindHomeScreen() {
                                             showResultBanner = true
                                             ttsManager.speak(result.message)
                                             // Auto-hide banner after 6 seconds
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         }
                                         is LandmarkRecognizer.RecognitionResult.NoMatch -> {
-                                            resultText = "No tagged place recognized"
+                                            resultText = "No saved place recognized"
                                             showResultBanner = true
                                             ttsManager.speak(result.message)
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
-                                                showResultBanner = false
-                                            }
-                                        }
-                                        is LandmarkRecognizer.RecognitionResult.Ambiguous -> {
-                                            resultText = "Multiple similar places detected"
-                                            showResultBanner = true
-                                            ttsManager.speak(result.message)
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         }
@@ -452,8 +444,8 @@ fun BlindHomeScreen() {
                                             resultText = "Error recognizing place"
                                             showResultBanner = true
                                             ttsManager.speak("Error recognizing place")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         }
@@ -462,8 +454,8 @@ fun BlindHomeScreen() {
                                     resultText = "Error recognizing place"
                                     showResultBanner = true
                                     ttsManager.speak("Error recognizing place")
-                                    kotlinx.coroutines.launch {
-                                        kotlinx.coroutines.delay(6000)
+                                    launch {
+                                        delay(6000)
                                         showResultBanner = false
                                     }
                                 } finally {
@@ -488,16 +480,16 @@ fun BlindHomeScreen() {
                                                 resultText = text
                                                 showResultBanner = true
                                                 ttsManager.speak(text)
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
+                                                launch {
+                                                    delay(6000)
                                                     showResultBanner = false
                                                 }
                                             } else {
                                                 resultText = "No clear text detected"
                                                 showResultBanner = true
                                                 ttsManager.speak("No clear text detected. Move closer and hold steady.")
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
+                                                launch {
+                                                    delay(6000)
                                                     showResultBanner = false
                                                 }
                                             }
@@ -505,8 +497,8 @@ fun BlindHomeScreen() {
                                             resultText = "Error reading text"
                                             showResultBanner = true
                                             ttsManager.speak("Error reading text")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         } finally {
@@ -516,50 +508,53 @@ fun BlindHomeScreen() {
                                 }
                                 "color" -> {
                                     // Color detection mode
-                                    try {
-                                        val colorName = colorDetector.detectColorAtCenter(frame)
-                                        if (colorName == "unknown") {
-                                            resultText = "Unable to detect color"
+                                    scope.launch {
+                                        try {
+                                            val colorName = colorDetector.detectColorAtCenter(frame)
+                                            if (colorName == "unknown") {
+                                                resultText = "Unable to detect color"
+                                                showResultBanner = true
+                                                ttsManager.speak("Unable to detect color")
+                                                launch {
+                                                    delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            } else {
+                                                resultText = "Color detected is $colorName"
+                                                showResultBanner = true
+                                                ttsManager.speak("Color detected is $colorName")
+                                                launch {
+                                                    delay(6000)
+                                                    showResultBanner = false
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            resultText = "Error detecting color"
                                             showResultBanner = true
-                                            ttsManager.speak("Unable to detect color")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            ttsManager.speak("Error detecting color")
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
-                                        } else {
-                                            resultText = "Color detected is $colorName"
-                                            showResultBanner = true
-                                            ttsManager.speak("Color detected is $colorName")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
-                                                showResultBanner = false
-                                            }
+                                        } finally {
+                                            isProcessing = false
                                         }
-                                    } catch (e: Exception) {
-                                        resultText = "Error detecting color"
-                                        showResultBanner = true
-                                        ttsManager.speak("Error detecting color")
-                                        kotlinx.coroutines.launch {
-                                            kotlinx.coroutines.delay(6000)
-                                            showResultBanner = false
-                                        }
-                                    } finally {
-                                        isProcessing = false
                                     }
                                 }
                                 "describe" -> {
                                     // Object detection mode
                                     scope.launch {
                                         try {
-                                            val objects = objectDetector.detectObjects(frame)
+                                            val objects = objectDetector.detectObjects(frame, latestRotation)
                                             
                                             // Check if no objects were detected (filtered out or model failed)
                                             if (objects.isEmpty()) {
-                                                resultText = "No clear objects detected"
+                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width, frame)
+                                                resultText = description
                                                 showResultBanner = true
-                                                ttsManager.speak("No clear objects detected. Try better lighting or move closer.")
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
+                                                ttsManager.speak(description)
+                                                launch {
+                                                    delay(6000)
                                                     showResultBanner = false
                                                 }
                                             } else {
@@ -581,51 +576,51 @@ fun BlindHomeScreen() {
                                                                 resultText = richDescription
                                                                 showResultBanner = true
                                                                 ttsManager.speak(richDescription)
-                                                                kotlinx.coroutines.launch {
-                                                                    kotlinx.coroutines.delay(6000)
+                                                                launch {
+                                                                    delay(6000)
                                                                     showResultBanner = false
                                                                 }
                                                             } else {
                                                                 // Fallback to rule-based
-                                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                                val description = sceneDescriptionBuilder.buildDescription(objects, frame.width, frame)
                                                                 resultText = description
                                                                 showResultBanner = true
                                                                 ttsManager.speak(description)
-                                                                kotlinx.coroutines.launch {
-                                                                    kotlinx.coroutines.delay(6000)
+                                                                launch {
+                                                                    delay(6000)
                                                                     showResultBanner = false
                                                                 }
                                                             }
                                                         } else {
                                                             // Fallback to rule-based on timeout or error
-                                                            val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                            val description = sceneDescriptionBuilder.buildDescription(objects, frame.width, frame)
                                                             resultText = description
                                                             showResultBanner = true
                                                             ttsManager.speak(description)
-                                                            kotlinx.coroutines.launch {
-                                                                kotlinx.coroutines.delay(6000)
+                                                            launch {
+                                                                delay(6000)
                                                                 showResultBanner = false
                                                             }
                                                         }
                                                     } catch (e: Exception) {
                                                         // Fallback to rule-based on any error
-                                                        val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                        val description = sceneDescriptionBuilder.buildDescription(objects, frame.width, frame)
                                                         resultText = description
                                                         showResultBanner = true
                                                         ttsManager.speak(description)
-                                                        kotlinx.coroutines.launch {
-                                                            kotlinx.coroutines.delay(6000)
+                                                        launch {
+                                                            delay(6000)
                                                             showResultBanner = false
                                                         }
                                                     }
                                                 } else {
                                                     // Use rule-based description
-                                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width)
+                                                    val description = sceneDescriptionBuilder.buildDescription(objects, frame.width, frame)
                                                     resultText = description
                                                     showResultBanner = true
                                                     ttsManager.speak(description)
-                                                    kotlinx.coroutines.launch {
-                                                        kotlinx.coroutines.delay(6000)
+                                                    launch {
+                                                        delay(6000)
                                                         showResultBanner = false
                                                     }
                                                 }
@@ -634,8 +629,8 @@ fun BlindHomeScreen() {
                                             resultText = "Error detecting objects"
                                             showResultBanner = true
                                             ttsManager.speak("Error detecting objects")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         } finally {
@@ -644,34 +639,24 @@ fun BlindHomeScreen() {
                                     }
                                 }
                                 "path" -> {
-                                    // Path feature detection mode
+                                    // Path & hazards detection mode
                                     scope.launch {
                                         try {
-                                            if (!pathFeatureDetector.isReady()) {
-                                                resultText = "Path detection model not loaded"
-                                                showResultBanner = true
-                                                ttsManager.speak("Path detection model not loaded")
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
-                                                    showResultBanner = false
-                                                }
-                                            } else {
-                                                val features = pathFeatureDetector.detectPathFeatures(frame)
-                                                val description = pathFeatureDescriptionBuilder.buildDescription(features)
-                                                resultText = description
-                                                showResultBanner = true
-                                                ttsManager.speak(description)
-                                                kotlinx.coroutines.launch {
-                                                    kotlinx.coroutines.delay(6000)
-                                                    showResultBanner = false
-                                                }
+                                            val features = pathFeatureDetector.detectPathFeatures(frame)
+                                            val description = pathFeatureDescriptionBuilder.buildDescription(features)
+                                            resultText = description
+                                            showResultBanner = true
+                                            ttsManager.speak(description)
+                                            launch {
+                                                delay(6000)
+                                                showResultBanner = false
                                             }
                                         } catch (e: Exception) {
                                             resultText = "Error detecting path features"
                                             showResultBanner = true
                                             ttsManager.speak("Error detecting path features")
-                                            kotlinx.coroutines.launch {
-                                                kotlinx.coroutines.delay(6000)
+                                            launch {
+                                                delay(6000)
                                                 showResultBanner = false
                                             }
                                         } finally {
@@ -703,7 +688,8 @@ fun BlindHomeScreen() {
                     containerColor = PersonaBlind,
                     contentColor = TextPrimary
                 ),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(2.dp, android.graphics.Color.parseColor("#1F1F1F"))
             ) {
                 Text(
                     text = "Start Navigation",
@@ -741,55 +727,44 @@ fun BlindHomeScreen() {
                     },
                     onConfirm = {
                         if (landmarkName.isNotBlank()) {
-                            val frame1 = latestFrame
-                            if (frame1 != null) {
+                            val frame = latestFrame
+                            if (frame != null) {
                                 isProcessing = true
                                 scope.launch {
                                     try {
-                                        // Capture first frame signature
-                                        // Wait 300ms for second frame
-                                        delay(300)
-                                        
-                                        // Capture second frame
-                                        val frame2 = latestFrame
-                                        
-                                        if (frame2 != null) {
-                                            // Use dual-frame averaging for better accuracy
-                                            landmarkTagger.tagLocationWithDualFrame(
-                                                name = landmarkName,
-                                                photo1 = frame1,
-                                                photo2 = frame2,
-                                                onSuccess = { tagId ->
-                                                    resultText = "Place tagged: $landmarkName"
-                                                    ttsManager.speak("Place tagged: $landmarkName")
-                                                    landmarkName = ""
-                                                    showTaggingDialog = false
-                                                },
-                                                onError = { error ->
-                                                    resultText = "Failed to tag place"
-                                                    ttsManager.speak("Failed to tag place")
+                                        // Immediate frame capture for better UX
+                                        landmarkTagger.tagLocation(
+                                            name = landmarkName,
+                                            photo = frame,
+                                            onSuccess = { tagId ->
+                                                resultText = "Place tagged: $landmarkName"
+                                                showResultBanner = true
+                                                ttsManager.speak("Place tagged: $landmarkName")
+                                                landmarkName = ""
+                                                showTaggingDialog = false
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
                                                 }
-                                            )
-                                        } else {
-                                            // Fallback to single frame if second capture fails
-                                            landmarkTagger.tagLocation(
-                                                name = landmarkName,
-                                                photo = frame1,
-                                                onSuccess = { tagId ->
-                                                    resultText = "Place tagged: $landmarkName"
-                                                    ttsManager.speak("Place tagged: $landmarkName")
-                                                    landmarkName = ""
-                                                    showTaggingDialog = false
-                                                },
-                                                onError = { error ->
-                                                    resultText = "Failed to tag place"
-                                                    ttsManager.speak("Failed to tag place")
+                                            },
+                                            onError = { error ->
+                                                resultText = "Failed to tag place"
+                                                showResultBanner = true
+                                                ttsManager.speak("Failed to tag place")
+                                                kotlinx.coroutines.launch {
+                                                    kotlinx.coroutines.delay(6000)
+                                                    showResultBanner = false
                                                 }
-                                            )
-                                        }
+                                            }
+                                        )
                                     } catch (e: Exception) {
                                         resultText = "Failed to tag place"
+                                        showResultBanner = true
                                         ttsManager.speak("Failed to tag place")
+                                        kotlinx.coroutines.launch {
+                                            kotlinx.coroutines.delay(6000)
+                                            showResultBanner = false
+                                        }
                                     } finally {
                                         isProcessing = false
                                     }
@@ -819,11 +794,8 @@ fun BlindHomeScreen() {
                     }
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
-}
 
 /**
  * Mode chip with TalkBack support.
@@ -838,7 +810,7 @@ private fun ModeChip(
     Button(
         onClick = onClick,
         modifier = modifier
-            .height(56.dp)
+            .height(64.dp)
             .semantics {
                 contentDescription = if (isActive) "$text mode selected" else "$text mode. Double tap to select."
             },
@@ -854,7 +826,7 @@ private fun ModeChip(
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
             textAlign = TextAlign.Center
         )
@@ -883,7 +855,7 @@ private fun ActionButton(
             contentColor = TextPrimary
         ),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(2.dp, TextPrimary)
+        border = BorderStroke(2.dp, android.graphics.Color.parseColor("#1F1F1F"))
     ) {
         if (isProcessing) {
             CircularProgressIndicator(

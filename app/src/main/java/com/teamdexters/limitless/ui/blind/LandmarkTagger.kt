@@ -42,11 +42,10 @@ class LandmarkTagger(
 
     /**
      * Tag a location with the given name and photo.
-     * Uses dual-frame averaging: captures 2 consecutive frames ~300ms apart
-     * and stores the averaged signature to reduce noise from camera movement.
+     * Improved UX: Uses single-frame immediate capture for faster, more reliable tagging.
      *
      * @param name Name provided by the user.
-     * @param photo Captured photo of the landmark (first frame).
+     * @param photo Captured photo of the landmark.
      * @param onSuccess Called when tagging succeeds.
      * @param onError Called when tagging fails.
      */
@@ -57,16 +56,8 @@ class LandmarkTagger(
         onError: (String) -> Unit
     ) {
         try {
-            // Extract signature from first frame
-            val signature1 = VisualSignature.extractSignature(photo)
-
-            // Wait 300ms for second frame capture
-            // Note: The caller should provide the second frame via a callback mechanism
-            // For now, we'll use the same frame as a fallback if dual-frame isn't implemented
-            // TODO(Naren): Implement dual-frame capture with 300ms delay in BlindHomeScreen
-            
-            // For now, use single-frame signature (will be upgraded to dual-frame when UI supports it)
-            val signature = signature1
+            // Extract signature from frame immediately (no delay for better UX)
+            val signature = VisualSignature.extractSignature(photo)
 
             // Generate a unique ID for this landmark.
             val tagId = UUID.randomUUID().toString()

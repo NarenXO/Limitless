@@ -16,13 +16,12 @@ class LandmarkRecognizer(
 ) {
 
     private companion object {
-        const val SIMILARITY_THRESHOLD = 70f // Minimum similarity score (70%)
-        const val MARGIN_THRESHOLD = 10f // Minimum margin between top and second match (10%)
+        const val SIMILARITY_THRESHOLD = 55f // Minimum similarity score (55%)
     }
 
     /**
      * Recognize a landmark from the current camera frame.
-     * Uses strict matching: similarity >= 70% and top match beats second by >= 10% margin.
+     * Uses forgiving matching: similarity >= 55% without strict margin requirements.
      * @param currentFrame The current camera frame
      * @return Recognition result with appropriate feedback message
      */
@@ -35,7 +34,7 @@ class LandmarkRecognizer(
                 // If no signatures cached, return no match
                 if (signatureCache.isEmpty()) {
                     return@withContext RecognitionResult.NoMatch(
-                        "No tagged place recognized. Make sure lighting and angle match."
+                        "No saved place recognized here. Try matching the original view."
                     )
                 }
                 
@@ -54,31 +53,18 @@ class LandmarkRecognizer(
                 // Check if we have at least one match
                 if (similarities.isEmpty()) {
                     return@withContext RecognitionResult.NoMatch(
-                        "No tagged place recognized. Make sure lighting and angle match."
+                        "No saved place recognized here. Try matching the original view."
                     )
                 }
                 
                 val topMatch = similarities[0]
                 val topSimilarity = topMatch.second
                 
-                // Check if top similarity meets threshold
+                // Check if top similarity meets threshold (55%)
                 if (topSimilarity < SIMILARITY_THRESHOLD) {
                     return@withContext RecognitionResult.NoMatch(
-                        "No tagged place recognized. Make sure lighting and angle match."
+                        "No saved place recognized here. Try matching the original view."
                     )
-                }
-                
-                // Check margin requirement if we have at least 2 matches
-                if (similarities.size >= 2) {
-                    val secondMatch = similarities[1]
-                    val secondSimilarity = secondMatch.second
-                    val margin = topSimilarity - secondSimilarity
-                    
-                    if (margin < MARGIN_THRESHOLD) {
-                        return@withContext RecognitionResult.Ambiguous(
-                            "Multiple similar places detected. Try moving closer."
-                        )
-                    }
                 }
                 
                 // Get location name from database
@@ -90,7 +76,7 @@ class LandmarkRecognizer(
                     )
                 } else {
                     RecognitionResult.NoMatch(
-                        "No tagged place recognized. Make sure lighting and angle match."
+                        "No saved place recognized here. Try matching the original view."
                     )
                 }
             } catch (e: Exception) {
@@ -105,7 +91,6 @@ class LandmarkRecognizer(
     sealed class RecognitionResult {
         data class Success(val locationName: String, val message: String) : RecognitionResult()
         data class NoMatch(val message: String) : RecognitionResult()
-        data class Ambiguous(val message: String) : RecognitionResult()
         data class Error(val message: String) : RecognitionResult()
     }
 }

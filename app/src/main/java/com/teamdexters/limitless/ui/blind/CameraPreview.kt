@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
@@ -181,7 +182,7 @@ private fun startCamera(
 
             // Image capture use case for high-quality OCR
             val imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAX_QUALITY)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                 .build()
 
             // Select back camera as a default
