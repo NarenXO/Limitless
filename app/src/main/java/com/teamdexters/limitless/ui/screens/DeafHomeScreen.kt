@@ -28,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -952,6 +954,7 @@ private fun SpeakerEnrollmentSection(
 /**
  * Enrollment dialog for recording voice samples.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EnrollmentDialog(
     enrollmentName: String,
@@ -983,7 +986,7 @@ private fun EnrollmentDialog(
                     onValueChange = onNameChange,
                     placeholder = { Text("Name") },
                     singleLine = true,
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                    colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = PersonaDeaf,
                         unfocusedBorderColor = SurfaceTint,
                         cursorColor = PersonaDeaf

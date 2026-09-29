@@ -3,15 +3,14 @@ package com.teamdexters.limitless.feature.deaf.translation
 import android.content.Context
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
-import com.google.mlkit.translate.TranslateLanguage
-import com.google.mlkit.translate.Translation
-import com.google.mlkit.translate.Translator
-import com.google.mlkit.translate.TranslatorOptions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import com.google.android.gms.tasks.Task
 
@@ -256,9 +255,10 @@ class OfflineTranslator(private val context: Context) {
 /**
  * Extension function to await Task result in coroutine.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { continuation ->
     addOnSuccessListener { result ->
-        continuation.resume(result)
+        continuation.resume(result, onCancellation = null)
     }
     addOnFailureListener { exception ->
         continuation.resumeWithException(exception)
