@@ -61,7 +61,7 @@ fun CommunityReportScreen(
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
 
-    val reports by viewModel.reports.collectAsState(initial = emptyList())
+    val reports by viewModel.filteredReports.collectAsState(initial = emptyList())
 
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -84,6 +84,30 @@ fun CommunityReportScreen(
         sheetPeekHeight = 64.dp,
         sheetContent = {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                val coroutineScope = rememberCoroutineScope()
+                // Search Bar
+                val searchQuery by viewModel.searchQuery.collectAsState()
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = { Text("Search places in Chennai...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Filter Chips
+                val filterCategory by viewModel.filterCategory.collectAsState()
+                val filterOptions = listOf("All", "Ramps", "Elevators", "Washrooms", "Obstacles")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(filterOptions) { filter ->
+                        FilterChip(
+                            selected = filterCategory == filter,
+                            onClick = { viewModel.updateFilterCategory(filter) },
+                            label = { Text(filter) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Community Reports (${reports.size})",
                     style = MaterialTheme.typography.titleMedium,
@@ -205,6 +229,14 @@ fun CommunityReportScreen(
                                             color = Color(0xFF1F1F1F)
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = { viewModel.confirmReport(report.id) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0F2F4), contentColor = Color(0xFF1F1F1F))
+                                    ) {
+                                        Text("Confirm Location (+1) • ${report.confirmationCount}")
+                                    }
                                 }
                             }
                         }
@@ -247,6 +279,19 @@ fun CommunityReportScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Report Obstacle Quick Action
+                Button(
+                    onClick = { 
+                        viewModel.onCategorySelected(Category("Obstacle", Icons.Default.Warning))
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Report Obstacle", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+                
                 // Category selector
             Text(text = "Select Category", style = MaterialTheme.typography.titleMedium)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

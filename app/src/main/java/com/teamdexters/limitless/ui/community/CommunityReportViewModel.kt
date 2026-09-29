@@ -8,6 +8,7 @@ import android.location.Location
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,6 +62,43 @@ class CommunityReportViewModel @Inject constructor(
 
     // Expose real-time Flow of all reports from Room DAO
     val reports: kotlinx.coroutines.flow.Flow<List<UserReportEntity>> = userReportDao.getAllReports()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
+    private val _filterCategory = MutableStateFlow("All")
+    val filterCategory: StateFlow<String> = _filterCategory
+
+    val filteredReports = combine(reports, _searchQuery, _filterCategory) { reportList, query, filter ->
+        reportList.filter { report ->
+            val matchesQuery = query.isBlank() || 
+                report.locationName.contains(query, ignoreCase = true) || 
+                report.description.contains(query, ignoreCase = true)
+            
+            val matchesFilter = filter == "All" || 
+                report.category.equals(filter, ignoreCase = true) ||
+                (filter == "Ramps" && report.hasRamp) ||
+                (filter == "Elevators" && report.hasElevator) ||
+                (filter == "Washrooms" && report.hasAccessibleRestroom) ||
+                (filter == "Obstacles" && report.category.equals("OBSTACLE", ignoreCase = true))
+
+            matchesQuery && matchesFilter
+        }
+    }
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun updateFilterCategory(category: String) {
+        _filterCategory.value = category
+    }
+
+    fun confirmReport(reportId: Long) {
+        viewModelScope.launch {
+            userReportDao.incrementConfirmationCount(reportId)
+        }
+    }
 
     fun fetchCurrentLocation(context: Context) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)

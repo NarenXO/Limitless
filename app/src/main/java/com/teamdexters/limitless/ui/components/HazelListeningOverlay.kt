@@ -66,7 +66,7 @@ fun HazelListeningOverlay(
     
     androidx.compose.runtime.LaunchedEffect(isVisible) {
         if (isVisible) {
-            kotlinx.coroutines.delay(10000L)
+            kotlinx.coroutines.delay(8000L)
             onDismiss()
         }
     }
@@ -79,9 +79,21 @@ fun HazelListeningOverlay(
                 putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.US.toLanguageTag())
                 putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
-                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
-                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 10000L)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
+                putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 8000L)
+            }
+            
+            val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            val focusRequest = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE).build()
+            } else null
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                focusRequest?.let { audioManager.requestAudioFocus(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             }
             
             fun startListening() {
@@ -120,6 +132,12 @@ fun HazelListeningOverlay(
             
             onDispose {
                 recognizer.destroy()
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.abandonAudioFocus(null)
+                }
             }
         } else {
             onDispose {}

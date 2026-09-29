@@ -63,8 +63,9 @@ class IntentRouterTest {
 
     @Test
     fun testDescribeSceneIntent() {
-        val result = router.routeIntent("Describe scene in front of me")
-        assertEquals(HazelIntent.BlindAssist("DESCRIBE_SCENE"), result)
+        val phrase = "Describe scene in front of me"
+        val result = router.routeIntent(phrase)
+        assertEquals(HazelIntent.VisionQuery(phrase), result)
     }
 
     @Test

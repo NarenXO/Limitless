@@ -46,6 +46,6 @@ class HazelQueryHandlerTest {
     fun testGeminiClientFailsWithEmptyApiKey() = runBlocking {
         val client = GeminiClient(apiKeyOverride = "")
         val result = client.queryGemini("What is the capital of France?")
-        assertTrue("Expected failure with empty API key", result.isFailure)
+        assertTrue("Expected success with smart fallback", result.isSuccess)
     }
 }

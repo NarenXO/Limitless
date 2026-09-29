@@ -60,4 +60,11 @@ interface UserReportDao {
      */
     @Delete
     suspend fun deleteReport(report: UserReportEntity)
+
+    /**
+     * Increments the confirmation count of a report by 1.
+     * Used for community upvoting features.
+     */
+    @Query("UPDATE user_reports SET confirmationCount = confirmationCount + 1 WHERE id = :id")
+    suspend fun incrementConfirmationCount(id: Long)
 }
