@@ -121,8 +121,9 @@ dependencies {
     // Vosk-android (offline STT)
     implementation("com.alphacephei:vosk-android:0.3.32")
     
-    // TensorFlow Lite
+    // TensorFlow Lite & ONNX Runtime
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

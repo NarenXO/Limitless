@@ -57,6 +57,7 @@ import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
 import com.teamdexters.limitless.data.local.LimitlessDatabase
+import com.teamdexters.limitless.assistant.openwakeword.OpenWakeWordManager
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
@@ -70,6 +71,9 @@ import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 import dagger.hilt.android.AndroidEntryPoint
@@ -195,6 +199,31 @@ fun HazelAssistantWrapper(
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
+    // openWakeWord background engine
+    val openWakeWordManager = remember(context) {
+        OpenWakeWordManager(
+            context = context,
+            onWakeWordDetected = {
+                coroutineScope.launch(Dispatchers.Main) {
+                    delay(300L) // Wait 300ms for audio HAL release
+                    isHazelListening = true
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(currentRoute, isHazelListening) {
+        if (currentRoute in personaHomeRoutes && !isHazelListening) {
+            delay(500L)
+            openWakeWordManager.resume()
+        } else {
+            openWakeWordManager.pause()
+        }
+    }
+
+    DisposableEffect(openWakeWordManager) {
+        onDispose { openWakeWordManager.destroy() }
+    }
     
     // Register BroadcastReceiver for accessibility service action
     DisposableEffect(context) {
