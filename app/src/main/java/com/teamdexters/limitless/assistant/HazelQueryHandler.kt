@@ -110,6 +110,45 @@ class HazelQueryHandler(
         return BuildConfig.GEMINI_API_KEY.trim().isNotEmpty()
     }
 
+    fun handleVisionQuery(
+        query: String,
+        scope: CoroutineScope,
+        tts: TextToSpeech?,
+        onResponseReady: (String) -> Unit
+    ) {
+        scope.launch {
+            val isOnline = isNetworkAvailable()
+            val offlineFallback = "I need an internet connection to process what I see."
+            
+            val responseText = if (isOnline && isApiKeyPresent()) {
+                val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
+                if (latestFrame != null) {
+                    val base64Image = bitmapToBase64(latestFrame)
+                    val result = geminiClient.queryGemini(query, base64Image)
+                    result.getOrElse { e ->
+                        Log.w(TAG, "Gemini Vision query failed: ${e.message}")
+                        "I had trouble analyzing the image. Please try again."
+                    }
+                } else {
+                    "My camera isn't active right now, so I can't see anything."
+                }
+            } else {
+                offlineFallback
+            }
+
+            withContext(Dispatchers.Main) {
+                onResponseReady(responseText)
+                speakResponse(tts, responseText)
+            }
+        }
+    }
+
+    private fun bitmapToBase64(bitmap: android.graphics.Bitmap): String {
+        val outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+        return android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+    }
+
     private fun speakResponse(tts: TextToSpeech?, text: String) {
         try {
             tts?.language = Locale.US

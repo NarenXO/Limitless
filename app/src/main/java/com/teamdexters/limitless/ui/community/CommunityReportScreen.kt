@@ -91,23 +91,126 @@ fun CommunityReportScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     items(reports) { report ->
+                        val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
+                        val timeDiff = System.currentTimeMillis() - report.timestamp
+                        val timeString = when {
+                            timeDiff < 3600000 -> "${maxOf(1, timeDiff / 60000)}m ago"
+                            timeDiff < 86400000 -> "${timeDiff / 3600000}h ago"
+                            timeDiff < 172800000 -> "Yesterday"
+                            else -> "${timeDiff / 86400000}d ago"
+                        }
+                        
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F1EE))
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = report.locationName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Category: ${report.category}", style = MaterialTheme.typography.bodySmall)
-                                Text("Description: ${report.description}", style = MaterialTheme.typography.bodySmall)
-                                Text("Trust Score: ${report.trustScore}", style = MaterialTheme.typography.bodySmall)
+                            Column {
+                                // Image Header
+                                if (!report.photoUri.isNullOrEmpty()) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(model = report.photoUri),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxWidth().height(140.dp)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(140.dp)
+                                            .background(Color(0xFFE0F2F4)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            tint = Color.Gray,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    // Header: Avatar, Name, Time
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(Color(0xFFF791A9), androidx.compose.foundation.shape.CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = report.locationName.take(1).uppercase(),
+                                                color = Color.White,
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = report.locationName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                color = Color(0xFF1F1F1F)
+                                            )
+                                            Text(
+                                                text = timeString,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                        Row {
+                                            (1..5).forEach { star ->
+                                                Icon(
+                                                    imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFFFC107),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    // Tags and Description
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFFE0F2F4), RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = report.category,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF1F1F1F)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Trust Score: ${report.trustScore}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    if (!report.description.startsWith("Rating:")) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = report.description,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFF1F1F1F)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

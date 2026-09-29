@@ -98,6 +98,7 @@ fun AccessibilityScannerScreen(
                                             val mediaImage = imageProxy.image
                                             if (mediaImage != null) {
                                                 val bitmap = imageProxy.toBitmap()
+                                                com.teamdexters.limitless.assistant.vision.CameraFrameManager.updateFrame(bitmap)
                                                 viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
                                             }
                                         }

@@ -80,6 +80,14 @@ sealed class HazelIntent {
     ) : HazelIntent()
 
     /**
+     * Intent for answering questions about the current camera frame (Multi-modal).
+     * @param query The user's specific question about what they are looking at
+     */
+    data class VisionQuery(
+        val query: String
+    ) : HazelIntent()
+
+    /**
      * Unmatched / freeform query intent handed over to Gemini in Phase 3.
      * @param rawQuery The original spoken text that couldn't be matched locally
      */

@@ -1,152 +1,110 @@
 package com.teamdexters.limitless.assistant
 
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
-import com.teamdexters.limitless.assistant.ml.AudioPreprocessor
-import com.teamdexters.limitless.assistant.ml.TFLiteModelLoader
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import org.tensorflow.lite.Interpreter
 
-/**
- * Interface for detecting wake words to activate Hazel assistant.
- */
 interface WakeWordListener {
-    
-    /**
-     * Starts listening for the wake word "Hey Hazel".
-     * @param onWakeWordDetected Callback function to execute when wake word is detected
-     */
     fun startListening(onWakeWordDetected: () -> Unit)
-    
-    /**
-     * Stops listening for the wake word.
-     * Should be called when not needed to conserve resources.
-     */
     fun stopListening()
 }
 
 /**
- * Real TFLite implementation of [WakeWordListener] for "Hey Hazel" keyword detection.
- *
- * @param context Android [Context] required to load the model asset.
- * @param threshold Confidence threshold for keyword detection (default 0.7f).
+ * Android SpeechRecognizer implementation of [WakeWordListener] for "Hey Hazel" keyword detection.
  */
 class DefaultWakeWordListener(
     private val context: Context? = null,
-    private val threshold: Float = 0.7f
-) : WakeWordListener {
+    private val threshold: Float = 0.7f // Not used for SpeechRecognizer
+) : WakeWordListener, RecognitionListener {
 
     companion object {
         private const val TAG = "WakeWordListener"
-        private const val MODEL_NAME = "hey_hazel.tflite"
-        private const val COOLDOWN_MS = 2000L
     }
 
     private var isListening = false
-    private var interpreter: Interpreter? = null
-    private var audioPreprocessor: AudioPreprocessor? = null
-    private var scope: CoroutineScope? = null
-    private var lastDetectionTime = 0L
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var onWakeWordDetectedCallback: (() -> Unit)? = null
 
     override fun startListening(onWakeWordDetected: () -> Unit) {
-        if (isListening) return
+        if (isListening || context == null) return
         isListening = true
+        onWakeWordDetectedCallback = onWakeWordDetected
 
-        if (context == null) {
-            Log.w(TAG, "Context is null. TFLite wake-word detection pipeline cannot be initialized. Operating in no-op mode.")
-            return
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+            setRecognitionListener(this@DefaultWakeWordListener)
         }
-
-        val loadedInterpreter = TFLiteModelLoader.loadModel(context, MODEL_NAME)
-        if (loadedInterpreter == null) {
-            Log.w(TAG, "Model file '$MODEL_NAME' missing or invalid. WakeWordListener operating in no-op mode without crashing.")
-            return
-        }
-
-        this.interpreter = loadedInterpreter
-
-        val inputShape = try {
-            loadedInterpreter.getInputTensor(0).shape()
-        } catch (e: Exception) {
-            intArrayOf(1, 43, 40, 1)
-        }
-
-        val outputShape = try {
-            loadedInterpreter.getOutputTensor(0).shape()
-        } catch (e: Exception) {
-            intArrayOf(1, 2)
-        }
-
-        val numClasses = if (outputShape.size > 1) outputShape[1] else 2
-
-        val preprocessor = AudioPreprocessor(inputShape = inputShape)
-        this.audioPreprocessor = preprocessor
-
-        val coroutineScope = CoroutineScope(Dispatchers.Default + Job())
-        this.scope = coroutineScope
-
-        preprocessor.startRecording(coroutineScope) { floatChunk ->
-            if (!isListening) return@startRecording
-
-            try {
-                val outputBuffer = Array(1) { FloatArray(numClasses) }
-                val reshapedInput = reshapeInput(floatChunk, inputShape)
-
-                loadedInterpreter.run(reshapedInput, outputBuffer)
-
-                val wakeWordConfidence = if (numClasses > 1) outputBuffer[0][1] else outputBuffer[0][0]
-
-                if (wakeWordConfidence >= threshold) {
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastDetectionTime >= COOLDOWN_MS) {
-                        lastDetectionTime = currentTime
-                        Log.i(TAG, "Wake word 'Hey Hazel' detected! Confidence: $wakeWordConfidence")
-                        onWakeWordDetected()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Inference execution error: ${e.message}", e)
-            }
-        }
+        startListeningInternal()
     }
 
-    private fun reshapeInput(flatArray: FloatArray, shape: IntArray): Any {
-        return when (shape.size) {
-            2 -> Array(shape[0]) { i ->
-                FloatArray(shape[1]) { j ->
-                    val idx = i * shape[1] + j
-                    if (idx < flatArray.size) flatArray[idx] else 0f
-                }
-            }
-            4 -> Array(shape[0]) { i ->
-                Array(shape[1]) { j ->
-                    Array(shape[2]) { k ->
-                        FloatArray(shape[3]) { l ->
-                            val idx = ((i * shape[1] + j) * shape[2] + k) * shape[3] + l
-                            if (idx < flatArray.size) flatArray[idx] else 0f
-                        }
-                    }
-                }
-            }
-            else -> flatArray
+    private fun startListeningInternal() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 100000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 100000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 100000L)
+        }
+        try {
+            speechRecognizer?.startListening(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting speech recognizer", e)
         }
     }
 
     override fun stopListening() {
         isListening = false
-        audioPreprocessor?.stopRecording()
-        audioPreprocessor = null
-        scope?.cancel()
-        scope = null
-        try {
-            interpreter?.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing interpreter: ${e.message}")
+        speechRecognizer?.stopListening()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        onWakeWordDetectedCallback = null
+    }
+
+    override fun onReadyForSpeech(params: Bundle?) {}
+    override fun onBeginningOfSpeech() {}
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onEndOfSpeech() {}
+    
+    override fun onError(error: Int) {
+        if (isListening) {
+            // Restart listener on error to keep it continuous
+            speechRecognizer?.cancel()
+            startListeningInternal()
         }
-        interpreter = null
+    }
+
+    override fun onResults(results: Bundle?) {
+        handleResults(results)
+        if (isListening) {
+            startListeningInternal()
+        }
+    }
+
+    override fun onPartialResults(partialResults: Bundle?) {
+        handleResults(partialResults)
+    }
+
+    override fun onEvent(eventType: Int, params: Bundle?) {}
+
+    private fun handleResults(results: Bundle?) {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        if (matches != null) {
+            val combined = matches.joinToString(" ")
+            if (combined.contains("hey hazel", ignoreCase = true)) {
+                Log.i(TAG, "Wake word 'Hey Hazel' detected!")
+                onWakeWordDetectedCallback?.invoke()
+                
+                // Briefly restart to avoid multiple rapid triggers
+                speechRecognizer?.cancel()
+                if (isListening) {
+                    startListeningInternal()
+                }
+            }
+        }
     }
 
     fun isActive(): Boolean = isListening

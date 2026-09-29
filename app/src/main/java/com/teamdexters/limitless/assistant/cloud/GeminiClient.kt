@@ -39,7 +39,7 @@ class GeminiClient(
      * @param prompt User's unmatched spoken query
      * @return [Result.success] with Gemini response or [Result.failure] on error
      */
-    suspend fun queryGemini(prompt: String): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun queryGemini(prompt: String, base64Image: String? = null): Result<String> = withContext(Dispatchers.IO) {
         val key = apiKey.trim()
         if (key.isEmpty()) {
             return@withContext Result.failure(IllegalStateException("Gemini API key is missing or empty."))
@@ -60,8 +60,20 @@ class GeminiClient(
                 put("system_instruction", JSONObject().apply {
                     put("parts", JSONArray().put(JSONObject().put("text", SYSTEM_INSTRUCTION)))
                 })
+                
+                val partsArray = JSONArray()
+                partsArray.put(JSONObject().put("text", prompt))
+                
+                if (base64Image != null) {
+                    val inlineData = JSONObject().apply {
+                        put("mime_type", "image/jpeg")
+                        put("data", base64Image)
+                    }
+                    partsArray.put(JSONObject().put("inline_data", inlineData))
+                }
+                
                 put("contents", JSONArray().put(
-                    JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))
+                    JSONObject().put("parts", partsArray)
                 ))
             }
 

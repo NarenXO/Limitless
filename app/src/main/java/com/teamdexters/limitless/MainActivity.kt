@@ -420,6 +420,15 @@ private fun handleHazelIntent(
                 onResponseReady = onShowBanner
             )
         }
+        is HazelIntent.VisionQuery  -> {
+            onHandled()
+            queryHandler.handleVisionQuery(
+                query = intent.query,
+                scope = scope,
+                tts = tts,
+                onResponseReady = onShowBanner
+            )
+        }
         is HazelIntent.Unknown -> {
             onHandled()
             queryHandler.handleGeneralQuery(
