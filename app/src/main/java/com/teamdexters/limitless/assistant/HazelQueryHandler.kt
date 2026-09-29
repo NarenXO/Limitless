@@ -30,7 +30,7 @@ class HazelQueryHandler(
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
-        const val OFFLINE_FALLBACK_MESSAGE = "I couldn't understand that. Try again or use the app manually."
+        const val OFFLINE_FALLBACK_MESSAGE = "I couldn't reach the network. Please try again."
     }
 
     /**
@@ -56,7 +56,7 @@ class HazelQueryHandler(
             val result = geminiClient.queryGemini(rawQuery)
             val responseText = result.getOrElse { e ->
                 Log.w(TAG, "Gemini API query failed or timed out: ${e.message}.")
-                "I heard: $rawQuery. Try saying 'Open Scanner', 'Community reports', or 'Blind mode'."
+                "I couldn't reach the network. Please try again."
             }
 
             withContext(Dispatchers.Main) {
@@ -88,9 +88,15 @@ class HazelQueryHandler(
         return try {
             val connectivityManager =
                 context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            val activeNetwork = connectivityManager?.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            val activeNetwork = connectivityManager?.activeNetwork
+            if (activeNetwork != null) {
+                val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+                if (capabilities != null && capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    return true
+                }
+            }
+            @Suppress("DEPRECATION")
+            connectivityManager?.activeNetworkInfo?.isConnected == true
         } catch (e: Exception) {
             false
         }
@@ -111,7 +117,7 @@ class HazelQueryHandler(
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
-            val offlineFallback = "I need an internet connection to process what I see."
+            val offlineFallback = "I couldn't reach the network. Please try again."
             
             val responseText = if (isOnline && isApiKeyPresent()) {
                 val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()

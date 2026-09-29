@@ -217,7 +217,7 @@ class NetworkStatusTrackerTest {
     @Test
     fun testOfflineFallbackMessageConstant() {
         assertEquals(
-            "I couldn't understand that. Try again or use the app manually.",
+            "I couldn't reach the network. Please try again.",
             HazelQueryHandler.OFFLINE_FALLBACK_MESSAGE
         )
     }

@@ -147,4 +147,31 @@ class CommunityReportViewModel @Inject constructor(
             }
         }
     }
+
+    fun submitObstacleReport(description: String) {
+        val currentLat = _location.value?.latitude ?: 0.0
+        val currentLng = _location.value?.longitude ?: 0.0
+        
+        viewModelScope.launch {
+            val report = UserReportEntity(
+                locationName = "Reported Obstacle",
+                latitude = currentLat,
+                longitude = currentLng,
+                category = "OBSTACLE",
+                description = description,
+                hasRamp = false,
+                hasElevator = false,
+                hasAccessibleRestroom = false,
+                photoUri = null,
+                trustScore = 15,
+                timestamp = System.currentTimeMillis()
+            )
+            
+            try {
+                userReportDao.insertReport(report)
+            } catch (e: Exception) {
+                // handle error if needed
+            }
+        }
+    }
 }

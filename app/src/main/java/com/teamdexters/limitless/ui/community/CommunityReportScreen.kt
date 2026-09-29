@@ -61,6 +61,9 @@ fun CommunityReportScreen(
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
 
+    var showObstacleDialog by remember { mutableStateOf(false) }
+    var obstacleDescription by remember { mutableStateOf("") }
+
     val reports by viewModel.filteredReports.collectAsState(initial = emptyList())
 
     // Image picker launcher
@@ -77,6 +80,34 @@ fun CommunityReportScreen(
         if (submitResult == true) {
             scaffoldState.snackbarHostState.showSnackbar("Report submitted successfully!")
         }
+    }
+
+    if (showObstacleDialog) {
+        AlertDialog(
+            onDismissRequest = { showObstacleDialog = false },
+            title = { Text("Report an Obstacle") },
+            text = {
+                OutlinedTextField(
+                    value = obstacleDescription,
+                    onValueChange = { obstacleDescription = it },
+                    placeholder = { Text("Describe obstacle (e.g. Broken elevator, blocked ramp)") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.submitObstacleReport(obstacleDescription)
+                    showObstacleDialog = false
+                    obstacleDescription = ""
+                }) {
+                    Text("Submit Obstacle")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showObstacleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     BottomSheetScaffold(
@@ -282,7 +313,7 @@ fun CommunityReportScreen(
                 // Report Obstacle Quick Action
                 Button(
                     onClick = { 
-                        viewModel.onCategorySelected(Category("Obstacle", Icons.Default.Warning))
+                        showObstacleDialog = true
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))

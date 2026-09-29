@@ -108,9 +108,12 @@ class DefaultWakeWordListener(
     private fun handleResults(results: Bundle?) {
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         if (matches != null) {
-            val combined = matches.joinToString(" ")
-            if (combined.contains("hey hazel", ignoreCase = true)) {
-                Log.i(TAG, "Wake word 'Hey Hazel' detected!")
+            val combined = matches.joinToString(" ").lowercase()
+            if (combined.contains("hey hazel") || 
+                combined.contains("hazel") || 
+                combined.contains("hey hazle") || 
+                combined.contains("he hazel")) {
+                Log.i(TAG, "Wake word detected!")
                 onWakeWordDetectedCallback?.invoke()
                 stopListening()
             }

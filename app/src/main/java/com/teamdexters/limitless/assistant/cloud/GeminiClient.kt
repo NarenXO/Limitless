@@ -25,7 +25,7 @@ class GeminiClient(
 ) {
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        private const val SYSTEM_INSTRUCTION = "You are Hazel, an on-device AI accessibility assistant for the Limitless app. Answer the user's query in 1-2 concise, clear, and helpful sentences suitable for text-to-speech accessibility."
+        private const val SYSTEM_INSTRUCTION = "You are Hazel, an AI assistant. Provide a helpful, direct, 1-2 sentence response to the user's query."
         private const val TIMEOUT_MS = 5000
     }
 
@@ -107,16 +107,7 @@ class GeminiClient(
     }
 
     private fun getSmartFallbackResponse(prompt: String): Result<String> {
-        val lowerPrompt = prompt.lowercase()
-        return if (lowerPrompt.contains("hackathon") || lowerPrompt.contains("prepare")) {
-            Result.success("To prepare for a hackathon, stay hydrated, map out your app features early, and prioritize accessibility and user experience. Team Dexters is doing great!")
-        } else if (lowerPrompt.contains("limitless") || lowerPrompt.contains("what is")) {
-            Result.success("Limitless is an inclusive app built by Team Dexters designed to empower individuals with visual, auditory, speech, or mobility challenges using AI and community reports.")
-        } else if (lowerPrompt.contains("navigate") || lowerPrompt.contains("go to")) {
-            Result.success("You can use the bottom navigation bar to switch personas, or ask me to open the scanner or community feed directly.")
-        } else {
-            Result.success("I am Hazel, your Limitless AI assistant. I'm currently operating in offline mode. I can help you navigate the app or answer basic questions.")
-        }
+        return Result.success("I couldn't reach the network. Please try again.")
     }
 
     /**
