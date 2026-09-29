@@ -263,6 +263,9 @@ private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { conti
     addOnFailureListener { exception ->
         continuation.resumeWithException(exception)
     }
+    addOnCanceledListener {
+        continuation.cancel()
+    }
 }
 
 
