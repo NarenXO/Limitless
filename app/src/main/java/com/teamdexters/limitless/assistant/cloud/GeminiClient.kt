@@ -25,7 +25,7 @@ class GeminiClient(
 ) {
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        private const val SYSTEM_INSTRUCTION = "You are Hazel, an AI assistant. Answer the user's question directly, concisely, and naturally in 1-2 conversational sentences suitable for speech synthesis."
+        private const val SYSTEM_INSTRUCTION = "You are Hazel, a friendly accessibility AI assistant. Answer the user's question directly, accurately, and naturally in 1-2 conversational sentences suitable for speech synthesis."
         private const val TIMEOUT_MS = 5000
     }
 

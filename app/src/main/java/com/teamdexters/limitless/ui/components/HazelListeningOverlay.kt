@@ -69,19 +69,21 @@ fun HazelListeningOverlay(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
-    var statusText by remember { mutableStateOf("Status: Listening... Speak your command") }
+    var statusText by remember { mutableStateOf("Status: Listening... speak your query") }
     var recognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
     
     val startListening = {
         val recognizer = recognizerRef
         if (recognizer != null) {
             Log.d(TAG, "Calling recognizer.startListening()")
-            statusText = "Status: Listening... Speak your command"
+            statusText = "Status: Listening... speak your query"
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
             }
             recognizer.startListening(intent)
             
