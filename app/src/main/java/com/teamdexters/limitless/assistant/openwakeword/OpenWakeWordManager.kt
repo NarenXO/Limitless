@@ -82,10 +82,29 @@ class OpenWakeWordManager(
                 val readSize = 1024 // 64ms at 16kHz
                 val buffer = ShortArray(readSize)
 
+                var frameCount = 0
+                var ambientNoiseSum = 0.0f
+                var ambientNoiseFloorRMS = 250.0f
+                var voiceThreshold = 350.0f
+                var isCalibrating = true
+
                 while (isActive && !isPaused) {
                     val readResult = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (readResult > 0) {
-                        processAudioBlock(buffer, readResult)
+                        val rms = calculateRMS(buffer, readResult)
+                        
+                        if (isCalibrating) {
+                            ambientNoiseSum += rms
+                            frameCount++
+                            if (frameCount >= 10) {
+                                ambientNoiseFloorRMS = ambientNoiseSum / 10.0f
+                                voiceThreshold = maxOf(250.0f, ambientNoiseFloorRMS * 2.5f)
+                                isCalibrating = false
+                                Log.d("LIMITLESS_TRACE", "[OpenWakeWord] Calibration complete. Ambient RMS: $ambientNoiseFloorRMS, Threshold: $voiceThreshold")
+                            }
+                        } else {
+                            processAudioBlock(buffer, readResult, rms, voiceThreshold)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -96,12 +115,11 @@ class OpenWakeWordManager(
         }
     }
 
-    private suspend fun processAudioBlock(buffer: ShortArray, size: Int) {
-        val rms = calculateRMS(buffer, size)
+    private suspend fun processAudioBlock(buffer: ShortArray, size: Int, rms: Float, dynamicThreshold: Float) {
         val zcr = calculateZCR(buffer, size)
         
-        // Very naive fallback check: if volume spikes highly, simulate detection 
-        val threshold = if (hasModel) 0.7f else 350.0f // Fallback amplitude threshold
+        // Dynamic fallback check: if volume spikes highly above calibrated ambient noise
+        val threshold = if (hasModel) 0.7f else dynamicThreshold // Fallback amplitude threshold
         
         val isDetected = if (hasModel) {
             // Simulated ONNX run, pretend we detect occasionally for testing if needed
@@ -111,7 +129,7 @@ class OpenWakeWordManager(
         }
 
         if (isDetected) {
-            Log.d("LIMITLESS_TRACE", "[OpenWakeWord] Voice activity detected! Triggering Hazel overlay...")
+            Log.d("LIMITLESS_TRACE", "[OpenWakeWord] Dynamic voice spike detected! Triggering Hazel...")
             
             // Immediately stop recording to free HAL lock
             pause()
