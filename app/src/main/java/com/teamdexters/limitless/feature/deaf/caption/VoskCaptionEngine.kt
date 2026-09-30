@@ -14,7 +14,7 @@ import java.io.IOException
  * This is a simplified stub implementation that simulates the Vosk functionality.
  * The actual Vosk integration would require the native library to be properly loaded.
  */
-class VoskCaptionEngine(private val context: Context) {
+class VoskCaptionEngine(private val context: Context?) {
     
     private var isInitialized = false
     
@@ -28,6 +28,8 @@ class VoskCaptionEngine(private val context: Context) {
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
+            if (context == null) return@withContext false
+            
             val modelDir = File(context.filesDir, MODEL_PATH)
             
             if (!modelDir.exists()) {
@@ -53,6 +55,8 @@ class VoskCaptionEngine(private val context: Context) {
      */
     private fun copyModelFromAssets(destDir: File) {
         try {
+            if (context == null) throw IOException("Context is null")
+            
             destDir.mkdirs()
             
             val assets = context.assets.list(MODEL_PATH)
@@ -92,6 +96,8 @@ class VoskCaptionEngine(private val context: Context) {
      * Recursively copy asset directory.
      */
     private fun copyAssetDirectory(assetPath: String, destDir: File) {
+        if (context == null) return
+        
         val assets = context.assets.list(assetPath) ?: return
         
         for (asset in assets) {

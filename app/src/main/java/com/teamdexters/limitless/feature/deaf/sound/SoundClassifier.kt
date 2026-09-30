@@ -11,7 +11,7 @@ import java.io.IOException
  * Processes 16kHz mono audio frames for environmental sound classification.
  * This is a stub implementation for compilation - actual TFLite integration would require proper model loading.
  */
-class SoundClassifier(private val context: Context) {
+class SoundClassifier(private val context: Context?) {
     
     private var isModelLoaded = false
     
@@ -26,6 +26,8 @@ class SoundClassifier(private val context: Context) {
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
+            if (context == null) return@withContext false
+            
             // Check if model file exists in assets
             val modelExists = try {
                 context.assets.open(MODEL_PATH).close()

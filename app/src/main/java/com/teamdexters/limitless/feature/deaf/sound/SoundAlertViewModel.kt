@@ -13,10 +13,19 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for managing sound alerts and vibration patterns.
  */
-class SoundAlertViewModel(private val context: Context) : ViewModel() {
+class SoundAlertViewModel(private val context: Context?) : ViewModel() {
     
-    private val vibrationVocabulary = VibrationVocabulary(context)
-    private val soundClassifier = SoundClassifier(context)
+    private val vibrationVocabulary = try {
+        if (context != null) VibrationVocabulary(context) else null
+    } catch (e: Exception) {
+        null
+    }
+    
+    private val soundClassifier = try {
+        if (context != null) SoundClassifier(context) else null
+    } catch (e: Exception) {
+        null
+    }
     
     private val _activeAlert = MutableStateFlow<SoundAlert?>(null)
     val activeAlert: StateFlow<SoundAlert?> = _activeAlert.asStateFlow()
@@ -39,7 +48,7 @@ class SoundAlertViewModel(private val context: Context) : ViewModel() {
      */
     private fun loadModel() {
         modelLoadJob = viewModelScope.launch {
-            val isLoaded = soundClassifier.initialize()
+            val isLoaded = soundClassifier?.initialize() ?: false
             _isModelLoaded.value = isLoaded
         }
     }
@@ -59,7 +68,7 @@ class SoundAlertViewModel(private val context: Context) : ViewModel() {
         alertDismissJob?.cancel()
         
         // Trigger vibration
-        vibrationVocabulary.vibrateForSound(soundType)
+        vibrationVocabulary?.vibrateForSound(soundType)
         
         // Create alert based on sound type
         val alert = when (soundType) {
@@ -127,7 +136,7 @@ class SoundAlertViewModel(private val context: Context) : ViewModel() {
      */
     fun dismissAlert() {
         _activeAlert.value = null
-        vibrationVocabulary.cancel()
+        vibrationVocabulary?.cancel()
     }
     
     /**
@@ -166,7 +175,7 @@ class SoundAlertViewModel(private val context: Context) : ViewModel() {
             return
         }
         
-        val soundType = soundClassifier.classifyAudio(audioData)
+        val soundType = soundClassifier?.classifyAudio(audioData)
         if (soundType != null) {
             triggerAlert(soundType)
         }
@@ -186,8 +195,8 @@ class SoundAlertViewModel(private val context: Context) : ViewModel() {
         super.onCleared()
         alertDismissJob?.cancel()
         modelLoadJob?.cancel()
-        vibrationVocabulary.cancel()
-        soundClassifier.release()
+        vibrationVocabulary?.cancel()
+        soundClassifier?.release()
     }
 }
 

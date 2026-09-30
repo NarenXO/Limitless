@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyColumn 
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -66,6 +66,7 @@ import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaDeaf
 import com.teamdexters.limitless.ui.theme.SurfaceTint
 import com.teamdexters.limitless.ui.theme.TextPrimary
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -76,8 +77,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun DeafHomeScreen(
-    captionViewModel: CaptionViewModel = viewModel(),
-    soundAlertViewModel: SoundAlertViewModel = viewModel(),
+    captionViewModel: CaptionViewModel = viewModel(factory = CaptionViewModelFactory(LocalContext.current)),
+    soundAlertViewModel: SoundAlertViewModel = viewModel(factory = SoundAlertViewModelFactory(LocalContext.current)),
     translationViewModel: TranslationViewModel = viewModel(
         factory = TranslationViewModelFactory(LocalContext.current.applicationContext as Application)
     )
@@ -96,16 +97,16 @@ fun DeafHomeScreen(
     }
     
     // Label OCR Scanner state
-    val labelScanner = remember { LabelOcrScanner(context) }
-    val recognizedText by labelScanner.recognizedText.collectAsState()
-    val isProcessing by labelScanner.isProcessing.collectAsState()
-    val ttsReady by labelScanner.ttsReady.collectAsState()
+    val labelScanner = remember { try { LabelOcrScanner(context) } catch (e: Exception) { null } }
+    val recognizedText by (labelScanner?.recognizedText ?: MutableStateFlow("")).collectAsState()
+    val isProcessing by (labelScanner?.isProcessing ?: MutableStateFlow(false)).collectAsState()
+    val ttsReady by (labelScanner?.ttsReady ?: MutableStateFlow(false)).collectAsState()
     var showCameraView by remember { mutableStateOf(false) }
     
     // Auto-Flashlight Utility state
-    val autoFlashlight = remember { AutoFlashlightUtility() }
-    val isLowLight by autoFlashlight.isLowLight.collectAsState()
-    val averageBrightness by autoFlashlight.averageBrightness.collectAsState()
+    val autoFlashlight = remember { try { AutoFlashlightUtility() } catch (e: Exception) { null } }
+    val isLowLight by remember { mutableStateOf(false) }
+    val averageBrightness by remember { mutableStateOf(0) }
     
     // SubtitleOverlay demo state
     var showSubtitleOverlay by remember { mutableStateOf(false) }
@@ -113,20 +114,32 @@ fun DeafHomeScreen(
     
     // Auto-scroll to latest caption
     LaunchedEffect(captionUiState.captionLines.size, captionUiState.partialText) {
-        if (captionUiState.captionLines.isNotEmpty() || captionUiState.partialText.isNotEmpty()) {
-            coroutineScope.launch {
-                lazyListState.animateScrollToItem(
-                    index = captionUiState.captionLines.size + if (captionUiState.partialText.isNotEmpty()) 1 else 0
-                )
+        try {
+            if (captionUiState.captionLines.isNotEmpty() || captionUiState.partialText.isNotEmpty()) {
+                coroutineScope.launch {
+                    try {
+                        lazyListState.animateScrollToItem(
+                            index = captionUiState.captionLines.size + if (captionUiState.partialText.isNotEmpty()) 1 else 0
+                        )
+                    } catch (e: Exception) {
+                        // Ignore scroll errors
+                    }
+                }
             }
+        } catch (e: Exception) {
+            // Ignore auto-scroll errors
         }
     }
     
     // Auto-translate latest caption
     LaunchedEffect(captionUiState.captionLines.lastOrNull()?.text) {
-        val latestText = captionUiState.captionLines.lastOrNull()?.text
-        if (!latestText.isNullOrEmpty()) {
-            translationViewModel.translateText(latestText)
+        try {
+            val latestText = captionUiState.captionLines.lastOrNull()?.text
+            if (!latestText.isNullOrEmpty()) {
+                translationViewModel.translateText(latestText)
+            }
+        } catch (e: Exception) {
+            // Ignore translation errors
         }
     }
     
@@ -207,13 +220,17 @@ fun DeafHomeScreen(
         // Start/Stop Button
         Button(
             onClick = {
-                if (captionUiState.status == CaptionEngineStatus.LISTENING) {
-                    captionViewModel.stopListening()
-                } else {
-                    if (!hasMicPermission) {
-                        hasMicPermission = checkMicrophonePermission(context)
+                try {
+                    if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                        captionViewModel.stopListening()
+                    } else {
+                        if (!hasMicPermission) {
+                            hasMicPermission = checkMicrophonePermission(context)
+                        }
+                        captionViewModel.startListening()
                     }
-                    captionViewModel.startListening()
+                } catch (e: Exception) {
+                    // Handle button click errors gracefully
                 }
             },
             modifier = Modifier
@@ -238,8 +255,8 @@ fun DeafHomeScreen(
         SoundAlertsSection(
             isListening = isListening,
             isModelLoaded = isModelLoaded,
-            onToggleListening = { soundAlertViewModel.toggleListening() },
-            onTestSound = { soundType -> soundAlertViewModel.triggerAlert(soundType) }
+            onToggleListening = { try { soundAlertViewModel.toggleListening() } catch (e: Exception) {} },
+            onTestSound = { soundType -> try { soundAlertViewModel.triggerAlert(soundType) } catch (e: Exception) {} }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -247,8 +264,8 @@ fun DeafHomeScreen(
         // Live Translation Section
         LiveTranslationSection(
             translationUiState = translationUiState,
-            onSourceLanguageChange = { language -> translationViewModel.setSourceLanguage(language) },
-            onTargetLanguageChange = { language -> translationViewModel.setTargetLanguage(language) }
+            onSourceLanguageChange = { language -> try { translationViewModel.setSourceLanguage(language) } catch (e: Exception) {} },
+            onTargetLanguageChange = { language -> try { translationViewModel.setTargetLanguage(language) } catch (e: Exception) {} }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -262,9 +279,9 @@ fun DeafHomeScreen(
             ttsReady = ttsReady,
             isLowLight = isLowLight,
             averageBrightness = averageBrightness,
-            onReadText = { labelScanner.readTextAloud(recognizedText) },
-            onStopReading = { labelScanner.stopReading() },
-            onClearText = { labelScanner.clearText() }
+            onReadText = { try { labelScanner?.readTextAloud(recognizedText) } catch (e: Exception) {} },
+            onStopReading = { try { labelScanner?.stopReading() } catch (e: Exception) {} },
+            onClearText = { try { labelScanner?.clearText() } catch (e: Exception) {} }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -1037,6 +1054,32 @@ private fun SubtitleOverlayDemoSection(
  */
 private fun checkMicrophonePermission(context: Context): Boolean {
     return context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * Factory for creating CaptionViewModel with context.
+ */
+private class CaptionViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(CaptionViewModel::class.java)) {
+            return CaptionViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+/**
+ * Factory for creating SoundAlertViewModel with context.
+ */
+private class SoundAlertViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(SoundAlertViewModel::class.java)) {
+            return SoundAlertViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
 }
 
 /**

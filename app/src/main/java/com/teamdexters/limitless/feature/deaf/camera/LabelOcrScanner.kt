@@ -21,9 +21,14 @@ import java.util.Locale
  * This tool extracts text from product packaging, document labels, or medicine bottle text.
  * It is NOT a visual pill/medicine identification system.
  */
-class LabelOcrScanner(private val context: Context) {
+class LabelOcrScanner(private val context: Context?) {
     
-    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val textRecognizer = try {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    } catch (e: Exception) {
+        null
+    }
+    
     private var textToSpeech: TextToSpeech? = null
     
     private val _recognizedText = MutableStateFlow("")
@@ -43,8 +48,16 @@ class LabelOcrScanner(private val context: Context) {
      * Initialize Text-to-Speech engine.
      */
     private fun initializeTTS() {
-        textToSpeech = TextToSpeech(context) { status ->
-            _ttsReady.value = status == TextToSpeech.SUCCESS
+        try {
+            if (context != null) {
+                textToSpeech = TextToSpeech(context) { status ->
+                    _ttsReady.value = status == TextToSpeech.SUCCESS
+                }
+            } else {
+                _ttsReady.value = false
+            }
+        } catch (e: Exception) {
+            _ttsReady.value = false
         }
     }
     
@@ -52,7 +65,7 @@ class LabelOcrScanner(private val context: Context) {
      * Process a camera frame to extract text.
      */
     suspend fun processImage(imageProxy: ImageProxy): String {
-        if (_isProcessing.value) {
+        if (_isProcessing.value || textRecognizer == null) {
             return _recognizedText.value
         }
         
@@ -66,7 +79,7 @@ class LabelOcrScanner(private val context: Context) {
                     imageProxy.imageInfo.rotationDegrees
                 )
                 
-                val result = textRecognizer.process(inputImage).await()
+                val result = textRecognizer!!.process(inputImage).await()
                 val extractedText = result.text
                 
                 if (extractedText.isNotEmpty()) {
@@ -120,7 +133,7 @@ class LabelOcrScanner(private val context: Context) {
     fun release() {
         textToSpeech?.shutdown()
         textToSpeech = null
-        textRecognizer.close()
+        textRecognizer?.close()
     }
 }
 

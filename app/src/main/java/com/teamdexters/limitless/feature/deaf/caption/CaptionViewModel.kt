@@ -18,10 +18,19 @@ import kotlinx.coroutines.withContext
 /**
  * ViewModel for managing live caption state and recognition.
  */
-class CaptionViewModel(private val context: Context) : ViewModel() {
+class CaptionViewModel(private val context: Context?) : ViewModel() {
     
-    private val audioStreamer = AudioStreamer()
-    private val voskEngine = VoskCaptionEngine(context)
+    private val audioStreamer = try {
+        AudioStreamer()
+    } catch (e: Exception) {
+        null
+    }
+    
+    private val voskEngine = try {
+        if (context != null) VoskCaptionEngine(context) else null
+    } catch (e: Exception) {
+        null
+    }
     
     private val _uiState = MutableStateFlow(CaptionUiState())
     val uiState: StateFlow<CaptionUiState> = _uiState.asStateFlow()
@@ -38,7 +47,7 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
      */
     private fun loadModel() {
         modelLoadJob = viewModelScope.launch(Dispatchers.IO) {
-            val isLoaded = voskEngine.initialize()
+            val isLoaded = voskEngine?.initialize() ?: false
             
             if (!isLoaded) {
                 _uiState.value = _uiState.value.copy(
@@ -59,7 +68,7 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
             return
         }
         
-        if (!voskEngine.isReady()) {
+        if (voskEngine == null || !voskEngine.isReady()) {
             _uiState.value = _uiState.value.copy(
                 status = CaptionEngineStatus.MODEL_MISSING
             )
@@ -76,7 +85,7 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
                     status = CaptionEngineStatus.LISTENING
                 )
                 
-                if (!audioStreamer.initialize()) {
+                if (audioStreamer == null || !audioStreamer.initialize()) {
                     _uiState.value = _uiState.value.copy(
                         status = CaptionEngineStatus.ERROR
                     )
@@ -109,8 +118,8 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
     fun stopListening() {
         recognitionJob?.cancel()
         recognitionJob = null
-        audioStreamer.stopStreaming()
-        voskEngine.reset()
+        audioStreamer?.stopStreaming()
+        voskEngine?.reset()
         
         _uiState.value = _uiState.value.copy(
             status = CaptionEngineStatus.IDLE,
@@ -167,6 +176,7 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
      * Check if microphone permission is granted.
      */
     private fun hasMicrophonePermission(): Boolean {
+        if (context == null) return false
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
@@ -180,7 +190,7 @@ class CaptionViewModel(private val context: Context) : ViewModel() {
         super.onCleared()
         recognitionJob?.cancel()
         modelLoadJob?.cancel()
-        audioStreamer.release()
-        voskEngine.release()
+        audioStreamer?.release()
+        voskEngine?.release()
     }
 }

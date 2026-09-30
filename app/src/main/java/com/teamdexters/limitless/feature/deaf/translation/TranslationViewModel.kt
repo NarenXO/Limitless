@@ -16,7 +16,11 @@ import kotlinx.coroutines.withContext
  */
 class TranslationViewModel(application: Application) : AndroidViewModel(application) {
     
-    private val offlineTranslator = OfflineTranslator(application.applicationContext)
+    private val offlineTranslator = try {
+        OfflineTranslator(application.applicationContext)
+    } catch (e: Exception) {
+        null
+    }
     
     private val _uiState = MutableStateFlow(TranslationUiState())
     val uiState: StateFlow<TranslationUiState> = _uiState.asStateFlow()
@@ -33,10 +37,10 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
      */
     private fun initializeTranslator() {
         translationJob = viewModelScope.launch(Dispatchers.IO) {
-            val success = offlineTranslator.initialize(
+            val success = offlineTranslator?.initialize(
                 sourceLanguage = _uiState.value.sourceLanguage,
                 targetLanguage = _uiState.value.targetLanguage
-            )
+            ) ?: false
             
             if (success) {
                 _uiState.value = _uiState.value.copy(
@@ -89,7 +93,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 originalText = text
             )
             
-            val translated = if (offlineTranslator.isReady.value) {
+            val translated = if (offlineTranslator?.isReady?.value == true) {
                 offlineTranslator.translate(text)
             } else {
                 "Model not ready"
@@ -115,7 +119,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
      * Get download status from translator.
      */
     fun getDownloadStatus(): OfflineTranslator.DownloadStatus {
-        return offlineTranslator.downloadStatus.value
+        return offlineTranslator?.downloadStatus?.value ?: OfflineTranslator.DownloadStatus.Error
     }
     
     /**
@@ -124,7 +128,7 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     override fun onCleared() {
         super.onCleared()
         translationJob?.cancel()
-        offlineTranslator.close()
+        offlineTranslator?.close()
     }
 }
 

@@ -13,14 +13,19 @@ import androidx.annotation.RequiresApi
  * Vibration vocabulary system for distinct sound-type patterns.
  * Wraps Vibrator/VibratorManager with SDK 26+ safe vibration effects.
  */
-class VibrationVocabulary(private val context: Context) {
+class VibrationVocabulary(private val context: Context?) {
     
-    private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-        vibratorManager?.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    private val vibrator: Vibrator? = try {
+        if (context == null) null
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    } catch (e: Exception) {
+        null
     }
     
     /**
