@@ -2,7 +2,8 @@ package com.teamdexters.limitless.ui.roommapping
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -11,352 +12,299 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.teamdexters.limitless.roommapping.SpatialRouteResult
+import com.teamdexters.limitless.roommapping.SpatialRouteStep
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun ThreeDIsometricMap(
-    routeResult: SpatialRouteResult,
+    steps: List<SpatialRouteStep>,
     activeStepIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var scale by remember { mutableStateOf(1f) }
-    var panOffset by remember { mutableStateOf(Offset.Zero) }
-
-    val infiniteTransition = rememberInfiniteTransition()
-    
-    // Pulse alpha for "YOU ARE HERE" halo
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val beaconPulseRadius by infiniteTransition.animateFloat(
+        initialValue = 12f,
+        targetValue = 28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "beaconPulse"
+    )
+    val beaconPulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
         targetValue = 0.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
+            animation = tween(1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
-        )
+        ),
+        label = "beaconAlpha"
     )
 
-    // Pulse radius for the halo
-    val pulseRadius by infiniteTransition.animateFloat(
-        initialValue = 20f,
-        targetValue = 60f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
+    // Smooth transition for user position moving along graph
+    val animatedStepIndex by animateFloatAsState(
+        targetValue = activeStepIndex.toFloat(),
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "stepAnim"
     )
 
-    // Pulsing stroke width for active path
-    val activeStrokeWidth by infiniteTransition.animateFloat(
-        initialValue = 4f,
-        targetValue = 7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .border(2.dp, Color(0xFFF791A9), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                val canvasWidth = size.width
+                val canvasHeight = size.height
 
-    // Energy flow animation offset (0 to 1)
-    val flowPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
-    )
+                // 3D Isometric Projection Helper
+                // Maps 3D World (x: 0..1, y: 0..1, z: 0..1) to 2D Screen Canvas
+                fun project3D(x: Float, y: Float, z: Float): Offset {
+                    val centerX = canvasWidth * 0.5f
+                    val centerY = canvasHeight * 0.55f
+                    val scaleX = canvasWidth * 0.38f
+                    val scaleY = canvasHeight * 0.28f
+                    val scaleZ = canvasHeight * 0.25f
 
-    val textMeasurer = rememberTextMeasurer()
-    val stepsCount = maxOf(1, routeResult.autoGeneratedRouteSteps.size)
-    val actualIndex = activeStepIndex.coerceIn(0, stepsCount - 1)
+                    // 3D Isometric Rotation Matrix (30 degree tilt)
+                    val cos30 = 0.866f
+                    val sin30 = 0.5f
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(0.5f, 3f)
-                        panOffset += pan
-                    }
+                    val isoX = centerX + (x - y) * cos30 * scaleX
+                    val isoY = centerY + (x + y) * sin30 * scaleY - (z * scaleZ)
+                    return Offset(isoX, isoY)
                 }
-        ) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
 
-            withTransform({
-                translate(panOffset.x, panOffset.y)
-                scale(scale, scale, pivot = Offset(canvasWidth / 2, canvasHeight / 2))
-                
-                // Isometric transform: translate to center, rotate, scale Y, translate back
-                translate(size.width / 2, size.height / 2)
-                rotate(45f)
-                scale(1f, 0.5f)
-                translate(-size.width / 2, -size.height / 2)
-            }) {
-                val gridSpacing = 60f
-                val roomWidth = size.width * 0.8f
-                val roomHeight = size.height * 0.8f
-                val startX = (size.width - roomWidth) / 2
-                val startY = (size.height - roomHeight) / 2
-
-                // 3D Room Boundary & Grid (Floor)
-                drawRect(
-                    color = Color(0xFFE0F2F4),
-                    topLeft = Offset(startX, startY),
-                    size = Size(roomWidth, roomHeight)
-                )
-
-                for (x in 0..roomWidth.toInt() step gridSpacing.toInt()) {
+                // 1. Draw 3D Floor Plan Grid (Tile Surface)
+                val gridDivisions = 6
+                for (i in 0..gridDivisions) {
+                    val t = i / gridDivisions.toFloat()
                     drawLine(
-                        color = Color.LightGray.copy(alpha = 0.5f),
-                        start = Offset(startX + x, startY),
-                        end = Offset(startX + x, startY + roomHeight),
-                        strokeWidth = 2f
+                        color = Color(0xFF1F1F1F).copy(alpha = 0.12f),
+                        start = project3D(t, 0f, 0f),
+                        end = project3D(t, 1f, 0f),
+                        strokeWidth = 1.dp.toPx()
                     )
-                }
-                for (y in 0..roomHeight.toInt() step gridSpacing.toInt()) {
                     drawLine(
-                        color = Color.LightGray.copy(alpha = 0.5f),
-                        start = Offset(startX, startY + y),
-                        end = Offset(startX + roomWidth, startY + y),
-                        strokeWidth = 2f
+                        color = Color(0xFF1F1F1F).copy(alpha = 0.12f),
+                        start = project3D(0f, t, 0f),
+                        end = project3D(1f, t, 0f),
+                        strokeWidth = 1.dp.toPx()
                     )
                 }
 
-                drawRect(
-                    color = Color(0xFF1F1F1F),
-                    topLeft = Offset(startX, startY),
-                    size = Size(roomWidth, roomHeight),
-                    style = Stroke(width = 6f)
-                )
+                // 2. Draw Extruded 3D Architectural Perimeter Walls
+                val wallHeight = 0.35f
+                val wallColor = Color(0xFF1F1F1F).copy(alpha = 0.15f)
+                val wallStrokeColor = Color(0xFF1F1F1F).copy(alpha = 0.6f)
 
-                // Feature Blocks (Entrance, Ramp, Exit)
-                val blockHeight = 40f
-                
-                // Entrance Block
-                val entranceRect = androidx.compose.ui.geometry.Rect(
-                    left = startX + roomWidth * 0.4f,
-                    top = startY + roomHeight * 0.9f - 30f,
-                    right = startX + roomWidth * 0.6f,
-                    bottom = startY + roomHeight * 0.9f + 30f
-                )
-                drawRect(color = Color.DarkGray, topLeft = entranceRect.topLeft, size = entranceRect.size)
-                
-                // Ramp Block
-                val rampRect = androidx.compose.ui.geometry.Rect(
-                    left = startX + roomWidth * 0.2f,
-                    top = startY + roomHeight * 0.5f,
-                    right = startX + roomWidth * 0.4f,
-                    bottom = startY + roomHeight * 0.7f
-                )
-                drawRect(color = Color(0xFFFFE797), topLeft = rampRect.topLeft, size = rampRect.size)
-                
-                // Exit Block
-                val exitRect = androidx.compose.ui.geometry.Rect(
-                    left = startX + roomWidth * 0.7f,
-                    top = startY + roomHeight * 0.1f,
-                    right = startX + roomWidth * 0.9f,
-                    bottom = startY + roomHeight * 0.2f
-                )
-                drawRect(color = Color(0xFFBAD6DA), topLeft = exitRect.topLeft, size = exitRect.size)
-
-                // Waypoints mapping
-                val waypoints = mutableListOf<Offset>()
-                waypoints.add(Offset(entranceRect.center.x, entranceRect.center.y)) // Start at entrance
-                if (stepsCount > 1) {
-                    waypoints.add(Offset(rampRect.center.x, rampRect.center.y))
-                    if (stepsCount > 2) {
-                        for (i in 2 until stepsCount) {
-                            val progress = i.toFloat() / stepsCount
-                            waypoints.add(Offset(startX + roomWidth * (0.5f + progress * 0.3f), startY + roomHeight * (0.8f - progress * 0.6f)))
-                        }
-                    }
-                }
-                // Last point is exit
-                waypoints[waypoints.lastIndex] = Offset(exitRect.center.x, exitRect.center.y)
-
-                // Draw Paths
-                for (i in 0 until waypoints.size - 1) {
-                    val p1 = waypoints[i]
-                    val p2 = waypoints[i+1]
-                    
-                    val pathColor = when {
-                        i < actualIndex -> Color(0xFFBAD6DA) // Completed
-                        i == actualIndex -> Color(0xFFF791A9) // Active
-                        else -> Color(0xFF1F1F1F) // Future
-                    }
-                    
-                    val pathStyle = when {
-                        i < actualIndex -> Stroke(width = 6f)
-                        i == actualIndex -> Stroke(width = activeStrokeWidth * 2)
-                        else -> Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f))
-                    }
-                    
-                    drawLine(color = pathColor, start = p1, end = p2, strokeWidth = if (pathStyle is Stroke) pathStyle.width else 4f, pathEffect = if (pathStyle is Stroke) pathStyle.pathEffect else null)
-                    
-                    // Energy flow effect (particles) on active or future lines
-                    if (i >= actualIndex) {
-                        val dx = p2.x - p1.x
-                        val dy = p2.y - p1.y
-                        val flowPoint = Offset(p1.x + dx * flowPhase, p1.y + dy * flowPhase)
-                        drawCircle(color = Color.White.copy(alpha = 0.8f), radius = 4f, center = flowPoint)
-                    }
-                }
-
-                // Draw Animated "YOU ARE HERE" Traveler Marker
-            }
-            
-            // Draw 2D elements that shouldn't be isometric distorted
-            // Calculate isometric position for traveler
-            val gridSpacing = 60f
-            val roomWidth = canvasWidth * 0.8f
-            val roomHeight = canvasHeight * 0.8f
-            val startX = (canvasWidth - roomWidth) / 2
-            val startY = (canvasHeight - roomHeight) / 2
-            
-            val entranceCenter = Offset(startX + roomWidth * 0.5f, startY + roomHeight * 0.9f)
-            val rampCenter = Offset(startX + roomWidth * 0.3f, startY + roomHeight * 0.6f)
-            val exitCenter = Offset(startX + roomWidth * 0.8f, startY + roomHeight * 0.15f)
-            
-            val waypoints2D = mutableListOf<Offset>()
-            waypoints2D.add(entranceCenter)
-            if (stepsCount > 1) waypoints2D.add(rampCenter)
-            if (stepsCount > 2) {
-                for (i in 2 until stepsCount) {
-                    val progress = i.toFloat() / stepsCount
-                    waypoints2D.add(Offset(startX + roomWidth * (0.5f + progress * 0.3f), startY + roomHeight * (0.8f - progress * 0.6f)))
-                }
-            }
-            waypoints2D[waypoints2D.lastIndex] = exitCenter
-
-            // Apply isometric projection to get screen coordinates
-            fun isoProject(p: Offset): Offset {
-                // translate
-                var x = p.x - canvasWidth / 2
-                var y = p.y - canvasHeight / 2
-                // rotate 45
-                val rad = Math.toRadians(45.0)
-                val cos = Math.cos(rad).toFloat()
-                val sin = Math.sin(rad).toFloat()
-                val rx = x * cos - y * sin
-                val ry = x * sin + y * cos
-                // scale y
-                val sy = ry * 0.5f
-                // translate back and apply pan/scale
-                return Offset((rx + canvasWidth / 2) * scale + panOffset.x, (sy + canvasHeight / 2) * scale + panOffset.y)
-            }
-
-            // We need to animate the traveler position.
-            // For simplicity in Canvas without another animateFloatAsState in recomposition,
-            // we'll just snap to the active step, but it will have the pulsing halo.
-            val targetPos = waypoints2D.getOrElse(actualIndex) { waypoints2D.first() }
-            val screenPos = isoProject(targetPos)
-            
-            // Pulsing Halo
-            drawCircle(
-                color = Color(0xFFF791A9).copy(alpha = pulseAlpha),
-                radius = pulseRadius * scale,
-                center = screenPos
-            )
-            
-            // Center User Dot
-            drawCircle(
-                color = Color(0xFFF791A9),
-                radius = 12f * scale,
-                center = screenPos
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 12f * scale,
-                center = screenPos,
-                style = Stroke(width = 3f * scale)
-            )
-
-            // Pointer Cone (Direction indicator)
-            val nextPos = waypoints2D.getOrElse(actualIndex + 1) { targetPos }
-            if (nextPos != targetPos) {
-                val screenNextPos = isoProject(nextPos)
-                val dx = screenNextPos.x - screenPos.x
-                val dy = screenNextPos.y - screenPos.y
-                val angle = Math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
-                
-                val coneLength = 20f * scale
-                val coneWidth = 10f * scale
-                val coneTip = Offset(
-                    screenPos.x + Math.cos(angle.toDouble()).toFloat() * coneLength,
-                    screenPos.y + Math.sin(angle.toDouble()).toFloat() * coneLength
-                )
-                val coneP1 = Offset(
-                    screenPos.x + Math.cos((angle + Math.PI / 2).toDouble()).toFloat() * coneWidth,
-                    screenPos.y + Math.sin((angle + Math.PI / 2).toDouble()).toFloat() * coneWidth
-                )
-                val coneP2 = Offset(
-                    screenPos.x + Math.cos((angle - Math.PI / 2).toDouble()).toFloat() * coneWidth,
-                    screenPos.y + Math.sin((angle - Math.PI / 2).toDouble()).toFloat() * coneWidth
-                )
-                
-                val conePath = Path().apply {
-                    moveTo(coneTip.x, coneTip.y)
-                    lineTo(coneP1.x, coneP1.y)
-                    lineTo(coneP2.x, coneP2.y)
+                // West Wall (x=0)
+                val westWall = Path().apply {
+                    moveTo(project3D(0f, 0f, 0f).x, project3D(0f, 0f, 0f).y)
+                    lineTo(project3D(0f, 1f, 0f).x, project3D(0f, 1f, 0f).y)
+                    lineTo(project3D(0f, 1f, wallHeight).x, project3D(0f, 1f, wallHeight).y)
+                    lineTo(project3D(0f, 0f, wallHeight).x, project3D(0f, 0f, wallHeight).y)
                     close()
                 }
-                drawPath(path = conePath, color = Color(0xFFF791A9))
+                drawPath(westWall, color = wallColor)
+                drawPath(westWall, color = wallStrokeColor, style = Stroke(width = 1.5.dp.toPx()))
+
+                // North Wall (y=0)
+                val northWall = Path().apply {
+                    moveTo(project3D(0f, 0f, 0f).x, project3D(0f, 0f, 0f).y)
+                    lineTo(project3D(1f, 0f, 0f).x, project3D(1f, 0f, 0f).y)
+                    lineTo(project3D(1f, 0f, wallHeight).x, project3D(1f, 0f, wallHeight).y)
+                    lineTo(project3D(0f, 0f, wallHeight).x, project3D(0f, 0f, wallHeight).y)
+                    close()
+                }
+                drawPath(northWall, color = wallColor)
+                drawPath(northWall, color = wallStrokeColor, style = Stroke(width = 1.5.dp.toPx()))
+
+                // 3. Draw 3D Extruded Doorway Archway (Entrance & Exit)
+                // East Doorway (Exit)
+                val doorWidth = 0.25f
+                val doorStart = project3D(1f, 0.35f, 0f)
+                val doorEnd = project3D(1f, 0.35f + doorWidth, 0f)
+                val doorTopStart = project3D(1f, 0.35f, 0.45f)
+                val doorTopEnd = project3D(1f, 0.35f + doorWidth, 0.45f)
+
+                val doorArch = Path().apply {
+                    moveTo(doorStart.x, doorStart.y)
+                    lineTo(doorTopStart.x, doorTopStart.y)
+                    lineTo(doorTopEnd.x, doorTopEnd.y)
+                    lineTo(doorEnd.x, doorEnd.y)
+                }
+                drawPath(doorArch, color = Color(0xFFBAD6DA), style = Stroke(width = 3.dp.toPx()))
+
+                // 4. Calculate Precise 3D Route Graph Nodes
+                val totalSteps = if (steps.isEmpty()) 3 else steps.size
+                val graphNodes = mutableListOf<Offset>()
+                val raw3DNodes = mutableListOf<Triple<Float, Float, Float>>()
+
+                // Generate precise spatial waypoints through room geometry
+                for (i in 0 until totalSteps) {
+                    val progress = i / (totalSteps - 1).coerceAtLeast(1).toFloat()
+                    val x = 0.15f + progress * 0.7f
+                    val y = when (i % 3) {
+                        0 -> 0.2f + progress * 0.3f
+                        1 -> 0.75f - progress * 0.2f
+                        else -> 0.35f + progress * 0.45f
+                    }
+                    val z = 0.02f // Slightly elevated off floor plane
+                    raw3DNodes.add(Triple(x, y, z))
+                    graphNodes.add(project3D(x, y, z))
+                }
+
+                // 5. Draw 3D Polyline Route Path & Directional Chevrons
+                for (i in 0 until graphNodes.size - 1) {
+                    val p1 = graphNodes[i]
+                    val p2 = graphNodes[i + 1]
+                    val isCurrentSegment = (i == activeStepIndex)
+
+                    val lineThickness = if (isCurrentSegment) 6.dp.toPx() else 3.5.dp.toPx()
+                    val lineColor = if (isCurrentSegment) Color(0xFFF791A9) else Color(0xFF00C853)
+
+                    drawLine(
+                        color = lineColor,
+                        start = p1,
+                        end = p2,
+                        strokeWidth = lineThickness
+                    )
+
+                    // Draw 3D Directional Chevron Arrow along path segment
+                    val midX = (p1.x + p2.x) * 0.5f
+                    val midY = (p1.y + p2.y) * 0.5f
+                    drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(midX, midY))
+                }
+
+                // 6. Draw 3D Graph Nodes with Badges
+                graphNodes.forEachIndexed { index, nodeOffset ->
+                    val isPassed = index < activeStepIndex
+                    val isActive = index == activeStepIndex
+                    val nodeColor = when {
+                        isActive -> Color(0xFFF791A9)
+                        isPassed -> Color(0xFFBAD6DA)
+                        else -> Color(0xFF00C853)
+                    }
+
+                    // Node Circle
+                    drawCircle(color = nodeColor, radius = if (isActive) 12.dp.toPx() else 8.dp.toPx(), center = nodeOffset)
+                    drawCircle(color = Color.White, radius = if (isActive) 5.dp.toPx() else 3.dp.toPx(), center = nodeOffset)
+                }
+
+                // 7. Calculate Interpolated 3D Position for "YOU ARE HERE" Avatar
+                val currentIdx = animatedStepIndex.toInt().coerceIn(0, raw3DNodes.size - 1)
+                val nextIdx = (currentIdx + 1).coerceAtMost(raw3DNodes.size - 1)
+                val fraction = animatedStepIndex - currentIdx
+
+                val currNode = raw3DNodes[currentIdx]
+                val nextNode = raw3DNodes[nextIdx]
+
+                val user3DX = currNode.first + (nextNode.first - currNode.first) * fraction
+                val user3DY = currNode.second + (nextNode.second - currNode.second) * fraction
+                val user3DZ = 0.05f
+
+                val userScreenPos = project3D(user3DX, user3DY, user3DZ)
+
+                // 8. Draw Animated 3D "YOU ARE HERE" Pulsing Beacon & FOV Cone
+                // Pulsing Aura Ring
+                drawCircle(
+                    color = Color(0xFFF791A9).copy(alpha = beaconPulseAlpha),
+                    radius = beaconPulseRadius.dp.toPx(),
+                    center = userScreenPos
+                )
+
+                // 3D Directional Field-of-View Cone pointing toward next waypoint
+                val fovPath = Path().apply {
+                    val fovLength = 28.dp.toPx()
+                    val fovWidth = 18.dp.toPx()
+                    val dirX = nextNode.first - currNode.first
+                    val dirY = nextNode.second - currNode.second
+                    val angle = kotlin.math.atan2(dirY.toDouble(), dirX.toDouble()).toFloat()
+
+                    val tipX = userScreenPos.x + fovLength * cos(angle)
+                    val tipY = userScreenPos.y + fovLength * sin(angle)
+                    val leftX = userScreenPos.x + fovWidth * cos(angle + 2.4f)
+                    val leftY = userScreenPos.y + fovWidth * sin(angle + 2.4f)
+                    val rightX = userScreenPos.x + fovWidth * cos(angle - 2.4f)
+                    val rightY = userScreenPos.y + fovWidth * sin(angle - 2.4f)
+
+                    moveTo(userScreenPos.x, userScreenPos.y)
+                    lineTo(leftX, leftY)
+                    lineTo(tipX, tipY)
+                    lineTo(rightX, rightY)
+                    close()
+                }
+                drawPath(fovPath, color = Color(0xFFF791A9).copy(alpha = 0.35f))
+
+                // Solid User Center Marker
+                drawCircle(color = Color(0xFFF791A9), radius = 9.dp.toPx(), center = userScreenPos)
+                drawCircle(color = Color.White, radius = 4.dp.toPx(), center = userScreenPos)
+
+                // 9. Draw Cardinal Compass Headings on Floor
+                val northPos = project3D(0.5f, 0.05f, 0f)
+                val southPos = project3D(0.5f, 0.95f, 0f)
+                val eastPos = project3D(0.95f, 0.5f, 0f)
+                val westPos = project3D(0.05f, 0.5f, 0f)
+
+                drawCircle(color = Color(0xFF1F1F1F).copy(alpha = 0.2f), radius = 3.dp.toPx(), center = northPos)
+                drawCircle(color = Color(0xFF1F1F1F).copy(alpha = 0.2f), radius = 3.dp.toPx(), center = southPos)
+                drawCircle(color = Color(0xFF1F1F1F).copy(alpha = 0.2f), radius = 3.dp.toPx(), center = eastPos)
+                drawCircle(color = Color(0xFF1F1F1F).copy(alpha = 0.2f), radius = 3.dp.toPx(), center = westPos)
             }
 
-            // Text Badge Tag ("YOU ARE HERE")
-            val textLayoutResult = textMeasurer.measure(
-                text = "YOU ARE HERE",
-                style = TextStyle(color = Color.White, fontSize = (10 * scale).sp, fontWeight = FontWeight.Bold)
-            )
-            val badgeWidth = textLayoutResult.size.width + 16f * scale
-            val badgeHeight = textLayoutResult.size.height + 8f * scale
-            val badgeTopLeft = Offset(screenPos.x - badgeWidth / 2, screenPos.y - 45f * scale - badgeHeight)
-            
-            drawRoundRect(
-                color = Color(0xFF1F1F1F),
-                topLeft = badgeTopLeft,
-                size = Size(badgeWidth, badgeHeight),
-                cornerRadius = CornerRadius(8f * scale, 8f * scale)
-            )
-            
-            drawText(
-                textLayoutResult = textLayoutResult,
-                color = Color.White,
-                topLeft = Offset(badgeTopLeft.x + 8f * scale, badgeTopLeft.y + 4f * scale)
-            )
-        }
+            // Top Status Header Tag
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                    .border(1.dp, Color(0xFF1F1F1F).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "PRECISE 3D GRAPH • STEP ${activeStepIndex + 1} OF ${steps.size.coerceAtLeast(1)}",
+                    color = Color(0xFF1F1F1F),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-        // Top-Right Badge Controls
-        Card(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
-            shape = RoundedCornerShape(8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Text(
-                text = "LIVE 3D MAP • STEP ${actualIndex + 1} OF $stepsCount",
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F1F1F)
-            )
+            // Floating "YOU ARE HERE" Badge attached to top center
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp)
+                    .background(Color(0xFF1F1F1F), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Color(0xFFF791A9), RoundedCornerShape(4.dp))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "YOU ARE HERE (Live 3D Beacon)",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
