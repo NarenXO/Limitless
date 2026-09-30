@@ -18,4 +18,7 @@ interface RoomConnectionDao {
 
     @Query("SELECT * FROM room_connections WHERE fromRoomId = :roomId OR toRoomId = :roomId")
     fun getConnectionsForRoom(roomId: String): Flow<List<RoomConnectionEntity>>
+    
+    @Query("SELECT COUNT(*) FROM room_connections")
+    fun getConnectionCount(): Flow<Int>
 }

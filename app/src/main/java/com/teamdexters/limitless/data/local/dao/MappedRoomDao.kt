@@ -14,4 +14,7 @@ interface MappedRoomDao {
     
     @Query("SELECT * FROM mapped_rooms")
     fun getAllRooms(): Flow<List<MappedRoomEntity>>
+    
+    @Query("SELECT COUNT(*) FROM mapped_rooms")
+    fun getRoomCount(): Flow<Int>
 }
