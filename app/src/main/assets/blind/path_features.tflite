@@ -1,1 +1,4 @@
-Placeholder for path features TFLite model. This model should detect ramps, stairs, curbs, zebra crossings, and traffic lights.
+PLACEHOLDER MODEL FILE
+This is a placeholder for the path features TFLite model.
+Replace this file with the actual trained model when available.
+Current size: < 1000 bytes to be detected as placeholder.

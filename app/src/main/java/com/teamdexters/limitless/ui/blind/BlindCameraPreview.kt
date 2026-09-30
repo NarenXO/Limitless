@@ -2,42 +2,37 @@ package com.teamdexters.limitless.ui.blind
 
 import android.Manifest
 import android.content.Context
-import android.graphics.Bitmap
+import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.teamdexters.limitless.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 /**
- * CameraX preview composable with frame capture capability.
- * Provides live camera preview and can capture frames for OCR or color detection.
- *
- * @param modifier Modifier for the preview
- * @param showReticle Whether to show a centered reticle overlay (for color detection mode)
- * @param onFrameReady Callback when a frame is ready for processing
- * @param onCaptureReady Callback when high-quality capture is ready for OCR
- * @param onError Callback for camera errors
+ * Full-screen CameraX preview for blind assistance.
+ * Always-on camera with frame capture capability for real-time object detection.
  */
 @Composable
-fun CameraPreview(
+fun BlindCameraPreview(
     modifier: Modifier = Modifier,
-    showReticle: Boolean = false,
-    onFrameReady: (Bitmap) -> Unit = {},
-    onCaptureReady: ((Bitmap, Int) -> Unit)? = null,
+    onFrameReady: (android.graphics.Bitmap, Int) -> Unit = { _, _ -> },
     onError: (Exception) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -53,14 +48,30 @@ fun CameraPreview(
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
-    LaunchedEffect(lifecycleOwner) {
+    // Camera permission launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            onError(SecurityException("Camera permission required"))
+        }
+    }
+
+    // Request camera permission if not granted
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!cameraPermission) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    // Start camera when permission is granted
+    androidx.compose.runtime.LaunchedEffect(cameraPermission) {
         if (cameraPermission) {
             startCamera(
                 context = context,
                 lifecycleOwner = lifecycleOwner,
                 previewView = previewView,
                 onFrameReady = onFrameReady,
-                onCaptureReady = onCaptureReady,
                 onError = onError
             )
         } else {
@@ -68,92 +79,27 @@ fun CameraPreview(
         }
     }
 
-    Box(modifier = modifier) {
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        if (showReticle) {
-            // Reticle overlay for color detection
-            ReticleOverlay()
+    // Cleanup camera on dispose
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            // Camera will be unbound when composable is disposed
         }
     }
+
+    AndroidView(
+        factory = { previewView },
+        modifier = modifier.fillMaxSize()
+    )
 }
 
 /**
- * Simple reticle overlay for color detection mode.
- * Shows a centered square with PersonaBlind ring and TextPrimary crosshair.
- */
-@Composable
-private fun ReticleOverlay() {
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        androidx.compose.foundation.Canvas(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            val canvasSize = size
-            val reticleSize = 72f
-            val strokeWidth = 3f
-
-            val centerX = canvasSize.width / 2
-            val centerY = canvasSize.height / 2
-            val halfReticle = reticleSize / 2
-
-            // Draw PersonaBlind ring
-            drawRect(
-                color = PersonaBlind,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    centerX - halfReticle,
-                    centerY - halfReticle
-                ),
-                size = androidx.compose.ui.geometry.Size(reticleSize, reticleSize),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = strokeWidth
-                )
-            )
-
-            // Draw TextPrimary crosshair - horizontal line
-            drawLine(
-                color = TextPrimary,
-                start = androidx.compose.ui.geometry.Offset(
-                    centerX - halfReticle + 10f,
-                    centerY
-                ),
-                end = androidx.compose.ui.geometry.Offset(
-                    centerX + halfReticle - 10f,
-                    centerY
-                ),
-                strokeWidth = strokeWidth
-            )
-
-            // Draw TextPrimary crosshair - vertical line
-            drawLine(
-                color = TextPrimary,
-                start = androidx.compose.ui.geometry.Offset(
-                    centerX,
-                    centerY - halfReticle + 10f
-                ),
-                end = androidx.compose.ui.geometry.Offset(
-                    centerX,
-                    centerY + halfReticle - 10f
-                ),
-                strokeWidth = strokeWidth
-            )
-        }
-    }
-}
-
-/**
- * Start the camera with CameraX.
+ * Start the camera with CameraX for blind assistance.
  */
 private fun startCamera(
     context: Context,
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
-    onFrameReady: (Bitmap) -> Unit,
-    onCaptureReady: ((Bitmap, Int) -> Unit)?,
+    onFrameReady: (android.graphics.Bitmap, Int) -> Unit,
     onError: (Exception) -> Unit
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -177,27 +123,22 @@ private fun startCamera(
                 .also {
                     it.setAnalyzer(
                         ContextCompat.getMainExecutor(context),
-                        FrameAnalyzer(onFrameReady, onCaptureReady)
+                        BlindFrameAnalyzer(onFrameReady)
                     )
                 }
 
-            // Image capture use case for high-quality OCR
-            val imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .build()
-
-            // Select back camera as a default
+            // Select back camera as default
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             // Unbind use cases before rebinding
             cameraProvider.unbindAll()
 
             // Bind use cases to camera
-            val useCases = mutableListOf(preview, imageAnalyzer, imageCapture)
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
-                *useCases.toTypedArray()
+                preview,
+                imageAnalyzer
             )
 
         } catch (e: Exception) {
@@ -208,19 +149,19 @@ private fun startCamera(
 
 /**
  * Image analysis analyzer that converts camera frames to Bitmaps.
+ * Runs continuously for real-time object detection.
  */
-private class FrameAnalyzer(
-    private val onFrameReady: (Bitmap) -> Unit,
-    private val onCaptureReady: ((Bitmap, Int) -> Unit)?
+private class BlindFrameAnalyzer(
+    private val onFrameReady: (android.graphics.Bitmap, Int) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private var lastFrameTime = 0L
-    private val frameInterval = 500L // Process at most 2 frames per second
+    private val frameInterval = 800L // Process at most 1.25 frames per second (800ms throttling)
 
     override fun analyze(image: ImageProxy) {
         val currentFrameTime = System.currentTimeMillis()
 
-        // Throttle frame processing to avoid overload
+        // Throttle frame processing to avoid overload (800ms interval)
         if (currentFrameTime - lastFrameTime < frameInterval) {
             image.close()
             return
@@ -231,9 +172,7 @@ private class FrameAnalyzer(
         try {
             val bitmap = imageProxyToBitmap(image, image.imageInfo.rotationDegrees)
             if (bitmap != null) {
-                onFrameReady(bitmap)
-                // Also notify capture ready callback if provided
-                onCaptureReady?.invoke(bitmap, image.imageInfo.rotationDegrees)
+                onFrameReady(bitmap, image.imageInfo.rotationDegrees)
             }
         } catch (e: Exception) {
             // Ignore conversion errors
@@ -245,7 +184,7 @@ private class FrameAnalyzer(
     /**
      * Convert ImageProxy to Bitmap with rotation handling.
      */
-    private fun imageProxyToBitmap(image: ImageProxy, rotationDegrees: Int): Bitmap? {
+    private fun imageProxyToBitmap(image: ImageProxy, rotationDegrees: Int): android.graphics.Bitmap? {
         val yBuffer = image.planes[0].buffer
         val uBuffer = image.planes[1].buffer
         val vBuffer = image.planes[2].buffer
@@ -282,5 +221,3 @@ private class FrameAnalyzer(
         }
     }
 }
-
-
