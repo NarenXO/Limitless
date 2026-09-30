@@ -10,7 +10,7 @@ import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.persona.PersonaSelectScreen
 import com.teamdexters.limitless.ui.screens.BlindHomeScreen
 import com.teamdexters.limitless.ui.screens.CommunityScreen
-import com.teamdexters.limitless.ui.screens.DeafHomeScreen
+import com.teamdexters.limitless.ui.deaf.DeafHomeScreen
 import com.teamdexters.limitless.ui.scanner.LocationDetailScreen
 import com.teamdexters.limitless.ui.screens.ScannerScreen
 import com.teamdexters.limitless.ui.speech.SpeechHomeScreen

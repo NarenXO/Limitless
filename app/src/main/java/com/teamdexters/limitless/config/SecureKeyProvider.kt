@@ -41,4 +41,12 @@ class SecureKeyProvider @Inject constructor(
     fun clearGeminiKey() {
         sharedPreferences.edit().remove("GEMINI_API_KEY").apply()
     }
+
+    fun saveUserName(name: String) {
+        sharedPreferences.edit().putString("USER_NAME", name).apply()
+    }
+
+    fun getUserName(): String? {
+        return sharedPreferences.getString("USER_NAME", "Naren")
+    }
 }
