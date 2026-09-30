@@ -35,46 +35,46 @@ class ScannerAnalyzer(private val context: Context) {
     }
 
     private fun setupObjectDetector() {
-        try {
-            val baseOptions = BaseOptions.builder()
-                .setModelAssetPath("mediapipe/efficientdet_lite0.tflite")
-                .build()
-                
-            val options = ObjectDetector.ObjectDetectorOptions.builder()
-                .setBaseOptions(baseOptions)
-                .setRunningMode(RunningMode.LIVE_STREAM)
-                .setMaxResults(5)
-                .setScoreThreshold(0.5f)
-                .setResultListener { result, _ ->
-                    val detections = mutableListOf<DetectedObject>()
-                    for (detection in result.detections()) {
-                        val category = detection.categories().firstOrNull() ?: continue
-                        val label = category.categoryName().lowercase()
-                        val conf = category.score()
-                        if (conf <= 0.5f) continue
-                        
-                        val accType = when {
-                            label.contains("ramp") || label.contains("wheelchair ramp") -> AccessibilityObjectType.RAMP
-                            label.contains("stairs") || label.contains("staircase") -> AccessibilityObjectType.STAIRS
-                            label.contains("handrail") || label.contains("railing") -> AccessibilityObjectType.HANDRAIL
-                            label.contains("door") || label.contains("doorway") || label.contains("entrance") -> AccessibilityObjectType.DOORWAY
-                            else -> AccessibilityObjectType.OTHER
-                        }
-                        if (accType != AccessibilityObjectType.OTHER) {
-                            detections.add(DetectedObject(label, conf, detection.boundingBox(), accType))
-                        }
+        val baseOptions = BaseOptions.builder()
+            .setModelAssetPath("mediapipe/efficientdet_lite0.tflite")
+            .build()
+            
+        val options = ObjectDetector.ObjectDetectorOptions.builder()
+            .setBaseOptions(baseOptions)
+            .setRunningMode(RunningMode.LIVE_STREAM)
+            .setMaxResults(5)
+            .setScoreThreshold(0.5f)
+            .setResultListener { result, _ ->
+                val detections = mutableListOf<DetectedObject>()
+                for (detection in result.detections()) {
+                    val category = detection.categories().firstOrNull() ?: continue
+                    val label = category.categoryName().lowercase()
+                    val conf = category.score()
+                    if (conf <= 0.5f) continue
+                    
+                    val accType = when {
+                        label.contains("ramp") || label.contains("wheelchair ramp") -> AccessibilityObjectType.RAMP
+                        label.contains("stairs") || label.contains("staircase") -> AccessibilityObjectType.STAIRS
+                        label.contains("handrail") || label.contains("railing") -> AccessibilityObjectType.HANDRAIL
+                        label.contains("door") || label.contains("doorway") || label.contains("entrance") -> AccessibilityObjectType.DOORWAY
+                        else -> AccessibilityObjectType.OTHER
                     }
-                    liveDetections = detections
+                    if (accType != AccessibilityObjectType.OTHER) {
+                        detections.add(DetectedObject(label, conf, detection.boundingBox(), accType))
+                    }
                 }
-                .setErrorListener { error ->
-                    android.util.Log.e("ScannerAnalyzer", "ObjectDetector error: ${error.message}")
-                }
-                .build()
-                
-            objectDetector = ObjectDetector.createFromOptions(context, options)
+                liveDetections = detections
+            }
+            .setErrorListener { error ->
+                android.util.Log.e("ScannerAnalyzer", "ObjectDetector error: ${error.message}")
+            }
+            .build()
+            
+        objectDetector = try {
+            ObjectDetector.createFromOptions(context, options)
         } catch (e: Throwable) {
-            android.util.Log.w("LIMITLESS_SCANNER", "MediaPipe TFLite asset init failed, using ML Kit fallback.", e)
-            objectDetector = null
+            android.util.Log.e("LIMITLESS_SCANNER", "MediaPipe TFLite init failed, falling back to ML Kit: ${e.localizedMessage}")
+            null
         }
     }
 
