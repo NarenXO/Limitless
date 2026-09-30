@@ -29,7 +29,8 @@ class HazelQueryHandler(
     private val geminiClient: GeminiClient = GeminiClient(),
     private val networkStatusTracker: NetworkStatusProvider? = null,
     private val hazelMemoryStore: HazelMemoryStore? = null,
-    private val cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager? = null
+    private val cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager? = null,
+    private val hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider? = null
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
@@ -52,6 +53,8 @@ class HazelQueryHandler(
         rawQuery: String,
         scope: CoroutineScope,
         tts: TextToSpeech?,
+        currentPersona: String = "",
+        currentRoute: String? = null,
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
@@ -94,11 +97,16 @@ class HazelQueryHandler(
                 }
             }
 
-            val historyContext = hazelMemoryStore?.getFormattedHistoryForPrompt(3) ?: ""
-            val fullPrompt = if (historyContext.isNotEmpty()) {
-                "$historyContext\nUser: $rawQuery"
+            val systemContext = hazelContextProvider?.getSystemContextPrompt(currentPersona, currentRoute) ?: ""
+            val fullPrompt = if (systemContext.isNotEmpty()) {
+                "$systemContext\nUser: $rawQuery"
             } else {
-                rawQuery
+                val historyContext = hazelMemoryStore?.getFormattedHistoryForPrompt(3) ?: ""
+                if (historyContext.isNotEmpty()) {
+                    "$historyContext\nUser: $rawQuery"
+                } else {
+                    rawQuery
+                }
             }
 
             val result = geminiClient.queryGemini(fullPrompt)
@@ -166,6 +174,8 @@ class HazelQueryHandler(
         query: String,
         scope: CoroutineScope,
         tts: TextToSpeech?,
+        currentPersona: String = "",
+        currentRoute: String? = null,
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
@@ -175,11 +185,18 @@ class HazelQueryHandler(
             val responseText = if (isOnline && isApiKeyPresent()) {
                 val base64Image = cameraFrameManager?.getLatestFrameAsBase64()
                 if (base64Image != null) {
-                    val result = geminiClient.queryGemini(query, base64Image)
-                    result.getOrElse { e ->
+                    val systemContext = hazelContextProvider?.getSystemContextPrompt(currentPersona, currentRoute) ?: ""
+                    val fullPrompt = if (systemContext.isNotEmpty()) {
+                        "$systemContext\nUser: $query"
+                    } else {
+                        query
+                    }
+                    val result = geminiClient.queryGemini(fullPrompt, base64Image)
+                    val finalResponseText = result.getOrElse { e ->
                         Log.w(TAG, "Gemini Vision query failed: ${e.message}")
                         "I had trouble analyzing the image. Please try again."
                     }
+                    finalResponseText
                 } else {
                     "My camera isn't active right now, so I can't see anything."
                 }

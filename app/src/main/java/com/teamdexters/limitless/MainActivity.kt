@@ -84,6 +84,9 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager
 
+    @javax.inject.Inject
+    lateinit var hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider
+
     /**
      * Tracks whether the user has granted RECORD_AUDIO at runtime.
      * Initialized eagerly so the Compose tree always reads the correct value.
@@ -121,7 +124,8 @@ class MainActivity : ComponentActivity() {
                 HazelAssistantWrapper(
                     database = database,
                     micGranted = micGranted.value,
-                    cameraFrameManager = cameraFrameManager
+                    cameraFrameManager = cameraFrameManager,
+                    hazelContextProvider = hazelContextProvider
                 )
             }
         }
@@ -141,7 +145,8 @@ class MainActivity : ComponentActivity() {
 fun HazelAssistantWrapper(
     database: LimitlessDatabase,
     micGranted: Boolean,
-    cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager
+    cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager,
+    hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -151,6 +156,16 @@ fun HazelAssistantWrapper(
     // Track current navigation route
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+
+    val currentPersona = remember(currentRoute) {
+        when (currentRoute) {
+            Screen.BlindHome.route -> "Blind Assist"
+            Screen.DeafHome.route -> "Deaf Captions"
+            Screen.SpeechHome.route -> "Speech AAC"
+            Screen.MobilityHome.route -> "Mobility Nav"
+            else -> "General"
+        }
+    }
 
     val personaHomeRoutes = listOf(
         Screen.BlindHome.route,
@@ -176,13 +191,14 @@ fun HazelAssistantWrapper(
     }
 
     // Hazel query handler with network status tracker, conversation memory, and vision capabilities
-    val queryHandler = remember(networkStatusTracker, database) {
+    val queryHandler = remember(networkStatusTracker, database, hazelContextProvider) {
         val memoryStore = com.teamdexters.limitless.hazel.HazelMemoryStore(database.hazelConversationDao())
         HazelQueryHandler(
             context = context,
             networkStatusTracker = networkStatusTracker,
             hazelMemoryStore = memoryStore,
-            cameraFrameManager = cameraFrameManager
+            cameraFrameManager = cameraFrameManager,
+            hazelContextProvider = hazelContextProvider
         )
     }
 
@@ -345,6 +361,8 @@ fun HazelAssistantWrapper(
                             queryHandler = queryHandler,
                             scope = coroutineScope,
                             tts = ttsRef,
+                            currentRoute = currentRoute,
+                            currentPersona = currentPersona,
                             onShowBanner = { text ->
                                 responseBannerText = text
                                 isBannerVisible = true
@@ -412,6 +430,8 @@ private fun handleHazelIntent(
     queryHandler: HazelQueryHandler,
     scope: CoroutineScope,
     tts: TextToSpeech?,
+    currentRoute: String?,
+    currentPersona: String,
     onShowBanner: (String) -> Unit,
     onHandled: () -> Unit
 ) {
@@ -462,6 +482,8 @@ private fun handleHazelIntent(
                 rawQuery = intent.rawQuery,
                 scope = scope,
                 tts = tts,
+                currentPersona = currentPersona,
+                currentRoute = currentRoute,
                 onResponseReady = onShowBanner
             )
         }
@@ -471,6 +493,8 @@ private fun handleHazelIntent(
                 query = intent.query,
                 scope = scope,
                 tts = tts,
+                currentPersona = currentPersona,
+                currentRoute = currentRoute,
                 onResponseReady = onShowBanner
             )
         }
@@ -480,6 +504,8 @@ private fun handleHazelIntent(
                 rawQuery = intent.rawQuery,
                 scope = scope,
                 tts = tts,
+                currentPersona = currentPersona,
+                currentRoute = currentRoute,
                 onResponseReady = onShowBanner
             )
         }
