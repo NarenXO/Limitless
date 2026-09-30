@@ -1,0 +1,79 @@
+package com.teamdexters.limitless.feature.deaf.sound
+
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
+
+/**
+ * YAMNet sound classifier using TensorFlow Lite.
+ * Loads yamnet.tflite and yamnet_label_list.txt from assets.
+ * Processes 16kHz mono audio frames for environmental sound classification.
+ * This is a stub implementation for compilation - actual TFLite integration would require proper model loading.
+ */
+class SoundClassifier(private val context: Context) {
+    
+    private var isModelLoaded = false
+    
+    companion object {
+        private const val MODEL_PATH = "yamnet.tflite"
+        private const val LABELS_PATH = "yamnet_label_list.txt"
+    }
+    
+    /**
+     * Initialize the YAMNet model and labels asynchronously.
+     * Must be called on Dispatchers.IO.
+     */
+    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Check if model file exists in assets
+            val modelExists = try {
+                context.assets.open(MODEL_PATH).close()
+                true
+            } catch (e: IOException) {
+                false
+            }
+            
+            // Check if labels file exists in assets
+            val labelsExist = try {
+                context.assets.open(LABELS_PATH).close()
+                true
+            } catch (e: IOException) {
+                false
+            }
+            
+            isModelLoaded = modelExists && labelsExist
+            isModelLoaded
+        } catch (e: Exception) {
+            isModelLoaded = false
+            false
+        }
+    }
+    
+    /**
+     * Classify audio frame and return the detected sound type.
+     * Returns null if classification fails or confidence is too low.
+     * This is a stub implementation - actual implementation would use TFLite.
+     */
+    fun classifyAudio(audioData: FloatArray): VibrationVocabulary.SoundType? {
+        if (!isModelLoaded) {
+            return null
+        }
+        
+        // Stub implementation - always return null for now
+        // Actual implementation would process audio through TFLite model
+        return null
+    }
+    
+    /**
+     * Check if the model is loaded successfully.
+     */
+    fun isReady(): Boolean = isModelLoaded
+    
+    /**
+     * Release resources.
+     */
+    fun release() {
+        isModelLoaded = false
+    }
+}

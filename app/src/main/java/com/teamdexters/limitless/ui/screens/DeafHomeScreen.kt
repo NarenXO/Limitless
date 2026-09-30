@@ -19,9 +19,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +48,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teamdexters.limitless.feature.deaf.caption.CaptionEngineStatus
 import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
+import com.teamdexters.limitless.feature.deaf.sound.SoundAlertViewModel
+import com.teamdexters.limitless.feature.deaf.sound.VibrationVocabulary
+import com.teamdexters.limitless.ui.components.SoundAlertBanner
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.PersonaDeaf
@@ -54,13 +61,18 @@ import kotlinx.coroutines.launch
 /**
  * Deaf & Hard of Hearing Assistant - Live Captions Screen
  * Provides real-time offline speech-to-text captions using Vosk.
+ * Integrated with YAMNet sound alerts and vibration vocabulary.
  */
 @Composable
 fun DeafHomeScreen(
-    viewModel: CaptionViewModel = viewModel()
+    captionViewModel: CaptionViewModel = viewModel(),
+    soundAlertViewModel: SoundAlertViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val captionUiState by captionViewModel.uiState.collectAsState()
+    val soundAlertUiState by soundAlertViewModel.activeAlert.collectAsState()
+    val isListening by soundAlertViewModel.isListening.collectAsState()
+    val isModelLoaded by soundAlertViewModel.isModelLoaded.collectAsState()
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     
@@ -69,11 +81,11 @@ fun DeafHomeScreen(
     }
     
     // Auto-scroll to latest caption
-    LaunchedEffect(uiState.captionLines.size, uiState.partialText) {
-        if (uiState.captionLines.isNotEmpty() || uiState.partialText.isNotEmpty()) {
+    LaunchedEffect(captionUiState.captionLines.size, captionUiState.partialText) {
+        if (captionUiState.captionLines.isNotEmpty() || captionUiState.partialText.isNotEmpty()) {
             coroutineScope.launch {
                 lazyListState.animateScrollToItem(
-                    index = uiState.captionLines.size + if (uiState.partialText.isNotEmpty()) 1 else 0
+                    index = captionUiState.captionLines.size + if (captionUiState.partialText.isNotEmpty()) 1 else 0
                 )
             }
         }
@@ -119,7 +131,7 @@ fun DeafHomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         // Warning Chips
-        when (uiState.status) {
+        when (captionUiState.status) {
             CaptionEngineStatus.MODEL_MISSING -> {
                 Box(
                     modifier = Modifier
@@ -156,13 +168,13 @@ fun DeafHomeScreen(
         // Start/Stop Button
         Button(
             onClick = {
-                if (uiState.status == CaptionEngineStatus.LISTENING) {
-                    viewModel.stopListening()
+                if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                    captionViewModel.stopListening()
                 } else {
                     if (!hasMicPermission) {
                         hasMicPermission = checkMicrophonePermission(context)
                     }
-                    viewModel.startListening()
+                    captionViewModel.startListening()
                 }
             },
             modifier = Modifier
@@ -174,7 +186,7 @@ fun DeafHomeScreen(
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = if (uiState.status == CaptionEngineStatus.LISTENING) "Stop" else "Start",
+                text = if (captionUiState.status == CaptionEngineStatus.LISTENING) "Stop" else "Start",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -182,6 +194,25 @@ fun DeafHomeScreen(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+        
+        // Sound Alerts Section
+        SoundAlertsSection(
+            isListening = isListening,
+            isModelLoaded = isModelLoaded,
+            onToggleListening = { soundAlertViewModel.toggleListening() },
+            onTestSound = { soundType -> soundAlertViewModel.triggerAlert(soundType) }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Active Alert Banner
+        soundAlertUiState?.let { alert ->
+            SoundAlertBanner(
+                alert = alert,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
         
         // Live Caption Container
         Box(
@@ -197,15 +228,15 @@ fun DeafHomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.captionLines) { line ->
+                items(captionUiState.captionLines) { line ->
                     CaptionLineItem(line = line)
                 }
                 
                 // Partial text (in-progress)
-                if (uiState.partialText.isNotEmpty()) {
+                if (captionUiState.partialText.isNotEmpty()) {
                     item {
                         Text(
-                            text = uiState.partialText,
+                            text = captionUiState.partialText,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Medium,
                             color = TextPrimary.copy(alpha = 0.7f),
@@ -229,6 +260,167 @@ private fun CaptionLineItem(line: com.teamdexters.limitless.feature.deaf.caption
         fontWeight = if (line.isFinal) FontWeight.Bold else FontWeight.Medium,
         color = TextPrimary
     )
+}
+
+/**
+ * Sound alerts section with toggle and test buttons.
+ */
+@Composable
+private fun SoundAlertsSection(
+    isListening: Boolean,
+    isModelLoaded: Boolean,
+    onToggleListening: () -> Unit,
+    onTestSound: (VibrationVocabulary.SoundType) -> Unit
+) {
+    Column {
+        // Section header
+        Text(
+            text = "Environmental Sound Alerts",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Listening toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Listening",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+            
+            Switch(
+                checked = isListening,
+                onCheckedChange = { onToggleListening() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = PersonaDeaf,
+                    checkedTrackColor = PersonaDeaf.copy(alpha = 0.5f),
+                    uncheckedThumbColor = TextPrimary.copy(alpha = 0.5f),
+                    uncheckedTrackColor = TextPrimary.copy(alpha = 0.2f)
+                )
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Model missing warning
+        if (!isModelLoaded) {
+            Box(
+                modifier = Modifier
+                    .background(HighlightBox, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "YAMNet model missing — use test buttons",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        
+        // Test buttons grid
+        TestButtonsGrid(onTestSound = onTestSound)
+    }
+}
+
+/**
+ * Grid of test buttons for sound alerts.
+ */
+@Composable
+private fun TestButtonsGrid(onTestSound: (VibrationVocabulary.SoundType) -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TestButton(
+                text = "Test Siren",
+                soundType = VibrationVocabulary.SoundType.SIREN,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+            TestButton(
+                text = "Test Fire Alarm",
+                soundType = VibrationVocabulary.SoundType.FIRE_ALARM,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TestButton(
+                text = "Test Doorbell",
+                soundType = VibrationVocabulary.SoundType.DOORBELL,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+            TestButton(
+                text = "Test Dog Bark",
+                soundType = VibrationVocabulary.SoundType.DOG_BARKING,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TestButton(
+                text = "Test Baby Cry",
+                soundType = VibrationVocabulary.SoundType.BABY_CRYING,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+            TestButton(
+                text = "Test Car Horn",
+                soundType = VibrationVocabulary.SoundType.CAR_HORN,
+                onClick = onTestSound,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/**
+ * Individual test button.
+ */
+@Composable
+private fun TestButton(
+    text: String,
+    soundType: VibrationVocabulary.SoundType,
+    onClick: (VibrationVocabulary.SoundType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = { onClick(soundType) },
+        modifier = modifier.height(48.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = SurfaceTint
+        ),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary
+        )
+    }
 }
 
 /**
