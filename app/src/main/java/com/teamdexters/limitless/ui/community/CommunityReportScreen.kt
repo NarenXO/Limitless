@@ -169,114 +169,119 @@ fun CommunityReportScreen(
         }
     ) { innerPadding ->
         // MAIN COMMUNITY FEED
-        Column(
+        val syncStatus by viewModel.syncStatus.collectAsState()
+        val analyticsData by viewModel.analyticsData.collectAsState()
+
+        androidx.compose.foundation.lazy.LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF7F1EE))
-                .padding(innerPadding)
+                .padding(innerPadding),
+            contentPadding = PaddingValues(bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val syncStatus by viewModel.syncStatus.collectAsState()
-            val analyticsData by viewModel.analyticsData.collectAsState()
             
-            // Profile Card
-            UserProfileCard(
-                syncStatus = syncStatus,
-                onSyncClick = { viewModel.triggerCloudSync() },
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
-            )
-
-            // Analytics Dashboard
-            CommunityAnalyticsCard(
-                analyticsData = analyticsData,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            
-            // View Toggle
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ViewModeTab(
-                    title = "📋 List Feed",
-                    isSelected = viewMode == ViewMode.LIST,
-                    onClick = { viewModel.setViewMode(ViewMode.LIST) },
-                    modifier = Modifier.weight(1f)
+            item {
+                // Profile Card
+                UserProfileCard(
+                    syncStatus = syncStatus,
+                    onSyncClick = { viewModel.triggerCloudSync() },
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)
                 )
-                ViewModeTab(
-                    title = "🗺️ Map View",
-                    isSelected = viewMode == ViewMode.MAP,
-                    onClick = { viewModel.setViewMode(ViewMode.MAP) },
-                    modifier = Modifier.weight(1f)
+            }
+
+            item {
+                // Analytics Dashboard
+                CommunityAnalyticsCard(
+                    analyticsData = analyticsData,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Filter Chips
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(ReportFilterCategory.values()) { filter ->
-                    FilterChip(
-                        selected = reportFilterCategory == filter,
-                        onClick = { viewModel.setFilterCategory(filter) },
-                        label = { Text(filter.label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = HighlightBox,
-                            selectedLabelColor = TextPrimary
-                        ),
-                        modifier = Modifier.semantics { contentDescription = "Filter by ${filter.label}" }
+            item {
+                // View Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ViewModeTab(
+                        title = "📋 List Feed",
+                        isSelected = viewMode == ViewMode.LIST,
+                        onClick = { viewModel.setViewMode(ViewMode.LIST) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ViewModeTab(
+                        title = "🗺️ Map View",
+                        isSelected = viewMode == ViewMode.MAP,
+                        onClick = { viewModel.setViewMode(ViewMode.MAP) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Sort Selector
-            var expandedSort by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                OutlinedButton(
-                    onClick = { expandedSort = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                    modifier = Modifier.semantics { contentDescription = "Sort by ${sortOrder.label}" }
+            item {
+                // Filter Chips
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Sort: ${sortOrder.label}")
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                }
-                DropdownMenu(expanded = expandedSort, onDismissRequest = { expandedSort = false }) {
-                    SortOrder.values().forEach { order ->
-                        DropdownMenuItem(
-                            text = { Text(order.label) },
-                            onClick = {
-                                viewModel.setSortOrder(order)
-                                expandedSort = false
-                            },
-                            modifier = Modifier.semantics { contentDescription = "Select sort order ${order.label}" }
+                    items(ReportFilterCategory.values()) { filter ->
+                        FilterChip(
+                            selected = reportFilterCategory == filter,
+                            onClick = { viewModel.setFilterCategory(filter) },
+                            label = { Text(filter.label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = HighlightBox,
+                                selectedLabelColor = TextPrimary
+                            ),
+                            modifier = Modifier.semantics { contentDescription = "Filter by ${filter.label}" }
                         )
                     }
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                // Sort Selector
+                var expandedSort by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    OutlinedButton(
+                        onClick = { expandedSort = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                        modifier = Modifier.semantics { contentDescription = "Sort by ${sortOrder.label}" }
+                    ) {
+                        Text("Sort: ${sortOrder.label}")
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    }
+                    DropdownMenu(expanded = expandedSort, onDismissRequest = { expandedSort = false }) {
+                        SortOrder.values().forEach { order ->
+                            DropdownMenuItem(
+                                text = { Text(order.label) },
+                                onClick = {
+                                    viewModel.setSortOrder(order)
+                                    expandedSort = false
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Select sort order ${order.label}" }
+                            )
+                        }
+                    }
+                }
+            }
             
             // Content based on ViewMode
             if (viewMode == ViewMode.LIST) {
-                androidx.compose.foundation.lazy.LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    items(reports) { report ->
+                items(reports) { report ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         ReportCard(report)
                     }
                 }
             } else {
-                CommunityMapView(
-                    reports = reports,
-                    onMapError = { viewModel.setViewMode(ViewMode.LIST) },
-                    modifier = Modifier.fillMaxSize().padding(16.dp).clip(RoundedCornerShape(12.dp))
-                )
+                item {
+                    CommunityMapView(
+                        reports = reports,
+                        onMapError = { viewModel.setViewMode(ViewMode.LIST) },
+                        modifier = Modifier.fillMaxWidth().height(500.dp).padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp))
+                    )
+                }
             }
         }
     }
