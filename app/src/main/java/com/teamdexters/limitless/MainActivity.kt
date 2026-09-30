@@ -100,6 +100,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var micArbiter: com.teamdexters.limitless.audio.MicArbiter
 
+    @Inject
+    lateinit var secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -121,7 +124,8 @@ class MainActivity : ComponentActivity() {
                 HazelAssistantWrapper(
                     database = database,
                     micGranted = micGranted.value,
-                    micArbiter = micArbiter
+                    micArbiter = micArbiter,
+                    secureKeyProvider = secureKeyProvider
                 )
             }
         }
@@ -141,7 +145,8 @@ class MainActivity : ComponentActivity() {
 fun HazelAssistantWrapper(
     database: LimitlessDatabase,
     micGranted: Boolean,
-    micArbiter: com.teamdexters.limitless.audio.MicArbiter
+    micArbiter: com.teamdexters.limitless.audio.MicArbiter,
+    secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -177,8 +182,10 @@ fun HazelAssistantWrapper(
 
     // Hazel query handler with network status tracker integration
     val queryHandler = remember(networkStatusTracker) {
+        val geminiClient = com.teamdexters.limitless.assistant.cloud.GeminiClient(secureKeyProvider)
         HazelQueryHandler(
             context = context,
+            geminiClient = geminiClient,
             networkStatusTracker = networkStatusTracker
         )
     }

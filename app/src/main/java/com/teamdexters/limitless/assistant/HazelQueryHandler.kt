@@ -25,7 +25,7 @@ import java.util.Locale
  */
 class HazelQueryHandler(
     private val context: Context,
-    private val geminiClient: GeminiClient = GeminiClient(),
+    private val geminiClient: GeminiClient,
     private val networkStatusTracker: NetworkStatusProvider? = null
 ) {
     companion object {

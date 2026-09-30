@@ -22,6 +22,7 @@ import java.net.URL
  * @param apiKeyOverride Optional API key parameter for testing or custom configuration.
  */
 class GeminiClient(
+    private val secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider,
     private val apiKeyOverride: String? = null
 ) {
     companion object {
@@ -31,7 +32,7 @@ class GeminiClient(
     }
 
     private val apiKey: String
-        get() = apiKeyOverride ?: BuildConfig.GEMINI_API_KEY
+        get() = apiKeyOverride ?: secureKeyProvider.getGeminiKey() ?: ""
 
     /**
      * Sends the prompt to Gemini REST endpoint with accessibility system instruction.

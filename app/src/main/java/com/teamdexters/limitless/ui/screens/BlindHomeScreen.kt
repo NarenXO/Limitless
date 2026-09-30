@@ -8,6 +8,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,6 +53,12 @@ import androidx.compose.material.icons.filled.ArrowBack
  * Blind & Low-Vision Assistant home screen.
  * Provides OCR text reading, color detection, object detection, path feature detection, and landmark tagging/recognition modes with camera integration.
  */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface SecureKeyProviderEntryPoint {
+    fun secureKeyProvider(): com.teamdexters.limitless.config.SecureKeyProvider
+}
+
 @Composable
 fun BlindHomeScreen(onBack: () -> Unit = {}) {
     // Intercept physical phone back gestures & hardware back buttons
@@ -135,7 +145,13 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
     
     // Network and Gemini
     val networkStatusTracker = remember { NetworkStatusTracker(context) }
-    val geminiClient = remember { GeminiClient() }
+    val secureKeyProvider = remember(context) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            SecureKeyProviderEntryPoint::class.java
+        ).secureKeyProvider()
+    }
+    val geminiClient = remember(secureKeyProvider) { GeminiClient(secureKeyProvider) }
 
     // Landmark tagging and recognition
     val database = remember {
