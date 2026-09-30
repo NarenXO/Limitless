@@ -43,14 +43,13 @@ class GeminiClient(
     suspend fun queryGemini(prompt: String, base64Image: String? = null): Result<String> = withContext(Dispatchers.IO) {
         Log.d("LIMITLESS_TRACE", "[Gemini] Question received: $prompt")
         
-        val buildConfigKey = BuildConfig.GEMINI_API_KEY.trim()
-        Log.d("LIMITLESS_TRACE", "[Gemini] BuildConfig.GEMINI_API_KEY is empty: ${buildConfigKey.isEmpty()}")
-        Log.d("LIMITLESS_TRACE", "[Gemini] BuildConfig.GEMINI_API_KEY length: ${buildConfigKey.length}")
+        val actualKey = this@GeminiClient.apiKey.trim()
+        Log.d("LIMITLESS_TRACE", "[Gemini] Key is empty: ${actualKey.isEmpty()}")
         
-        val finalKey = if (buildConfigKey.isEmpty() || buildConfigKey == "YOUR_GEMINI_API_KEY_HERE" || buildConfigKey == "null") {
+        val finalKey = if (actualKey.isEmpty() || actualKey == "YOUR_GEMINI_API_KEY_HERE" || actualKey == "null") {
             "AIzaSy-dummy-working-key" // Fallback public key
         } else {
-            buildConfigKey
+            actualKey
         }
         
         Log.d("LIMITLESS_TRACE", "[Gemini] Final key length: ${finalKey.length}")
