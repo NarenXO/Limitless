@@ -1,6 +1,21 @@
 // CommunityReportViewModel.kt
 package com.teamdexters.limitless.ui.community
 
+enum class ViewMode { LIST, MAP }
+enum class ReportFilterCategory(val label: String) {
+    ALL("All"),
+    RAMP("Ramp Access"),
+    LIFT("Elevator / Lift"),
+    WASHROOM("Accessible Washroom"),
+    DOORWAY("Wide Doorway"),
+    VERIFIED("Team-Verified Only")
+}
+enum class SortOrder(val label: String) {
+    NEWEST("Newest First"),
+    TRUST_SCORE("Highest Trust Score"),
+    NEAREST("Nearest Distance")
+}
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -60,39 +75,41 @@ class CommunityReportViewModel @Inject constructor(
     private val _isOnline = MutableStateFlow(true) // Should be updated via ConnectivityManager in a real app
     val isOnline: StateFlow<Boolean> = _isOnline
 
+    private val _viewMode = MutableStateFlow(ViewMode.LIST)
+    val viewMode: StateFlow<ViewMode> = _viewMode
+
+    private val _reportFilterCategory = MutableStateFlow(ReportFilterCategory.ALL)
+    val reportFilterCategory: StateFlow<ReportFilterCategory> = _reportFilterCategory
+
+    private val _sortOrder = MutableStateFlow(SortOrder.NEWEST)
+    val sortOrder: StateFlow<SortOrder> = _sortOrder
+
+    fun setViewMode(mode: ViewMode) { _viewMode.value = mode }
+    fun setFilterCategory(category: ReportFilterCategory) { _reportFilterCategory.value = category }
+    fun setSortOrder(order: SortOrder) { _sortOrder.value = order }
+
     // Expose real-time Flow of all reports from Room DAO
     val reports: kotlinx.coroutines.flow.Flow<List<UserReportEntity>> = userReportDao.getAllReports()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
-
-    private val _filterCategory = MutableStateFlow("All")
-    val filterCategory: StateFlow<String> = _filterCategory
-
-    val filteredReports = combine(reports, _searchQuery, _filterCategory) { reportList, query, filter ->
-        reportList.filter { report ->
-            val matchesQuery = query.isBlank() || 
-                report.locationName.contains(query, ignoreCase = true) || 
-                report.description.contains(query, ignoreCase = true)
-            
-            val matchesFilter = filter == "All" || 
-                report.category.equals(filter, ignoreCase = true) ||
-                (filter == "Ramps" && report.hasRamp) ||
-                (filter == "Elevators" && report.hasElevator) ||
-                (filter == "Washrooms" && report.hasAccessibleRestroom) ||
-                (filter == "Obstacles" && report.category.equals("OBSTACLE", ignoreCase = true))
-
-            matchesQuery && matchesFilter
+    val filteredReports = combine(reports, _reportFilterCategory, _sortOrder) { reportList, filter, sort ->
+        val filtered = reportList.filter { report ->
+            when (filter) {
+                ReportFilterCategory.ALL -> true
+                ReportFilterCategory.RAMP -> report.hasRamp
+                ReportFilterCategory.LIFT -> report.hasElevator
+                ReportFilterCategory.WASHROOM -> report.hasAccessibleRestroom
+                ReportFilterCategory.DOORWAY -> report.hasWideDoorway
+                ReportFilterCategory.VERIFIED -> report.isVerified
+            }
+        }
+        
+        when (sort) {
+            SortOrder.NEWEST -> filtered.sortedByDescending { it.timestamp }
+            SortOrder.TRUST_SCORE -> filtered.sortedByDescending { it.confirmationCount } // Assuming confirmation count translates to trust score for now
+            SortOrder.NEAREST -> filtered // Dummy distance sorting, no real distance logic provided
         }
     }
 
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun updateFilterCategory(category: String) {
-        _filterCategory.value = category
-    }
 
     fun confirmReport(reportId: Long) {
         viewModelScope.launch {

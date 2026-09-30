@@ -1,41 +1,159 @@
 package com.teamdexters.limitless.ui.scanner
 
+data class ComprehensiveScoreResult(
+    val totalScore: Int, // 0-100
+    val objectScore: Int, // 0-100 (30% weight)
+    val ocrScore: Int, // 0-100 (20% weight)
+    val brightnessScore: Int, // 0-100 (15% weight)
+    val checklistScore: Int, // 0-100 (35% weight)
+    val badgeColorHex: Long, // Color token based on range
+    val aiReasoningExplanation: String
+)
+
 object ScoreCalculator {
-    fun calculateObjectScore(labels: List<ScanObjectResult>): Float {
-        var score = 0f
-        if (labels.isNotEmpty()) score += 5f // Baseline
 
-        val doorTerms = listOf("door", "building", "entrance", "house", "room", "wall", "architecture", "property")
-        val floorTerms = listOf("stairs", "steps", "escalator", "floor", "tile", "pavement", "road", "sidewalk")
-        val seatingTerms = listOf("chair", "wheelchair", "furniture", "seat", "table", "bench")
+    fun calculateComprehensiveScore(
+        labels: List<ScanObjectResult>,
+        texts: List<String>,
+        doorWidth: String,
+        hasBraille: Boolean,
+        hasWashroom: Boolean,
+        brightness: Int
+    ): ComprehensiveScoreResult {
+        // 1. Object Score
+        var rampCount = 0
+        var handrailCount = 0
+        var doorwayCount = 0
+        var stairsCount = 0
+        var maxConfidence = 0f
 
-        if (labels.any { doorTerms.contains(it.label.lowercase()) }) score += 10f
-        if (labels.any { floorTerms.contains(it.label.lowercase()) }) score += 10f
-        if (labels.any { seatingTerms.contains(it.label.lowercase()) }) score += 10f
+        labels.forEach {
+            val lbl = it.label.lowercase()
+            if (lbl.contains("ramp")) rampCount++
+            else if (lbl.contains("handrail") || lbl.contains("railing")) handrailCount++
+            else if (lbl.contains("door") || lbl.contains("entrance")) doorwayCount++
+            else if (lbl.contains("stair")) stairsCount++
+            
+            if (it.confidence > maxConfidence) {
+                maxConfidence = it.confidence
+            }
+        }
 
-        return score.coerceIn(0f, 30f)
-    }
+        val rawObjScore = (rampCount * 35) + (handrailCount * 25) + (doorwayCount * 25) + (stairsCount * -15)
+        val objScore = rawObjScore.coerceIn(0, 100)
 
-    fun calculateOcrScore(texts: List<String>): Float {
-        var score = 0f
-        if (texts.isNotEmpty()) score += 10f
-
+        // 2. OCR Score
         val keywords = listOf("accessible", "entrance", "exit", "restroom", "pull", "push", "welcome", "open", "lift", "elevator", "ramp", "disabled", "information", "toilet")
-        val foundExtra = texts.any { text -> keywords.any { kw -> text.lowercase().contains(kw) } }
-        if (foundExtra) score += 10f
+        var kwCount = 0
+        texts.forEach { text ->
+            val words = text.lowercase().split("\\s+".toRegex())
+            words.forEach { w ->
+                if (keywords.any { it == w || w.contains(it) }) {
+                    kwCount++
+                }
+            }
+        }
+        val rawOcrScore = kwCount * 25
+        val ocrScore = rawOcrScore.coerceIn(0, 100)
 
-        return score.coerceIn(0f, 20f)
+        // 3. Brightness Score
+        val brightScore = brightness.coerceIn(0, 100)
+
+        // 4. Checklist Score
+        val doorWidthScore = when (doorWidth) {
+            "Narrow" -> 20
+            "Standard" -> 70
+            "Wide" -> 100
+            else -> 0
+        }
+        val brailleScore = if (hasBraille) 100 else 0
+        val washroomScore = if (hasWashroom) 100 else 0
+        
+        val checklistScore = (doorWidthScore + brailleScore + washroomScore) / 3
+
+        // Total Score
+        val totalScore = ((objScore * 0.30) + (ocrScore * 0.20) + (brightScore * 0.15) + (checklistScore * 0.35)).toInt().coerceIn(0, 100)
+
+        // Color Code
+        val colorHex = when {
+            totalScore <= 40 -> 0xFFF791A9
+            totalScore <= 70 -> 0xFFDDDD7B
+            else -> 0xFFBAD6DA
+        }
+
+        val reasoning = generateReasoningText(totalScore, rampCount, stairsCount, handrailCount, brightScore, hasBraille, doorWidth, maxConfidence)
+
+        return ComprehensiveScoreResult(
+            totalScore = totalScore,
+            objectScore = objScore,
+            ocrScore = ocrScore,
+            brightnessScore = brightScore,
+            checklistScore = checklistScore,
+            badgeColorHex = colorHex,
+            aiReasoningExplanation = reasoning
+        )
     }
 
-    fun calculateChecklistScore(doorWidth: String, hasBraille: Boolean, hasWashroom: Boolean): Float {
-        var score = 0f
-        if (doorWidth == "Standard") score += 10f
-        if (doorWidth == "Wide") score += 15f
-        if (hasBraille) score += 10f
-        if (hasWashroom) score += 10f
-        return score.coerceIn(0f, 35f)
-    }
+    fun generateReasoningText(
+        totalScore: Int,
+        rampCount: Int,
+        stairsCount: Int,
+        handrailCount: Int,
+        brightScore: Int,
+        hasBraille: Boolean,
+        doorWidth: String,
+        maxConfidence: Float = 0.9f
+    ): String {
+        val levelStr = when {
+            totalScore <= 40 -> "Needs Improvement"
+            totalScore <= 70 -> "Moderate Accessibility"
+            else -> "Highly Accessible"
+        }
 
+        val sb = StringBuilder("This location scored $totalScore/100 ($levelStr). ")
+
+        val confPct = (maxConfidence * 100).toInt()
+        
+        if (rampCount > 0 && handrailCount > 0) {
+            sb.append("Ramp and handrail detected with high confidence ($confPct%). ")
+        } else if (rampCount > 0) {
+            sb.append("Ramp detected. ")
+        } else if (stairsCount > 0 && rampCount == 0) {
+            sb.append("Stairs were detected at the entrance with no visible ramp. ")
+        } else if (stairsCount > 0) {
+            sb.append("Stairs detected. ")
+        }
+
+        if (brightScore >= 70) {
+            sb.append("Lighting is good ($brightScore/100)")
+        } else if (brightScore <= 40) {
+            sb.append("Lighting is dim ($brightScore/100)")
+        } else {
+            sb.append("Lighting is adequate ($brightScore/100)")
+        }
+
+        if (!hasBraille) {
+            sb.append(", but braille signage was missing. ")
+        } else {
+            sb.append(", and braille signage is present. ")
+        }
+
+        if (doorWidth == "Wide") {
+            sb.append("Manual door width check indicates a wide doorway (>90cm). ")
+        } else if (doorWidth == "Standard") {
+            sb.append("Manual door width check indicates a standard doorway (80-90cm). ")
+        } else {
+            sb.append("Manual door width check indicates a narrow doorway (<80cm). ")
+        }
+
+        if (totalScore <= 40) {
+            sb.append("We recommend bringing an assistant or choosing an alternate entrance.")
+        }
+
+        return sb.toString().trim()
+    }
+    
+    // Kept for backward compatibility
     fun calculateCombinedScore(
         labels: List<ScanObjectResult>,
         texts: List<String>,
@@ -44,12 +162,6 @@ object ScoreCalculator {
         hasWashroom: Boolean,
         brightness: Int
     ): Int {
-        val objScore = calculateObjectScore(labels)
-        val ocrScore = calculateOcrScore(texts)
-        val checkScore = calculateChecklistScore(doorWidth, hasBraille, hasWashroom)
-        val lightScore = ((brightness / 100f) * 15f).coerceIn(0f, 15f) // Map 0-100 to 0-15
-
-        val total = objScore + ocrScore + checkScore + lightScore
-        return total.toInt().coerceIn(35, 100)
+        return calculateComprehensiveScore(labels, texts, doorWidth, hasBraille, hasWashroom, brightness).totalScore
     }
 }

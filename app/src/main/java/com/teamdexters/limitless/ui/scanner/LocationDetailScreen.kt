@@ -144,10 +144,33 @@ fun LocationDetailScreen(
                 Text("Analysis Breakdown", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1F1F1F))
                 Spacer(modifier = Modifier.height(16.dp))
 
-                BreakdownRow("Object Detection", objectScore, 100f)
-                BreakdownRow("Signage OCR", ocrScore, 100f)
-                BreakdownRow("Brightness", brightnessScore, 100f)
-                BreakdownRow("Checklist", checklistScore, 100f)
+                val doorWidthStr = when {
+                    scoreEntity!!.doorWidthScore >= 1f -> "Wide"
+                    scoreEntity!!.doorWidthScore > 0f -> "Standard"
+                    else -> "Narrow"
+                }
+                
+                val reasoning = ScoreCalculator.generateReasoningText(
+                    totalScore = overallScore,
+                    rampCount = if (scoreEntity!!.rampDetected) 1 else 0,
+                    stairsCount = if (scoreEntity!!.stairsDetected) 1 else 0,
+                    handrailCount = if (scoreEntity!!.handrailsDetected) 1 else 0,
+                    brightScore = brightnessScore.toInt(),
+                    hasBraille = scoreEntity!!.brailleSignagePresent,
+                    doorWidth = doorWidthStr
+                )
+                
+                val comprehensiveResult = ComprehensiveScoreResult(
+                    totalScore = overallScore,
+                    objectScore = objectScore.toInt(),
+                    ocrScore = ocrScore.toInt(),
+                    brightnessScore = brightnessScore.toInt(),
+                    checklistScore = checklistScore.toInt(),
+                    badgeColorHex = scoreColor.value.toLong(),
+                    aiReasoningExplanation = reasoning
+                )
+
+                ScoreBreakdownCard(result = comprehensiveResult)
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -159,25 +182,5 @@ fun LocationDetailScreen(
                 Text("Time: $dateStr", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
             }
         }
-    }
-}
-
-@Composable
-fun BreakdownRow(label: String, value: Float, max: Float) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
-            Text("${value.toInt()}/${max.toInt()}", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = value / max,
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            color = Color(0xFFF791A9),
-            trackColor = Color(0xFFFFDBDF)
-        )
     }
 }

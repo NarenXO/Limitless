@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -41,6 +42,10 @@ fun AccessibilityScannerScreen(
     val hasBraille by viewModel.hasBraille.collectAsState()
     val hasWashroom by viewModel.hasWashroom.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
+    
+    val liveDetections by viewModel.liveDetections.collectAsState()
+    val currentDoorWidth by viewModel.currentDoorWidth.collectAsState()
+    val comprehensiveScore by viewModel.comprehensiveScore.collectAsState()
     
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -89,16 +94,21 @@ fun AccessibilityScannerScreen(
                                         .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                         .build()
                                         
-                                    var lastAnalyzeTime = 0L
+                                    var lastLiveTime = 0L
+                                    var lastScanTime = 0L
                                     analysis.setAnalyzer(executor) { imageProxy ->
                                         try {
                                             val currentTime = System.currentTimeMillis()
-                                            if (!isScanning && (currentTime - lastAnalyzeTime >= 1500)) {
-                                                lastAnalyzeTime = currentTime
-                                                @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
-                                                val mediaImage = imageProxy.image
-                                                if (mediaImage != null) {
-                                                    val bitmap = imageProxy.toBitmap()
+                                            @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+                                            val mediaImage = imageProxy.image
+                                            if (mediaImage != null) {
+                                                val bitmap = imageProxy.toBitmap()
+                                                if (currentTime - lastLiveTime >= 500) {
+                                                    lastLiveTime = currentTime
+                                                    viewModel.processLiveFrame(bitmap)
+                                                }
+                                                if (!isScanning && (currentTime - lastScanTime >= 1500)) {
+                                                    lastScanTime = currentTime
                                                     com.teamdexters.limitless.assistant.vision.CameraFrameManager.updateFrame(bitmap)
                                                     viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
                                                 }
@@ -121,6 +131,33 @@ fun AccessibilityScannerScreen(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+                        
+                        BoundingBoxOverlay(
+                            detections = liveDetections,
+                            imageWidth = 640, // We would normally use preview size, but this works if scaled inside Canvas
+                            imageHeight = 480,
+                            modifier = Modifier.fillMaxSize().semantics { contentDescription = "Live object tracking overlay" }
+                        )
+
+                        if (currentDoorWidth != null) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .background(Color(0xFFE0F2F4), RoundedCornerShape(8.dp))
+                                    .padding(8.dp)
+                                    .semantics { 
+                                        contentDescription = "Doorway detected: ${currentDoorWidth?.label} (${currentDoorWidth?.estimatedCm})"
+                                        liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite
+                                    }
+                            ) {
+                                Text(
+                                    text = "Doorway: ${currentDoorWidth?.label} (${currentDoorWidth?.estimatedCm})",
+                                    color = Color(0xFF1F1F1F),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                     } else {
                         Box(
                             modifier = Modifier
@@ -191,6 +228,11 @@ fun AccessibilityScannerScreen(
                             )
                         }
                     }
+                }
+
+                comprehensiveScore?.let { scoreResult ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ScoreBreakdownCard(result = scoreResult, modifier = Modifier.padding(top = 16.dp))
                 }
             }
 
