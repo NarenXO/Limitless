@@ -332,18 +332,21 @@ fun HazelAssistantWrapper(
                 )
 
                 // ── Floating mic button ──────────────────────────────────────
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.BottomEnd
-                ) {
-                    HazelFloatingMicButton(
-                        onClick = {
-                            android.util.Log.d("LIMITLESS_TRACE", "Hazel floating mic FAB tapped")
-                            isHazelListening = true
-                        }
-                    )
+                val hideHazelMic = currentRoute == Screen.PersonaSelect.route
+                if (!hideHazelMic) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.BottomEnd
+                    ) {
+                        HazelFloatingMicButton(
+                            onClick = {
+                                android.util.Log.d("LIMITLESS_TRACE", "Hazel floating mic FAB tapped")
+                                isHazelListening = true
+                            }
+                        )
+                    }
                 }
 
                 // ── Response banner ──────────────────────────────────────────

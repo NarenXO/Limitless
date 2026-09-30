@@ -18,7 +18,7 @@ fun LimitlessCard(
     content: @Composable BoxScope.() -> Unit
 ) {
     Surface(
-        color = DarkCharcoal,
+        color = SoftWhite,
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, SubtleDivider),
         modifier = modifier.then(

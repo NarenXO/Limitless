@@ -19,30 +19,30 @@ fun LimitlessScreenFrame(
     content: @Composable (PaddingValues) -> Unit
 ) {
     Scaffold(
-        containerColor = PureBlack,
+        containerColor = PureWhite,
         topBar = {
             // MUST HAVE 80dp top padding to avoid Hazel Banner
-            Column(modifier = Modifier.padding(top = 80.dp).background(PureBlack)) {
+            Column(modifier = Modifier.padding(top = 80.dp).background(PureWhite)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (onBack != null) {
                         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PureWhite)
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PureBlack)
                         }
                     }
-                    Text(title, style = MaterialTheme.typography.headlineSmall, color = PureWhite)
+                    Text(title, style = MaterialTheme.typography.headlineSmall, color = PureBlack)
                 }
                 Divider(color = SubtleDivider, thickness = 1.dp)
             }
         },
         bottomBar = {
             // Placeholder space for the 56dp bottom nav
-            Spacer(modifier = Modifier.height(56.dp).fillMaxWidth().background(PureBlack))
+            Spacer(modifier = Modifier.height(56.dp).fillMaxWidth().background(PureWhite))
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).background(PureBlack)) {
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).background(PureWhite)) {
             content(PaddingValues(16.dp))
         }
     }

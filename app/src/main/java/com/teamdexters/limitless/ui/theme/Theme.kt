@@ -11,11 +11,11 @@ import androidx.core.view.WindowCompat
 
 private val LimitlessColorScheme = lightColorScheme(
     primary = LimitlessPrimary,
-    background = LimitlessBackground,
-    surface = LimitlessBackground,
-    onPrimary = TextPrimary,
-    onBackground = TextPrimary,
-    onSurface = TextPrimary
+    background = PureWhite,
+    surface = SoftWhite,
+    onPrimary = PureWhite,
+    onBackground = PureBlack,
+    onSurface = PureBlack
 )
 
 @Composable

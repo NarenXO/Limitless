@@ -34,19 +34,19 @@ fun LimitlessButton(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val bgColor = when (style) {
-        ButtonStyle.PRIMARY -> PureWhite
+        ButtonStyle.PRIMARY -> PureBlack
         ButtonStyle.SECONDARY -> Color.Transparent
         ButtonStyle.EMERGENCY -> SosRed
     }
 
     val contentColor = when (style) {
-        ButtonStyle.PRIMARY -> PureBlack
-        ButtonStyle.SECONDARY -> PureWhite
+        ButtonStyle.PRIMARY -> PureWhite
+        ButtonStyle.SECONDARY -> PureBlack
         ButtonStyle.EMERGENCY -> PureWhite
     }
 
     val border = if (style == ButtonStyle.SECONDARY) {
-        BorderStroke(1.dp, SubtleDivider)
+        BorderStroke(1.dp, PureBlack)
     } else null
 
     val alpha = if (isPressed) 0.5f else 1f

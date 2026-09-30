@@ -25,8 +25,8 @@ fun LimitlessChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isSelected) PureWhite else Color.Transparent
-    val contentColor = if (isSelected) PureBlack else NeutralGray
+    val bgColor = if (isSelected) PureBlack else Color.Transparent
+    val contentColor = if (isSelected) PureWhite else NeutralGray
 
     Box(
         modifier = modifier
