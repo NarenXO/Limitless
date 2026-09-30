@@ -84,7 +84,7 @@ object VisionNarrationClient {
             val base64Image = encodeImageToBase64(bitmap)
 
             // Build request with vision prompt
-            val prompt = "You are Hazel, an assistant helping a blind or low-vision user. Describe this scene in 2 to 3 short natural sentences. Mention key objects, their approximate positions (left / center / right), lighting, and any hazards. Be concise, calm, and factual."
+            val prompt = "You are Hazel, an accessibility assistant for a blind user. Describe this live camera view in 2 short, concise, natural sentences:\n1) Count and mention any people visible (e.g. 'a person sitting', '3 people ahead', 'a crowd of people').\n2) Mention key objects and their positions (e.g. 'laptop on a desk').\n3) Read any prominent text visible on screens, signs, or labels.\n4) Mention main colors.\nBe factual, calm, and direct. Do not say 'I see' or 'This image shows'."
 
             val requestJson = JSONObject().apply {
                 put("contents", JSONArray().put(

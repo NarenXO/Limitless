@@ -26,6 +26,23 @@ object OfflineTextReader {
         TextRecognizerOptions.DEFAULT_OPTIONS
     )
 
+    suspend fun readTextRaw(bitmap: Bitmap, rotationDegrees: Int = 0): String? {
+        return try {
+            val preprocessed = preprocessForOcr(bitmap)
+            val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(
+                preprocessed,
+                rotationDegrees
+            )
+            val result = processImage(inputImage)
+            if (preprocessed != bitmap) preprocessed.recycle()
+
+            val extractedText = result.text.trim()
+            if (extractedText.isBlank()) null else extractedText
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Read text from the given bitmap.
      * Applies grayscale conversion and 1.5x contrast boost before recognition.

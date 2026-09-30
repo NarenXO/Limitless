@@ -18,6 +18,28 @@ object OfflineColorDetector {
 
     private const val TAG = "LIMITLESS_TRACE"
 
+    suspend fun detectColorRaw(bitmap: Bitmap): String? {
+        return try {
+            val cropWidth = (bitmap.width * 0.2f).toInt()
+            val cropHeight = (bitmap.height * 0.2f).toInt()
+            val startX = (bitmap.width - cropWidth) / 2
+            val startY = (bitmap.height - cropHeight) / 2
+
+            val centerBitmap = Bitmap.createBitmap(bitmap, startX, startY, cropWidth, cropHeight)
+            val palette = androidx.palette.graphics.Palette.from(centerBitmap).generate()
+            val dominantSwatch = palette.dominantSwatch ?: palette.swatches.maxByOrNull { it.population }
+
+            if (dominantSwatch != null) {
+                val rgb = dominantSwatch.rgb
+                mapRgbToColorName(Color.red(rgb), Color.green(rgb), Color.blue(rgb))
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Detect the dominant color in the center region of the bitmap.
      * Samples a 21x21 pixel center region to reduce single-pixel noise.

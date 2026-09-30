@@ -27,7 +27,7 @@ object OfflineObjectDetector {
     private const val TAG = "LIMITLESS_TRACE"
     private const val MODEL_PATH = "blind/efficientdet_lite0.tflite"
     private const val MAX_RESULTS = 4
-    private const val CONFIDENCE_THRESHOLD = 0.35f
+    private const val CONFIDENCE_THRESHOLD = 0.30f
 
     // Short-term memory: label+position → last-spoken timestamp
     private val spokenObjects = mutableMapOf<String, Long>()
@@ -85,7 +85,7 @@ object OfflineObjectDetector {
     fun detectObjects(bitmap: Bitmap, frameWidth: Int = bitmap.width, frameHeight: Int = bitmap.height): String {
         if (!isInitialized || detector == null) {
             Log.w(TAG, "OfflineObjectDetector: Detector not initialized")
-            return "I don't see any distinct objects in front of you."
+            return ""
         }
 
         return try {
@@ -94,12 +94,17 @@ object OfflineObjectDetector {
             Log.d(TAG, "OfflineObjectDetector: Detected ${detections.size} objects")
 
             if (detections.isEmpty()) {
-                return "I don't see any distinct objects in front of you."
+                return ""
             }
 
-            // Sort by confidence descending, take top MAX_RESULTS
-            val topDetections = detections
-                .filter { (it.categories.firstOrNull()?.score ?: 0f) >= CONFIDENCE_THRESHOLD }
+            val validDetections = detections.filter { (it.categories.firstOrNull()?.score ?: 0f) >= CONFIDENCE_THRESHOLD }
+            
+            if (validDetections.isEmpty()) {
+                return ""
+            }
+
+            val peopleDetections = validDetections.filter { normalizeLabel(it.categories.firstOrNull()?.label ?: "").equals("person", ignoreCase = true) }
+            val objectDetections = validDetections.filter { !normalizeLabel(it.categories.firstOrNull()?.label ?: "").equals("person", ignoreCase = true) }
                 .sortedByDescending { it.categories.firstOrNull()?.score ?: 0f }
                 .take(MAX_RESULTS)
 
@@ -110,7 +115,35 @@ object OfflineObjectDetector {
             val frameArea = (frameWidth * frameHeight).toFloat()
             val sentenceParts = mutableListOf<String>()
 
-            for (detection in topDetections) {
+            // People logic
+            if (peopleDetections.isNotEmpty()) {
+                val count = peopleDetections.size
+                val peopleStr = when {
+                    count == 1 -> "1 person"
+                    count in 2..4 -> "$count people"
+                    else -> "a crowd of people"
+                }
+                
+                // Try to get position of the most confident person
+                val mainPerson = peopleDetections.maxByOrNull { it.categories.firstOrNull()?.score ?: 0f }
+                val positionStr = if (mainPerson != null) {
+                    val centerX = mainPerson.boundingBox.centerX() / frameWidth.toFloat()
+                    when {
+                        centerX < 0.35f  -> " on your left"
+                        centerX <= 0.65f -> " ahead"
+                        else             -> " on your right"
+                    }
+                } else " ahead"
+                
+                val memKey = "people_${count}_$positionStr"
+                if (!spokenObjects.containsKey(memKey)) {
+                    sentenceParts.add("$peopleStr$positionStr")
+                    spokenObjects[memKey] = now
+                }
+            }
+
+            // Other objects logic
+            for (detection in objectDetections) {
                 val bbox = detection.boundingBox
                 val label = normalizeLabel(detection.categories.firstOrNull()?.label ?: "object")
                 val centerX = bbox.centerX() / frameWidth.toFloat()
@@ -133,22 +166,22 @@ object OfflineObjectDetector {
             }
 
             if (sentenceParts.isEmpty()) {
-                return "I don't see any distinct objects in front of you."
+                return ""
             }
 
             // Build natural-language sentence
             return when (sentenceParts.size) {
-                1 -> "There is ${sentenceParts[0]}."
-                2 -> "There is ${sentenceParts[0]}, and ${sentenceParts[1]}."
+                1 -> sentenceParts[0].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } + "."
+                2 -> sentenceParts[0].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } + " and " + sentenceParts[1] + "."
                 else -> {
                     val last = sentenceParts.last()
                     val rest = sentenceParts.dropLast(1).joinToString(", ")
-                    "There is $rest, and $last."
+                    rest.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } + ", and " + last + "."
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "OfflineObjectDetector: Detection error", e)
-            "I don't see any distinct objects in front of you."
+            ""
         }
     }
 

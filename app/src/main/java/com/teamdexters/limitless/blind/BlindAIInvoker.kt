@@ -5,6 +5,8 @@ import android.util.Log
 import com.teamdexters.limitless.assistant.cloud.GeminiClient
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * AI invoker for Blind Assist with online/offline fallback.
@@ -101,7 +103,7 @@ object BlindAIInvoker {
                     // Get Base64 image for Gemini Vision API (optimized with 50% JPEG quality)
                     val (base64Image, _) = CameraFrameManager.getLatestFrameAsBase64()
                     Log.d(TAG, "BlindAIInvoker: Sending Base64 frame to Gemini (size=${base64Image.length})")
-                    val scenePrompt = "Describe what is physically shown in this camera image in 1-2 short sentences. Be specific about objects, text, and colors visible."
+                    val scenePrompt = "You are Hazel, an accessibility assistant for a blind user. Describe this live camera view in 2 short, concise, natural sentences:\n1) Count and mention any people visible (e.g. 'a person sitting', '3 people ahead', 'a crowd of people').\n2) Mention key objects and their positions (e.g. 'laptop on a desk').\n3) Read any prominent text visible on screens, signs, or labels.\n4) Mention main colors.\nBe factual, calm, and direct. Do not say 'I see' or 'This image shows'."
                     val result = geminiClient?.queryGemini(scenePrompt, base64Image)
                     result?.getOrNull() ?: ""
                 } catch (e: Exception) {
@@ -133,10 +135,39 @@ object BlindAIInvoker {
     private suspend fun getOfflineFallbackResponse(intent: BlindVoiceCommandHandler.BlindIntent, frame: android.graphics.Bitmap): String {
         return when (intent) {
             BlindVoiceCommandHandler.BlindIntent.DESCRIBE_SURROUNDINGS,
-            BlindVoiceCommandHandler.BlindIntent.WHATS_IN_FRONT -> {
-                val result = OfflineObjectDetector.detectObjects(frame)
-                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
-                result
+            BlindVoiceCommandHandler.BlindIntent.WHATS_IN_FRONT,
+            BlindVoiceCommandHandler.BlindIntent.UNKNOWN -> {
+                coroutineScope {
+                    val objectsJob = async { OfflineObjectDetector.detectObjects(frame) }
+                    val textJob = async { OfflineTextReader.readTextRaw(frame) }
+                    val colorJob = async { OfflineColorDetector.detectColorRaw(frame) }
+
+                    val objectsResult = objectsJob.await()
+                    val textResult = textJob.await()
+                    val colorResult = colorJob.await()
+
+                    val sb = StringBuilder()
+                    if (objectsResult.isNotBlank()) {
+                        sb.append(objectsResult)
+                        sb.append(" ")
+                    } else {
+                        sb.append("A dark surface ahead. ")
+                    }
+
+                    if (colorResult != null) {
+                        sb.append("Dominant color is $colorResult. ")
+                    }
+
+                    if (textResult != null) {
+                        // only take the top 2 lines of text
+                        val lines = textResult.split("\n").take(2).joinToString(" ")
+                        sb.append("Text visible: '$lines'.")
+                    }
+
+                    val finalResult = sb.toString().trim()
+                    Log.d(TAG, "OfflineAI: Executed Super Vision Engine for intent=$intent result='$finalResult'")
+                    finalResult
+                }
             }
 
             BlindVoiceCommandHandler.BlindIntent.READ_TEXT -> {
@@ -157,16 +188,11 @@ object BlindAIInvoker {
                 result
             }
 
-            BlindVoiceCommandHandler.BlindIntent.UNKNOWN -> {
-                val result = OfflineObjectDetector.detectObjects(frame)
-                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
-                result
-            }
-
             else -> {
                 val result = OfflineObjectDetector.detectObjects(frame)
-                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
-                result
+                val finalResult = if (result.isBlank()) "I don't see any distinct objects in front of you." else result
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$finalResult'")
+                finalResult
             }
         }
     }
