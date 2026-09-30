@@ -21,7 +21,6 @@ fun LimitlessScreenFrame(
     Scaffold(
         containerColor = PureWhite,
         topBar = {
-            // MUST HAVE 80dp top padding to avoid Hazel Banner
             Column(modifier = Modifier.padding(top = 80.dp).background(PureWhite)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -32,17 +31,27 @@ fun LimitlessScreenFrame(
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PureBlack)
                         }
                     }
-                    Text(title, style = MaterialTheme.typography.headlineSmall, color = PureBlack)
+                    Text(
+                        text = title, 
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black), 
+                        color = PureBlack
+                    )
                 }
                 Divider(color = SubtleDivider, thickness = 1.dp)
             }
         },
         bottomBar = {
-            // Placeholder space for the 56dp bottom nav
             Spacer(modifier = Modifier.height(56.dp).fillMaxWidth().background(PureWhite))
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).background(PureWhite)) {
+        // Use Alignment.TopStart so content starts immediately below the header
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(PureWhite),
+            contentAlignment = Alignment.TopStart 
+        ) {
             content(PaddingValues(16.dp))
         }
     }

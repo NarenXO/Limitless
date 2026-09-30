@@ -68,9 +68,7 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
-import com.teamdexters.limitless.ui.theme.PersonaMobility
-import com.teamdexters.limitless.ui.theme.SurfaceTint
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.*
 import java.util.concurrent.Executors
 
 /**
@@ -154,8 +152,8 @@ fun QrScannerSection(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceTint)
-            .border(1.dp, PersonaMobility, RoundedCornerShape(16.dp))
+            .background(LightGray)
+            .border(1.dp, SubtleDivider, RoundedCornerShape(16.dp))
             .semantics { contentDescription = "QR code scanner for indoor navigation" }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -170,7 +168,7 @@ fun QrScannerSection(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(SurfaceTint)
+                            .background(LightGray)
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -178,7 +176,7 @@ fun QrScannerSection(
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = null,
-                            tint = TextPrimary,
+                            tint = PureBlack,
                             modifier = Modifier.size(36.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -186,13 +184,13 @@ fun QrScannerSection(
                             text = "Camera permission is required to scan indoor QR waypoints",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = TextPrimary,
+                            color = PureBlack,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Box(
                             modifier = Modifier
-                                .background(PersonaMobility, RoundedCornerShape(12.dp))
+                                .background(PureBlack, RoundedCornerShape(12.dp))
                                 .clickable { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -200,7 +198,7 @@ fun QrScannerSection(
                                 text = "Grant Camera Permission",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = PureWhite
                             )
                         }
                     }
@@ -322,7 +320,7 @@ fun QrScannerSection(
                                 Icon(
                                     imageVector = Icons.Default.Verified,
                                     contentDescription = null,
-                                    tint = TextPrimary,
+                                    tint = PureWhite,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -330,7 +328,7 @@ fun QrScannerSection(
                                     text = currentMsg,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = PureWhite
                                 )
                             }
                         }
@@ -350,21 +348,22 @@ fun QrScannerSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBDF)),
-                        shape = RoundedCornerShape(12.dp)
+                        colors = CardDefaults.cardColors(containerColor = SoftWhite),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SubtleDivider)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = "Scanned QR Content",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = PureBlack
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = currentScannedContent,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary
+                                color = SoftBlack
                             )
                             if (isUrlContent) {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -373,9 +372,9 @@ fun QrScannerSection(
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentScannedContent))
                                         context.startActivity(intent)
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = PersonaMobility)
+                                    colors = ButtonDefaults.buttonColors(containerColor = PureBlack)
                                 ) {
-                                    Text("Open in Browser", color = TextPrimary, fontWeight = FontWeight.Bold)
+                                    Text("Open in Browser", color = PureWhite, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -397,7 +396,7 @@ fun QrScannerSection(
                     Icon(
                         imageVector = Icons.Default.QrCodeScanner,
                         contentDescription = null,
-                        tint = TextPrimary,
+                        tint = PureBlack,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -405,7 +404,7 @@ fun QrScannerSection(
                         text = positionText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = TextPrimary
+                        color = PureBlack
                     )
                 }
 
@@ -415,11 +414,12 @@ fun QrScannerSection(
                     text = "Facing: $cardinalHeading (${userHeading.toInt()}°)",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    color = PureBlack
                 )
             }
         }
     }
+
 }
 
 private fun getCardinalDirection(degrees: Float): String {

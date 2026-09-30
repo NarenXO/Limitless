@@ -28,8 +28,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.teamdexters.limitless.ui.theme.PersonaMobility
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.PureBlack
+import com.teamdexters.limitless.ui.theme.PureWhite
 
 /**
  * Entry point button that transitions from Phase 4 outdoor route arrival to Phase 5 indoor navigation.
@@ -43,8 +43,7 @@ fun StartIndoorNavButton(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(PersonaMobility, RoundedCornerShape(16.dp))
-            .border(1.dp, TextPrimary.copy(alpha = 0.40f), RoundedCornerShape(16.dp))
+            .background(PureBlack, RoundedCornerShape(16.dp))
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = "Continue indoors. Start indoor navigation scanner."
@@ -64,7 +63,7 @@ fun StartIndoorNavButton(
             Icon(
                 imageVector = Icons.Default.MeetingRoom,
                 contentDescription = null,
-                tint = TextPrimary,
+                tint = PureWhite,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -72,7 +71,7 @@ fun StartIndoorNavButton(
                 text = "Continue Indoors / Start Indoor Nav",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = PureWhite
             )
         }
     }

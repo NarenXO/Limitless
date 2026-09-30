@@ -202,11 +202,11 @@ fun MobilityHomeScreen(
 
     // If user clicked "Start Indoor Nav", display full-screen IndoorNavScreen
     if (showIndoorNavScreen) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().background(PureWhite)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(PersonaMobility)
+                    .background(PureWhite)
                     .clickable { showIndoorNavScreen = false }
                     .padding(vertical = 10.dp, horizontal = 16.dp)
             ) {
@@ -214,14 +214,14 @@ fun MobilityHomeScreen(
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back to Outdoor Route",
-                        tint = TextPrimary
+                        tint = PureBlack
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "← Back to Outdoor Route Results",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = PureBlack
                     )
                 }
             }
@@ -244,10 +244,8 @@ fun MobilityHomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
-            .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp)
-            .semantics { contentDescription = "Mobility and Wheelchair Accessible Navigation Screen" }
+            .verticalScroll(scrollState),
+        verticalArrangement = Arrangement.Top
     ) {
 
         // 1. Header -----------------------------------------------------------
@@ -255,7 +253,7 @@ fun MobilityHomeScreen(
             text = "Mobility & Accessible Navigation",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary,
+            color = PureBlack,
             textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
@@ -277,7 +275,7 @@ fun MobilityHomeScreen(
                 text = "Starting Waypoint",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = PureBlack
             )
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -285,8 +283,8 @@ fun MobilityHomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceTint, RoundedCornerShape(12.dp))
-                    .border(1.dp, PersonaMobility, RoundedCornerShape(12.dp))
+                    .background(SoftWhite, RoundedCornerShape(12.dp))
+                    .border(1.dp, SubtleDivider, RoundedCornerShape(12.dp))
                     .clickable { originDropdownExpanded = true }
                     .padding(14.dp)
             ) {
@@ -314,7 +312,7 @@ fun MobilityHomeScreen(
                 text = "Destination",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = PureBlack
             )
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -322,8 +320,8 @@ fun MobilityHomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceTint, RoundedCornerShape(12.dp))
-                    .border(1.dp, PersonaMobility, RoundedCornerShape(12.dp))
+                    .background(SoftWhite, RoundedCornerShape(12.dp))
+                    .border(1.dp, SubtleDivider, RoundedCornerShape(12.dp))
                     .clickable { destDropdownExpanded = true }
                     .padding(14.dp)
             ) {
@@ -353,7 +351,7 @@ fun MobilityHomeScreen(
             text = "Accessibility Requirements",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = PureBlack
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -411,7 +409,7 @@ fun MobilityHomeScreen(
             icon = {
                 if (isComputing) {
                     androidx.compose.material3.CircularProgressIndicator(
-                        color = com.teamdexters.limitless.ui.theme.PureWhite,
+                        color = PureWhite,
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
@@ -419,7 +417,7 @@ fun MobilityHomeScreen(
                     Icon(
                         imageVector = Icons.Default.Route,
                         contentDescription = null,
-                        tint = com.teamdexters.limitless.ui.theme.PureWhite,
+                        tint = PureWhite,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -449,18 +447,19 @@ fun MobilityHomeScreen(
                                 text = "Distance: ${route.totalDistanceMeters} m",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = PureBlack
                             )
                             Text(
                                 text = "Est. Time: ${route.estimatedTimeSeconds / 60} mins",
                                 fontSize = 14.sp,
-                                color = TextPrimary
+                                color = SoftBlack
                             )
                         }
 
                         // Fully Accessible Status Pill
                         val pillBg = if (route.isFullyAccessible) PureBlack else LightGray
                         val pillText = if (route.isFullyAccessible) "Fully Accessible" else "Obstacles Present"
+                        val pillTextColor = if (route.isFullyAccessible) PureWhite else PureBlack
                         Box(
                             modifier = Modifier
                                 .background(pillBg, RoundedCornerShape(20.dp))
@@ -470,7 +469,7 @@ fun MobilityHomeScreen(
                                 text = pillText,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = pillTextColor
                             )
                         }
                     }
@@ -493,7 +492,7 @@ fun MobilityHomeScreen(
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
-                            tint = SoftBlack,
+                            tint = PureBlack,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -514,7 +513,7 @@ fun MobilityHomeScreen(
                 text = "Turn-by-Turn Guidance",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = PureBlack
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -552,9 +551,10 @@ private fun FilterChipItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    val bgColor = if (isSelected) PersonaMobility else SurfaceTint
-    val borderWidth = if (isFocused) 2.dp else 1.dp
-    val borderColor = if (isFocused) TextPrimary else PersonaMobility.copy(alpha = 0.40f)
+    val bgColor = if (isSelected) PureBlack else SoftWhite
+    val borderWidth = if (isFocused || isSelected) 2.dp else 1.dp
+    val borderColor = if (isFocused || isSelected) PureBlack else SubtleDivider
+    val contentColor = if (isSelected) PureWhite else PureBlack
     val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
 
     Box(
@@ -579,7 +579,7 @@ private fun FilterChipItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = TextPrimary,
+                tint = contentColor,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -587,7 +587,7 @@ private fun FilterChipItem(
                 text = label,
                 fontSize = 13.sp,
                 fontWeight = fontWeight,
-                color = TextPrimary
+                color = contentColor
             )
         }
     }
@@ -607,14 +607,15 @@ private fun RouteStepItem(step: RouteStep) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceTint, RoundedCornerShape(12.dp))
+            .background(SoftWhite, RoundedCornerShape(12.dp))
+            .border(1.dp, SubtleDivider, RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = stepIcon,
                 contentDescription = null,
-                tint = TextPrimary,
+                tint = PureBlack,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -624,7 +625,7 @@ private fun RouteStepItem(step: RouteStep) {
                     text = step.instruction,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    color = PureBlack
                 )
 
                 step.accessibilityNotes?.let { notes ->
@@ -648,10 +649,11 @@ private fun RouteStepItem(step: RouteStep) {
                         text = "${step.distanceMeters}m",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = PureWhite
                     )
                 }
             }
         }
     }
 }
+

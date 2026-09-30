@@ -221,51 +221,15 @@ fun BlindHomeScreen(
     var latestRotation by remember { mutableStateOf(0) }
 
     com.teamdexters.limitless.ui.components.LimitlessScreenFrame(
-        title = "Blind & Low-Vision",
+        title = "Blind & Low Vision",
         onBack = onBack
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(LimitlessBackground)
-        ) {
-        if (cameraPermission) {
-            // Camera preview
-            CameraPreview(
-                modifier = Modifier.fillMaxSize(),
-                showReticle = currentMode == "color",
-                onFrameReady = { bitmap ->
-                    latestFrame = bitmap
-                },
-                onCaptureReady = { bitmap, rotation ->
-                    latestFrame = bitmap
-                    latestRotation = rotation
-                },
-                onError = { exception ->
-                    Toast.makeText(context, "Camera error: ${exception.message}", Toast.LENGTH_SHORT).show()
-                }
-            )
-        } else {
-            // Permission denied message
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Camera permission required",
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        // UI overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(PureWhite),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top
         ) {
             // Header row
             Row(
@@ -279,7 +243,7 @@ fun BlindHomeScreen(
                     text = "Blind & Low-Vision Assist",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = PureBlack,
                     fontSize = 22.sp,
                     modifier = Modifier.semantics {
                         contentDescription = "Blind and Low-Vision Assist screen"
@@ -292,9 +256,10 @@ fun BlindHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .background(LightGray, RoundedCornerShape(16.dp))
                     .border(
-                        width = 2.dp,
-                        color = PersonaBlind,
+                        width = 1.dp,
+                        color = SubtleDivider,
                         shape = RoundedCornerShape(16.dp)
                     )
                     .clip(RoundedCornerShape(16.dp))
@@ -321,7 +286,7 @@ fun BlindHomeScreen(
                     ) {
                         Text(
                             text = "Camera permission required",
-                            color = TextPrimary,
+                            color = PureBlack,
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -409,7 +374,7 @@ fun BlindHomeScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
-                    color = TextPrimary
+                    color = PureBlack
                 )
                 Switch(
                     checked = useRicherDescriptions,
@@ -421,10 +386,10 @@ fun BlindHomeScreen(
                             "Richer descriptions disabled. Double tap to enable."
                     },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = PersonaBlind,
-                        uncheckedThumbColor = SurfaceTint,
-                        checkedTrackColor = PersonaBlind,
-                        uncheckedTrackColor = SurfaceTint
+                        checkedThumbColor = PureWhite,
+                        checkedTrackColor = PureBlack,
+                        uncheckedThumbColor = NeutralGray,
+                        uncheckedTrackColor = LightGray
                     )
                 )
             }
@@ -854,7 +819,7 @@ fun BlindHomeScreen(
             }
         }
     }
-}
+
 
 /**
  * Mode chip with TalkBack support.
@@ -874,13 +839,11 @@ private fun ModeChip(
                 contentDescription = if (isActive) "$text mode selected" else "$text mode. Double tap to select."
             },
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isActive) PersonaBlind else SurfaceTint,
-            contentColor = TextPrimary
+            containerColor = if (isActive) PureBlack else SoftWhite,
+            contentColor = if (isActive) PureWhite else PureBlack
         ),
         shape = RoundedCornerShape(12.dp),
-        border = if (isActive) {
-            BorderStroke(2.dp, TextPrimary)
-        } else null
+        border = BorderStroke(1.dp, if (isActive) PureBlack else SubtleDivider)
     ) {
         Text(
             text = text,
@@ -910,16 +873,15 @@ private fun ActionButton(
                 contentDescription = if (isProcessing) "Processing. Please wait." else text
             },
         colors = ButtonDefaults.buttonColors(
-            containerColor = PersonaBlind,
-            contentColor = TextPrimary
+            containerColor = PureBlack,
+            contentColor = PureWhite
         ),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(2.dp, TextPrimary)
+        shape = RoundedCornerShape(14.dp)
     ) {
         if (isProcessing) {
             CircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
-                color = TextPrimary,
+                color = PureWhite,
                 strokeWidth = 2.dp
             )
         } else {
@@ -927,7 +889,8 @@ private fun ActionButton(
                 text = text,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
+                fontSize = 20.sp,
+                color = PureWhite
             )
         }
     }
@@ -944,10 +907,10 @@ private fun ResultBanner(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = HighlightBox
+            containerColor = SoftWhite
         ),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, TextPrimary)
+        border = BorderStroke(1.dp, SubtleDivider)
     ) {
         Text(
             text = text,
@@ -961,7 +924,7 @@ private fun ResultBanner(
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             fontSize = 16.sp,
-            color = TextPrimary,
+            color = PureBlack,
             textAlign = TextAlign.Center
         )
     }
@@ -982,12 +945,12 @@ private fun LandmarkTaggingDialog(
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = LimitlessBackground,
+        containerColor = PureWhite,
         title = {
             Text(
                 text = "Tag This Place",
                 style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
+                color = PureBlack
             )
         },
         text = {
@@ -997,7 +960,7 @@ private fun LandmarkTaggingDialog(
                 Text(
                     text = "Say or type the name of this place",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextPrimary
+                    color = SoftBlack
                 )
                 
                 OutlinedTextField(
@@ -1019,16 +982,13 @@ private fun LandmarkTaggingDialog(
                         onClick = if (isListening) onStopSpeech else onStartSpeech,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isListening) PersonaBlind else SurfaceTint,
-                            contentColor = TextPrimary
+                            containerColor = if (isListening) PureBlack else SoftWhite,
+                            contentColor = if (isListening) PureWhite else PureBlack
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (isListening) PureBlack else SubtleDivider)
                     ) {
-                        if (isListening) {
-                            Text("Stop Listening")
-                        } else {
-                            Text("Speak")
-                        }
+                        Text(if (isListening) "Stop Listening" else "Speak")
                     }
                 }
             }
@@ -1038,18 +998,18 @@ private fun LandmarkTaggingDialog(
                 onClick = onConfirm,
                 enabled = landmarkName.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PersonaBlind,
-                    contentColor = TextPrimary
+                    containerColor = PureBlack,
+                    contentColor = PureWhite
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Tag")
+                Text("Tag", color = PureWhite)
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text("Cancel", color = TextPrimary)
+                Text("Cancel", color = PureBlack)
             }
         }
     )
-}
+}

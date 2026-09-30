@@ -76,7 +76,7 @@ fun NavigationOverlay(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(LimitlessBackground),
+                .background(PureWhite),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -86,15 +86,15 @@ fun NavigationOverlay(
                 Text(
                     text = "No navigation route available",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = TextPrimary,
+                    color = PureBlack,
                     textAlign = TextAlign.Center
                 )
 
                 Button(
                     onClick = onExit,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = PersonaBlind,
-                        contentColor = TextPrimary
+                        containerColor = PureBlack,
+                        contentColor = PureWhite
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -202,7 +202,7 @@ fun NavigationOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(LimitlessBackground)
+            .background(PureWhite)
     ) {
 
         Column(
@@ -234,7 +234,7 @@ fun NavigationOverlay(
                     style =
                         MaterialTheme.typography.headlineMedium,
 
-                    color = TextPrimary,
+                    color = PureBlack,
 
                     fontWeight =
                         FontWeight.Bold
@@ -243,7 +243,7 @@ fun NavigationOverlay(
                 if (route.fallbackWarning != null) {
                     Text(
                         text = route.fallbackWarning,
-                        color = androidx.compose.ui.graphics.Color.Yellow,
+                        color = PureBlack,
                         modifier = Modifier.padding(start = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold
@@ -261,8 +261,8 @@ fun NavigationOverlay(
 
                     colors =
                         ButtonDefaults.buttonColors(
-                            containerColor = SurfaceTint,
-                            contentColor = TextPrimary
+                            containerColor = LightGray,
+                            contentColor = PureBlack
                         ),
 
                     shape =
@@ -347,8 +347,8 @@ fun NavigationOverlay(
 
                     colors =
                         ButtonDefaults.buttonColors(
-                            containerColor = PersonaBlind,
-                            contentColor = TextPrimary
+                            containerColor = PureBlack,
+                            contentColor = PureWhite
                         ),
 
                     shape =
@@ -366,7 +366,8 @@ fun NavigationOverlay(
                             fontWeight =
                                 FontWeight.Bold,
 
-                            fontSize = 20.sp
+                            fontSize = 20.sp,
+                            color = PureWhite
                         )
 
                     } else {
@@ -380,7 +381,8 @@ fun NavigationOverlay(
                             fontWeight =
                                 FontWeight.Bold,
 
-                            fontSize = 20.sp
+                            fontSize = 20.sp,
+                            color = PureWhite
                         )
                     }
                 }
@@ -395,7 +397,7 @@ fun NavigationOverlay(
                     style =
                         MaterialTheme.typography.bodyMedium,
 
-                    color = TextPrimary
+                    color = PureBlack
                 )
             }
         }
@@ -426,8 +428,10 @@ private fun NavigationStepCard(
 
         colors =
             CardDefaults.cardColors(
-                containerColor = PersonaBlind
+                containerColor = SoftWhite
             ),
+
+        border = androidx.compose.foundation.BorderStroke(1.dp, SubtleDivider),
 
         shape =
             RoundedCornerShape(20.dp)
@@ -464,7 +468,7 @@ private fun NavigationStepCard(
                 style =
                     MaterialTheme.typography.headlineMedium,
 
-                color = TextPrimary,
+                color = PureBlack,
 
                 fontWeight =
                     FontWeight.Bold,
@@ -487,7 +491,7 @@ private fun NavigationStepCard(
                     style =
                         MaterialTheme.typography.displaySmall,
 
-                    color = TextPrimary,
+                    color = PureBlack,
 
                     fontWeight =
                     FontWeight.Bold,
@@ -503,7 +507,7 @@ private fun NavigationStepCard(
                     style =
                         MaterialTheme.typography.displaySmall,
 
-                    color = TextPrimary,
+                    color = PureBlack,
 
                     fontWeight =
                     FontWeight.Bold,
@@ -525,7 +529,7 @@ private fun NavigationStepCard(
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
 
-                color = TextPrimary
+                color = SoftBlack
             )
         }
     }
@@ -548,7 +552,7 @@ private fun TurnTypeIndicator(
                 4.dp.toPx()
 
             val arrowColor =
-                TextPrimary
+                PureBlack
 
             when (turnType) {
 

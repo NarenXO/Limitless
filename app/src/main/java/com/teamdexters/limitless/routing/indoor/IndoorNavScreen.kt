@@ -52,10 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.teamdexters.limitless.ui.theme.LimitlessBackground
-import com.teamdexters.limitless.ui.theme.PersonaMobility
-import com.teamdexters.limitless.ui.theme.SurfaceTint
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.*
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -211,7 +208,7 @@ fun IndoorNavScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LimitlessBackground)
+            .background(PureWhite)
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
             .semantics { contentDescription = "Indoor Navigation Screen for KCG Main Building." }
@@ -223,7 +220,7 @@ fun IndoorNavScreen() {
             text = "Indoor Navigation — KCG Main Building",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
-            color = PersonaMobility,
+            color = PureBlack,
             textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
@@ -238,7 +235,7 @@ fun IndoorNavScreen() {
                 text = "Navigate To Target Waypoint:",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = PureBlack
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -248,8 +245,9 @@ fun IndoorNavScreen() {
             ) {
                 items(kcgIndoorWaypoints) { wp ->
                     val isSelected = wp.id == targetWaypoint?.id
-                    val bgColor = if (isSelected) PersonaMobility else SurfaceTint
-                    val borderColor = if (isSelected) TextPrimary else PersonaMobility.copy(alpha = 0.40f)
+                    val bgColor = if (isSelected) PureBlack else SoftWhite
+                    val borderColor = if (isSelected) PureBlack else SubtleDivider
+                    val contentColor = if (isSelected) PureWhite else PureBlack
 
                     Box(
                         modifier = Modifier
@@ -270,7 +268,7 @@ fun IndoorNavScreen() {
                             Icon(
                                 imageVector = Icons.Default.Place,
                                 contentDescription = null,
-                                tint = TextPrimary,
+                                tint = contentColor,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -278,7 +276,7 @@ fun IndoorNavScreen() {
                                 text = wp.name,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = contentColor
                             )
                         }
                     }
@@ -335,8 +333,8 @@ fun IndoorNavScreen() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(PersonaMobility, RoundedCornerShape(12.dp))
-                .border(1.dp, TextPrimary.copy(alpha = 0.30f), RoundedCornerShape(12.dp))
+                .background(PureWhite, RoundedCornerShape(12.dp))
+                .border(1.dp, SubtleDivider, RoundedCornerShape(12.dp))
                 .padding(10.dp)
         ) {
             Row(
@@ -348,7 +346,7 @@ fun IndoorNavScreen() {
                     Icon(
                         imageVector = Icons.Default.DirectionsWalk,
                         contentDescription = null,
-                        tint = TextPrimary,
+                        tint = PureBlack,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -356,7 +354,7 @@ fun IndoorNavScreen() {
                         text = target?.let { "${it.name}: ${distanceToTargetMeters.toInt()}m" } ?: "No target selected",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = PureBlack
                     )
                 }
 
@@ -367,7 +365,7 @@ fun IndoorNavScreen() {
                     Icon(
                         imageVector = Icons.Default.Navigation,
                         contentDescription = "Simulate step",
-                        tint = TextPrimary,
+                        tint = PureBlack,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -375,12 +373,13 @@ fun IndoorNavScreen() {
                         text = clockDirectionText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                        color = PureBlack
                     )
                 }
             }
         }
     }
+
 }
 
 private fun calculateRelativeAngle(dx: Float, dy: Float, headingDeg: Float): Float {

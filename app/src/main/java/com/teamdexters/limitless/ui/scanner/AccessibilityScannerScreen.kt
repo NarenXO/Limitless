@@ -24,8 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.teamdexters.limitless.ui.theme.HighlightBox
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class, com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 @Composable
@@ -52,7 +51,7 @@ fun AccessibilityScannerScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFFF7F1EE)
+        containerColor = PureWhite
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -125,7 +124,7 @@ fun AccessibilityScannerScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(HighlightBox),
+                                .background(LightGray),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -136,22 +135,23 @@ fun AccessibilityScannerScreen(
                                 Icon(
                                     imageVector = androidx.compose.material.icons.Icons.Default.CameraAlt,
                                     contentDescription = "Camera Permission Required",
-                                    tint = TextPrimary,
+                                    tint = PureBlack,
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "Camera permission required to scan building accessibility",
-                                    color = TextPrimary,
+                                    color = PureBlack,
                                     style = MaterialTheme.typography.bodyLarge,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(
                                     onClick = { cameraPermissionState.launchPermissionRequest() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = HighlightBox)
+                                    colors = ButtonDefaults.buttonColors(containerColor = PureBlack, contentColor = PureWhite),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Grant Camera Permission")
+                                    Text("Grant Camera Permission", color = PureWhite, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                                 }
                             }
                         }
@@ -168,8 +168,9 @@ fun AccessibilityScannerScreen(
                             item {
                                 androidx.compose.material3.SuggestionChip(
                                     onClick = {},
-                                    label = { Text("Objects Detected", color = TextPrimary) },
-                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                                    label = { Text("Objects Detected", color = PureBlack) },
+                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = SoftWhite),
+                                    border = androidx.compose.material3.SuggestionChipDefaults.suggestionChipBorder(borderColor = SubtleDivider)
                                 )
                             }
                         }
@@ -177,8 +178,9 @@ fun AccessibilityScannerScreen(
                             item {
                                 androidx.compose.material3.SuggestionChip(
                                     onClick = {},
-                                    label = { Text("Text Detected", color = TextPrimary) },
-                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                                    label = { Text("Text Detected", color = PureBlack) },
+                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = SoftWhite),
+                                    border = androidx.compose.material3.SuggestionChipDefaults.suggestionChipBorder(borderColor = SubtleDivider)
                                 )
                             }
                         }
@@ -186,8 +188,9 @@ fun AccessibilityScannerScreen(
                             val lightStatus = if (lightingScore > 60) "Lighting: Good" else "Lighting: Dim"
                             androidx.compose.material3.SuggestionChip(
                                 onClick = {},
-                                label = { Text(lightStatus, color = TextPrimary) },
-                                colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
+                                label = { Text(lightStatus, color = PureBlack) },
+                                colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = SoftWhite),
+                                border = androidx.compose.material3.SuggestionChipDefaults.suggestionChipBorder(borderColor = SubtleDivider)
                             )
                         }
                     }
@@ -202,10 +205,20 @@ fun AccessibilityScannerScreen(
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
             ) {
-                Text("Manual Checklist", style = MaterialTheme.typography.titleMedium, color = Color(0xFF1F1F1F))
+                Text(
+                    text = "Manual Checklist",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PureBlack,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Door Width (Reference: Standard is 80-90cm)", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "Door Width (Reference: Standard is 80-90cm)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PureBlack,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("Narrow", "Standard", "Wide").forEach { w ->
@@ -213,6 +226,16 @@ fun AccessibilityScannerScreen(
                             selected = doorWidth == w,
                             onClick = { viewModel.onDoorWidthSelected(w) },
                             label = { Text(w) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PureBlack,
+                                selectedLabelColor = PureWhite,
+                                containerColor = SoftWhite,
+                                labelColor = PureBlack
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = if (doorWidth == w) PureBlack else SubtleDivider,
+                                selectedBorderColor = PureBlack
+                            ),
                             modifier = Modifier.semantics { contentDescription = "Select Door Width $w" }
                         )
                     }
@@ -220,36 +243,86 @@ fun AccessibilityScannerScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Braille Signage Present", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "Braille Signage Present",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PureBlack,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = hasBraille,
                         onClick = { viewModel.onBrailleSelected(true) },
                         label = { Text("Yes") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PureBlack,
+                            selectedLabelColor = PureWhite,
+                            containerColor = SoftWhite,
+                            labelColor = PureBlack
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (hasBraille) PureBlack else SubtleDivider,
+                            selectedBorderColor = PureBlack
+                        ),
                         modifier = Modifier.semantics { contentDescription = "Braille Signage Yes" }
                     )
                     FilterChip(
                         selected = !hasBraille,
                         onClick = { viewModel.onBrailleSelected(false) },
                         label = { Text("No") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PureBlack,
+                            selectedLabelColor = PureWhite,
+                            containerColor = SoftWhite,
+                            labelColor = PureBlack
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (!hasBraille) PureBlack else SubtleDivider,
+                            selectedBorderColor = PureBlack
+                        ),
                         modifier = Modifier.semantics { contentDescription = "Braille Signage No" }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Accessible Washroom", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "Accessible Washroom",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PureBlack,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = hasWashroom,
                         onClick = { viewModel.onWashroomSelected(true) },
                         label = { Text("Yes") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PureBlack,
+                            selectedLabelColor = PureWhite,
+                            containerColor = SoftWhite,
+                            labelColor = PureBlack
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (hasWashroom) PureBlack else SubtleDivider,
+                            selectedBorderColor = PureBlack
+                        ),
                         modifier = Modifier.semantics { contentDescription = "Accessible Washroom Yes" }
                     )
                     FilterChip(
                         selected = !hasWashroom,
                         onClick = { viewModel.onWashroomSelected(false) },
                         label = { Text("No") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PureBlack,
+                            selectedLabelColor = PureWhite,
+                            containerColor = SoftWhite,
+                            labelColor = PureBlack
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (!hasWashroom) PureBlack else SubtleDivider,
+                            selectedBorderColor = PureBlack
+                        ),
                         modifier = Modifier.semantics { contentDescription = "Accessible Washroom No" }
                     )
                 }
@@ -263,12 +336,14 @@ fun AccessibilityScannerScreen(
                             navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PureBlack, contentColor = PureWhite),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("GENERATE SCORE", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("GENERATE SCORE", color = PureWhite, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
         }
     }
+
 }
