@@ -139,7 +139,27 @@ fun LimitlessNavHost(
                 roomId = roomId,
                 photoPaths = photoPaths,
                 mappedRoomDao = database.mappedRoomDao(),
-                onRoomSaved = { navController.navigate("room-connection/$roomId") }
+                onRoomSaved = { navController.navigate("photo-route/$roomId") } // Handoff to PhotoRouteScreen!
+            )
+        }
+
+        // Photo Route (Spatial Route Generator)
+        composable(
+            route = "photo-route/{roomId}",
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val roomId = backStackEntry.arguments?.getString("roomId") ?: ""
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val roomDir = java.io.File(context.filesDir, "mapped_rooms/$roomId")
+            val photoPaths = (0..3).map { index -> java.io.File(roomDir, "photo_$index.jpg").absolutePath }
+                .filter { java.io.File(it).exists() }
+
+            com.teamdexters.limitless.ui.roommapping.PhotoRouteScreen(
+                roomId = roomId,
+                photoPaths = photoPaths,
+                onRouteSaved = {
+                    navController.navigate("room-connection/$roomId")
+                }
             )
         }
         
