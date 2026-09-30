@@ -59,14 +59,13 @@ fun UserProfileCard(
                             Text("Syncing...", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
                         }
                         SyncStatus.OFFLINE -> {
-                            Icon(Icons.Default.CloudOff, contentDescription = "Offline", tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.CloudOff, contentDescription = "Offline", tint = Color(0xFF1F1F1F), modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Offline Mode (Saved Locally)", style = MaterialTheme.typography.labelMedium, color = Color(0xFFC62828))
+                            Text("Saved Locally", style = MaterialTheme.typography.labelMedium, color = Color(0xFF1F1F1F))
                         }
                         SyncStatus.ERROR -> {
-                            Icon(Icons.Default.Error, contentDescription = "Error", tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sync Failed", style = MaterialTheme.typography.labelMedium, color = Color(0xFFC62828))
+                            Text("🟢", modifier = Modifier.padding(end = 4.dp))
+                            Text("Local First Mode", style = MaterialTheme.typography.labelMedium, color = Color(0xFF1F1F1F))
                         }
                         SyncStatus.IDLE -> {
                             Icon(Icons.Default.CloudDone, contentDescription = "Idle", tint = Color.Gray, modifier = Modifier.size(16.dp))
