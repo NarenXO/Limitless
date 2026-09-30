@@ -163,7 +163,7 @@ fun AccessibilityScannerScreen(
 
                         if (isARViewEnabled) {
                             ThreeDPathOverlay(
-                                pathClarity = comprehensiveScore?.pathClarity,
+                                safetyStatus = comprehensiveScore?.pathClarity?.name ?: "CLEAR",
                                 modifier = Modifier.fillMaxSize()
                             )
                             ThreeDMiniMapWidget(
