@@ -47,7 +47,16 @@ class OpenWakeWordManager(
             val assets = context.assets.list("") ?: emptyArray()
             val hasOnnx = assets.contains("hey_hazel.onnx")
             val hasTflite = assets.contains("hey_hazel.tflite")
-            hasModel = hasOnnx || hasTflite
+            
+            // Explicitly check for 65-byte placeholder
+            var isPlaceholder = false
+            if (hasTflite) {
+                context.assets.open("hey_hazel.tflite").use { 
+                    if (it.available() < 1024) isPlaceholder = true
+                }
+            }
+            
+            hasModel = hasOnnx || (hasTflite && !isPlaceholder)
             
             if (hasModel) {
                 val filename = if (hasOnnx) "hey_hazel.onnx" else "hey_hazel.tflite"
@@ -55,7 +64,7 @@ class OpenWakeWordManager(
                 Log.d("LIMITLESS_TRACE", "[WakeWord] Model filename: $filename")
                 Log.d("LIMITLESS_TRACE", "[WakeWord] Model labels: [Hey Hazel]")
             } else {
-                Log.w("LIMITLESS_TRACE", "[WakeWord] ONNX/TFLite model not found, using basic fallback acoustic detection")
+                Log.e("LIMITLESS_TRACE", "[WakeWord] NO TRAINED MODEL EXISTS! Found only a placeholder. Real OpenWakeWord detection is explicitly DISABLED.")
             }
         } catch (e: Exception) {
             Log.e("LIMITLESS_TRACE", "[WakeWord] Failed to check assets", e)
@@ -65,6 +74,10 @@ class OpenWakeWordManager(
     @SuppressLint("MissingPermission")
     fun start() {
         if (!isPaused) return
+        if (!hasModel) {
+            Log.e("LIMITLESS_TRACE", "[WakeWord] Cannot start engine: NO REAL WAKE WORD MODEL EXISTS. OpenWakeWord completely disabled.")
+            return
+        }
         isPaused = false
 
         val permission = if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) "GRANTED" else "DENIED"
@@ -129,33 +142,19 @@ class OpenWakeWordManager(
 
     private suspend fun processAudioBlock(buffer: ShortArray, size: Int, rms: Float, dynamicThreshold: Float) {
         absoluteFrameCount++
-        val zcr = calculateZCR(buffer, size)
         
-        // Dynamic fallback check: if volume spikes highly above calibrated ambient noise
-        val threshold = dynamicThreshold // Always use fallback logic because TFLite model is a 65 byte placeholder
+        // TODO: Implement actual ONNX/TFLite model inference here.
+        // For now, since we only have a placeholder model and user strictly forbade RMS fallback:
+        Log.e("LIMITLESS_TRACE", "[WakeWord] Real model inference is NOT implemented. Wake word will never trigger.")
         
-        val isDetected = rms > threshold && zcr in 20..300
-
-        val modelName = if (hasModel) "hey_hazel.tflite (placeholder)" else "AcousticFallback"
-        Log.d("LIMITLESS_TRACE", "[WakeWord]\nFrame=$absoluteFrameCount\nScore=$rms\nThreshold=$threshold\nModel=$modelName\nZCR=$zcr")
+        val isDetected = false
 
         if (isDetected) {
-            Log.d("LIMITLESS_TRACE", "[WakeWord] Wake Detected! (Dynamic voice spike)")
-            
-            // Immediately stop recording to free HAL lock
+            Log.d("LIMITLESS_TRACE", "[WakeWord] Wake Detected!")
             pause()
-            
-            // Switch to Main thread to trigger callback
             withContext(Dispatchers.Main) {
                 onWakeWordDetected()
             }
-        } else {
-            val reason = when {
-                rms <= threshold -> "RMS ($rms) below threshold ($threshold)"
-                zcr !in 20..300 -> "ZCR ($zcr) out of speech range [20, 300]"
-                else -> "Unknown reason"
-            }
-            Log.d("LIMITLESS_TRACE", "[WakeWord] Wake NOT detected. Reason: $reason")
         }
     }
 

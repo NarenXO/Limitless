@@ -124,10 +124,10 @@ fun PersonaSelectScreen(
      */
     fun makeRecognitionListener(
         onResult: (String) -> Unit,
-        onRetry: () -> Unit
+        onRetry: (Int) -> Unit
     ): RecognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onReadyForSpeech")
+            Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onReadyForSpeech at ${System.currentTimeMillis()}")
             isListening = true
             listeningHint = if (isNameStage) "Listening…" else "Listening... Say Blind, Deaf, Speech, or Mobility"
         }
@@ -160,16 +160,19 @@ fun PersonaSelectScreen(
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
                 SpeechRecognizer.ERROR_AUDIO          -> "ERROR_AUDIO"
                 SpeechRecognizer.ERROR_NETWORK        -> "ERROR_NETWORK"
+                11                                    -> "ERROR_SERVER_DISCONNECTED (11)"
                 else                                  -> "ERROR_$error"
             }
             Log.d("LIMITLESS_TRACE", "SpeechRecognizer: onError ($msg)")
             Log.w(TAG, "SpeechRecognizer error: $msg (code=$error)")
             if (!isNameStage) {
                 Log.e("LIMITLESS_TRACE", "[Stage 2] SpeechRecognizer onError: Code $error")
-                Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy SpeechRecognizer")
-                recognizerRef?.destroy()
+                Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy SpeechRecognizer at ${System.currentTimeMillis()}")
+                val oldRecognizer = recognizerRef
+                recognizerRef = null
+                oldRecognizer?.destroy()
             }
-            onRetry()
+            onRetry(error)
         }
         override fun onPartialResults(partial: Bundle?) {
             val partials = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -180,6 +183,9 @@ fun PersonaSelectScreen(
 
     // ── Helper: start recognition ─────────────────────────────────────────────
     fun startListening(listener: RecognitionListener) {
+            Log.d("LIMITLESS_TRACE", "isRecognitionAvailable: ${SpeechRecognizer.isRecognitionAvailable(context)}")
+            val isMainThread = android.os.Looper.getMainLooper().thread == Thread.currentThread()
+            Log.d("LIMITLESS_TRACE", "Main thread state: $isMainThread")
         val recognizer = recognizerRef ?: return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -190,6 +196,7 @@ fun PersonaSelectScreen(
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
         }
+        Log.d("LIMITLESS_TRACE", "Recognizer Intent: $intent, EXTRAs: ${intent.extras}")
         recognizer.setRecognitionListener(listener)
         recognizer.startListening(intent)
     }
@@ -211,7 +218,7 @@ fun PersonaSelectScreen(
                 capturedName = name.replaceFirstChar { it.uppercase() }
                 isNameStage = false
             },
-            onRetry = {
+            onRetry = { error ->
                 // Do NOT loop or flash the mic. The UI will say "Tap mic to speak".
             }
         )
@@ -221,10 +228,11 @@ fun PersonaSelectScreen(
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
     fun startPersonaListening(saveFn: (String) -> Unit) {
         if (recognizerRef != null) {
-            Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy previous recognizer before recreating")
+            Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy previous recognizer before recreating at ${System.currentTimeMillis()}")
             recognizerRef?.destroy()
         }
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
+        Log.d("LIMITLESS_TRACE", "SpeechRecognizer creation timestamp: ${System.currentTimeMillis()}")
         
         val personaListener = makeRecognitionListener(
             onResult = { spoken ->
@@ -243,8 +251,14 @@ fun PersonaSelectScreen(
                     // Do NOT auto-retry. Just stop and wait for tap.
                 }
             },
-            onRetry = {
-                // Do NOT auto-retry. Just stop and wait for tap.
+            onRetry = { error ->
+                if (error == 11) {
+                    Log.d("LIMITLESS_TRACE", "[Stage 2] Auto-restarting due to ERROR_11 after 500ms")
+                    coroutineScope.launch(Dispatchers.Main) {
+                        delay(500)
+                        startPersonaListening(saveFn)
+                    }
+                }
             }
         )
         startListening(personaListener)
@@ -268,9 +282,9 @@ fun PersonaSelectScreen(
                     }
                     override fun onDone(utteranceId: String?) {
                         if (utteranceId == "welcome") {
-                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' DONE")
+                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' DONE at ${System.currentTimeMillis()}")
                         } else {
-                            Log.d("LIMITLESS_TRACE", "TTS greeting DONE")
+                            Log.d("LIMITLESS_TRACE", "TTS greeting DONE at ${System.currentTimeMillis()}")
                         }
                         coroutineScope.launch(Dispatchers.Main) {
                             if (utteranceId == "welcome" && isNameStage) {
