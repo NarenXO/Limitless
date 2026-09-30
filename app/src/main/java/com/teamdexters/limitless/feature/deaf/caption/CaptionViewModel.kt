@@ -3,6 +3,7 @@ package com.teamdexters.limitless.feature.deaf.caption
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -37,6 +38,7 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
     
     private var recognitionJob: Job? = null
     private var modelLoadJob: Job? = null
+    private var useFallback = false
     
     init {
         loadModel()
@@ -50,12 +52,14 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
             val isLoaded = voskEngine?.initialize() ?: false
             
             if (isLoaded) {
+                useFallback = voskEngine?.isUsingFallback() ?: false
+                Log.d("LIMITLESS_TRACE", "CaptionViewModel: Model loaded, fallback=$useFallback")
                 _uiState.value = _uiState.value.copy(
                     status = CaptionEngineStatus.IDLE
                 )
             } else {
                 _uiState.value = _uiState.value.copy(
-                    status = CaptionEngineStatus.IDLE
+                    status = CaptionEngineStatus.MODEL_MISSING
                 )
             }
         }
@@ -83,36 +87,62 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
             return
         }
         
-        recognitionJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                _uiState.value = _uiState.value.copy(
-                    status = CaptionEngineStatus.LISTENING
-                )
-                
-                if (audioStreamer == null || !audioStreamer.initialize()) {
+        _uiState.value = _uiState.value.copy(
+            status = CaptionEngineStatus.LISTENING
+        )
+        
+        if (useFallback) {
+            // Use Android SpeechRecognizer fallback
+            voskEngine?.startListeningWithFallback()
+            
+            // Collect from caption flow
+            recognitionJob = viewModelScope.launch {
+                voskEngine?.captionFlow?.catch { e ->
+                    Log.e("LIMITLESS_TRACE", "CaptionViewModel: Caption flow error", e)
                     _uiState.value = _uiState.value.copy(
                         status = CaptionEngineStatus.ERROR
                     )
-                    return@launch
+                }?.collect { update ->
+                    processCaptionUpdate(update)
                 }
-                
-                val audioFlow = audioStreamer.startStreaming()
-                val captionFlow = voskEngine.processAudio(audioFlow)
-                
-                captionFlow.catch { e ->
-                    _uiState.value = _uiState.value.copy(
-                        status = CaptionEngineStatus.ERROR
-                    )
-                }.collect { update ->
-                    withContext(Dispatchers.Main) {
-                        processCaptionUpdate(update)
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    status = CaptionEngineStatus.ERROR
-                )
             }
+            
+            Log.d("LIMITLESS_TRACE", "CaptionViewModel: Started listening with SpeechRecognizer fallback")
+        } else {
+            // Use Vosk with AudioStreamer
+            recognitionJob = viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    if (audioStreamer == null || !audioStreamer.initialize()) {
+                        _uiState.value = _uiState.value.copy(
+                            status = CaptionEngineStatus.ERROR
+                        )
+                        return@launch
+                    }
+                    
+                    Log.d("LIMITLESS_TRACE", "CaptionViewModel: AudioStreamer initialized")
+                    
+                    val audioFlow = audioStreamer.startStreaming()
+                    val captionFlow = voskEngine.processAudio(audioFlow)
+                    
+                    captionFlow.catch { e ->
+                        Log.e("LIMITLESS_TRACE", "CaptionViewModel: Caption flow error", e)
+                        _uiState.value = _uiState.value.copy(
+                            status = CaptionEngineStatus.ERROR
+                        )
+                    }.collect { update ->
+                        withContext(Dispatchers.Main) {
+                            processCaptionUpdate(update)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("LIMITLESS_TRACE", "CaptionViewModel: Recognition error", e)
+                    _uiState.value = _uiState.value.copy(
+                        status = CaptionEngineStatus.ERROR
+                    )
+                }
+            }
+            
+            Log.d("LIMITLESS_TRACE", "CaptionViewModel: Started listening with Vosk")
         }
     }
     
@@ -122,13 +152,20 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
     fun stopListening() {
         recognitionJob?.cancel()
         recognitionJob = null
-        audioStreamer?.stopStreaming()
-        voskEngine?.reset()
+        
+        if (useFallback) {
+            voskEngine?.stopListeningWithFallback()
+        } else {
+            audioStreamer?.stopStreaming()
+            voskEngine?.reset()
+        }
         
         _uiState.value = _uiState.value.copy(
             status = CaptionEngineStatus.IDLE,
             partialText = ""
         )
+        
+        Log.d("LIMITLESS_TRACE", "CaptionViewModel: Stopped listening")
     }
     
     /**

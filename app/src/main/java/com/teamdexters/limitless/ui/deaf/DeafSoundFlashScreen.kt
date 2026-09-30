@@ -27,6 +27,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,6 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.teamdexters.limitless.feature.deaf.caption.CaptionEngineStatus
+import com.teamdexters.limitless.feature.deaf.caption.CaptionUiState
+import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
 import com.teamdexters.limitless.feature.deaf.sound.SoundAlertViewModel
 import com.teamdexters.limitless.feature.deaf.sound.VibrationVocabulary
 import com.teamdexters.limitless.ui.theme.manropeFontFamily
@@ -63,28 +71,44 @@ data class SoundCard(
 /**
  * Sound flash cards screen for deaf users.
  * Displays 6 distinct sound cards with unique visual flash colors and vibration patterns.
- * Includes live environmental sound detection toggle.
+ * Includes live environmental sound detection toggle and live captions.
  */
 @Composable
-fun DeafSoundFlashScreen(viewModel: SoundAlertViewModel = viewModel()) {
+fun DeafSoundFlashScreen(
+    soundViewModel: SoundAlertViewModel = viewModel(),
+    captionViewModel: CaptionViewModel = viewModel()
+) {
     val context = LocalContext.current
     
     var activeCard by remember { mutableStateOf<SoundCard?>(null) }
     var isFlashActive by remember { mutableStateOf(false) }
     
-    // Permission launcher for RECORD_AUDIO
+    // Permission launcher for RECORD_AUDIO (sound detection)
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.toggleListening()
+            soundViewModel.toggleListening()
         }
     }
     
-    // ViewModel state
-    val isListening by viewModel.isListening.collectAsState()
-    val isModelLoaded by viewModel.isModelLoaded.collectAsState()
-    val activeAlert by viewModel.activeAlert.collectAsState()
+    // Permission launcher for RECORD_AUDIO (captions)
+    val captionPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            captionViewModel.startListening()
+        }
+    }
+    
+    // Sound ViewModel state
+    val isListening by soundViewModel.isListening.collectAsState()
+    val isModelLoaded by soundViewModel.isModelLoaded.collectAsState()
+    val activeAlert by soundViewModel.activeAlert.collectAsState()
+    
+    // Caption ViewModel state
+    val captionUiState by captionViewModel.uiState.collectAsState()
+    val lazyListState = rememberLazyListState()
     
     // Handle detected alerts from live listening
     LaunchedEffect(activeAlert) {
@@ -100,8 +124,15 @@ fun DeafSoundFlashScreen(viewModel: SoundAlertViewModel = viewModel()) {
                 kotlinx.coroutines.delay(2000)
                 isFlashActive = false
                 activeCard = null
-                viewModel.dismissAlert()
+                soundViewModel.dismissAlert()
             }
+        }
+    }
+    
+    // Auto-scroll caption list when new text arrives
+    LaunchedEffect(captionUiState.captionLines.size, captionUiState.partialText) {
+        if (captionUiState.captionLines.isNotEmpty() || captionUiState.partialText.isNotEmpty()) {
+            lazyListState.animateScrollToItem(captionUiState.captionLines.size)
         }
     }
     
@@ -167,6 +198,114 @@ fun DeafSoundFlashScreen(viewModel: SoundAlertViewModel = viewModel()) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
+            // Live Captions Section
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Live Captions",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1F1F1F),
+                    fontFamily = manropeFontFamily,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                // Start/Stop Button
+                Button(
+                    onClick = {
+                        if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                            captionViewModel.stopListening()
+                        } else {
+                            captionPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                            Color(0xFFBAD6DA)
+                        } else {
+                            Color(0xFFF791A9)
+                        }
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                            "Stop Captions"
+                        } else {
+                            "Start Live Captions"
+                        },
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F1F1F),
+                        fontFamily = manropeFontFamily
+                    )
+                }
+                
+                // Caption Display Area
+                if (captionUiState.status == CaptionEngineStatus.LISTENING) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(
+                                color = Color(0xFFE0F2F4),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            // History lines
+                            items(captionUiState.captionLines) { line ->
+                                Text(
+                                    text = line.text,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFF1F1F1F).copy(alpha = 0.6f),
+                                    fontFamily = manropeFontFamily,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            
+                            // Current partial text
+                            if (captionUiState.partialText.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = captionUiState.partialText,
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1F1F1F),
+                                        fontFamily = manropeFontFamily
+                                    )
+                                }
+                            } else if (captionUiState.captionLines.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Listening... speak now",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF1F1F1F).copy(alpha = 0.5f),
+                                        fontFamily = manropeFontFamily
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             // Live Listening Toggle Banner
             Box(
                 modifier = Modifier
@@ -206,7 +345,7 @@ fun DeafSoundFlashScreen(viewModel: SoundAlertViewModel = viewModel()) {
                                 if (checked) {
                                     audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 } else {
-                                    viewModel.toggleListening()
+                                    soundViewModel.toggleListening()
                                 }
                             },
                             colors = SwitchDefaults.colors(
