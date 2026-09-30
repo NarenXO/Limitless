@@ -38,22 +38,32 @@ class MobilityViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            val seeder = DemoRoomSeeder(application, roomDao, connectionDao)
-            seeder.seedIfEmpty()
+            if (roomDao.getRoomCount().first() == 0) {
+                val seeder = DemoRoomSeeder(application, roomDao, connectionDao)
+                seeder.seedIfEmpty()
+                android.util.Log.d("LIMITLESS_TRACE", "MobilityViewModel: Pre-seeded 5 campus demo rooms")
+            }
             val builtGraph = graphBuilder.buildGraph()
             _graph.value = builtGraph
             _isSeeding.value = false
         }
     }
 
-    fun calculateAndNavigateRoute(startRoomId: String, endRoomId: String, preferRamp: Boolean = true) {
+    fun calculateAndNavigateRoute(startRoomId: String?, endRoomId: String, preferRamp: Boolean = true) {
+        val actualStartRoomId = startRoomId 
+            ?: currentLocationTracker.getCurrentRoomId() 
+            ?: "LIMITLESS_ROOM_KCG_ENTRANCE"
+
         val currentGraph = _graph.value ?: return
         val router = AStarAccessibleRouter(currentGraph)
         val route = router.findRoute(
-            fromRoomId = startRoomId,
+            fromRoomId = actualStartRoomId,
             toRoomId = endRoomId,
             preferRamp = preferRamp
         )
+        val pathList = route?.steps?.joinToString(" -> ") { it.toRoomName } ?: "No Route Found"
+        android.util.Log.d("LIMITLESS_TRACE", "Mobility -> [${actualStartRoomId}] to [${endRoomId}] -> Path: ${pathList}")
+
         if (route != null) {
             _activeRoute.value = route
             voiceNavigator.startNavigation(route)
