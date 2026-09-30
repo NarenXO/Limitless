@@ -60,7 +60,7 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
             .build()
             .also { imageAnalysis ->
                 imageAnalysis.setAnalyzer(
-                    androidx.camera.core.ContextCompat.getMainExecutor(context),
+                    androidx.core.content.ContextCompat.getMainExecutor(context),
                     this::analyzeFrame
                 )
             }

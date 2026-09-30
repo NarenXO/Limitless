@@ -143,6 +143,9 @@ object BlindAIInvoker {
                 Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
                 result
             }
+            else -> {
+                "Command not supported in offline mode."
+            }
         }
     }
 
