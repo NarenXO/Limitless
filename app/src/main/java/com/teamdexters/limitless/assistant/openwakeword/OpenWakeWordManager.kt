@@ -46,13 +46,14 @@ class OpenWakeWordManager(
     private fun checkModelAvailability() {
         try {
             val assets = context.assets.list("") ?: emptyArray()
-            val hasOnnx = assets.contains("hey_hazel.onnx")
-            val hasTflite = assets.contains("hey_hazel.tflite")
+            val hasOnnx = assets.contains("hey_hazel.onnx") || assets.contains("hey_rhasspy.onnx")
+            val hasTflite = assets.contains("hey_hazel.tflite") || assets.contains("hey_rhasspy.tflite")
             
             // Explicitly check for 65-byte placeholder
             var isPlaceholder = false
             if (hasTflite) {
-                context.assets.open("hey_hazel.tflite").use { 
+                val tfliteFile = if (assets.contains("hey_hazel.tflite")) "hey_hazel.tflite" else "hey_rhasspy.tflite"
+                context.assets.open(tfliteFile).use { 
                     if (it.available() < 1024) isPlaceholder = true
                 }
             }
@@ -60,10 +61,10 @@ class OpenWakeWordManager(
             hasModel = hasOnnx || (hasTflite && !isPlaceholder)
             
             if (hasModel) {
-                val filename = if (hasOnnx) "hey_hazel.onnx" else "hey_hazel.tflite"
+                val filename = if (assets.contains("hey_hazel.onnx")) "hey_hazel.onnx" else if (assets.contains("hey_rhasspy.onnx")) "hey_rhasspy.onnx" else if (assets.contains("hey_hazel.tflite")) "hey_hazel.tflite" else "hey_rhasspy.tflite"
                 Log.d("LIMITLESS_TRACE", "[WakeWord] Model loaded successfully")
                 Log.d("LIMITLESS_TRACE", "[WakeWord] Model filename: $filename")
-                Log.d("LIMITLESS_TRACE", "[WakeWord] Model labels: [Hey Hazel]")
+                Log.d("LIMITLESS_TRACE", "[WakeWord] Model labels: [Hey Hazel/Rhasspy]")
             } else {
                 Log.e("LIMITLESS_TRACE", "[WakeWord] NO TRAINED MODEL EXISTS! Found only a placeholder. Real OpenWakeWord detection is explicitly DISABLED.")
             }

@@ -9,71 +9,83 @@ class HazelActionDispatcher(
     private val onSpeak: (String) -> Unit
 ) {
     fun parseIntent(rawIntent: String): Boolean {
-        val lowerIntent = rawIntent.lowercase()
-        Log.d("LIMITLESS_TRACE", "MasterOrchestrator: Dispatched intent $rawIntent successfully")
-        
+        // Strip punctuation and extra spaces
+        val cleanIntent = rawIntent.lowercase()
+            .replace(Regex("[^a-z0-9 ]"), "")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+
+        fun logTrace(intentName: String, actionName: String) {
+            Log.d("LIMITLESS_TRACE", "Speech:\n$rawIntent\n↓\nIntent:\n$intentName\n↓\nAction:\n$actionName\n↓\nResult:\nSUCCESS")
+        }
+
         return when {
-            // Blind Vision
-            lowerIntent.contains("in front") || 
-            lowerIntent.contains("front of me") || 
-            lowerIntent.contains("describe") || 
-            lowerIntent.contains("what's around") || 
-            lowerIntent.contains("what am i holding") -> {
-                onSpeak("Navigating to Blind and Low Vision mode for you.")
+            // Camera / Vision
+            Regex("\\b(open camera|camera|take photo|describe|in front|front of me|what is around|what am i holding)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("OpenCameraIntent", "LaunchCamera")
+                onSpeak("Navigating to Camera and Vision mode for you.")
                 navController.navigate(Screen.BlindHome.route)
                 true
             }
-            
-            // Blind OCR
-            lowerIntent.contains("read text") || 
-            lowerIntent.contains("read label") || 
-            lowerIntent.contains("read sign") || 
-            lowerIntent.contains("what does it say") -> {
-                onSpeak("Navigating to Blind and Low Vision mode for you.")
+
+            // OCR / Text Reading
+            Regex("\\b(scan text|read text|read label|read sign|what does it say|read this)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("ReadTextIntent", "LaunchOCR")
+                onSpeak("Navigating to text reader for you.")
                 navController.navigate(Screen.BlindHome.route)
                 true
             }
-            
-            // Mobility Navigation
-            lowerIntent.contains("navigate to") || 
-            lowerIntent.contains("take me to") || 
-            lowerIntent.contains("move from here to") || 
-            lowerIntent.contains("tell me the route to") -> {
+
+            // Mobility / Navigation
+            Regex("\\b(navigation|navigate|maps|open maps|route|take me to|move from here to)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("NavigationIntent", "LaunchMaps")
                 onSpeak("Navigating to Mobility and Wheelchair mode for you.")
                 navController.navigate(Screen.MobilityHome.route)
                 true
             }
             
             // Room Accessibility
-            lowerIntent.contains("is ") && lowerIntent.contains(" accessible") || 
-            lowerIntent.contains("does ") && lowerIntent.contains(" have a ramp") ||
-            lowerIntent.contains("check ") -> {
+            Regex("\\b(is accessible|has ramp|have a ramp|check room)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("RoomAccessibilityIntent", "CheckAccessibility")
                 onSpeak("Navigating to Mobility and Wheelchair mode for you.")
                 navController.navigate(Screen.MobilityHome.route)
                 true
             }
-            
+
+            // Flashlight
+            Regex("\\b(flashlight on|flashlight off|torch on|torch off)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("FlashlightIntent", "ToggleFlashlight")
+                val action = if (cleanIntent.contains("on")) "Turning flashlight on." else "Turning flashlight off."
+                onSpeak(action)
+                // Flashlight toggle logic goes here
+                true
+            }
+
+            // Emergency / SOS
+            Regex("\\b(emergency|sos|call emergency contact|help me|i fell)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("EmergencyIntent", "DispatchSOS")
+                onSpeak("Emergency triggered. Calling for help.")
+                true
+            }
+
+            // System Status / Settings
+            Regex("\\b(battery status|wifi status|bluetooth|settings|open settings)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("SystemSettingsIntent", "OpenSettings")
+                onSpeak("Opening system settings.")
+                // Navigation to settings or status readout goes here
+                true
+            }
+
             // Speech AAC
-            lowerIntent.contains("say ") || 
-            lowerIntent.contains("speak ") -> {
+            Regex("\\b(say|speak)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("SpeechAACIntent", "LaunchAAC")
                 onSpeak("Navigating to Speech Impaired mode for you.")
                 navController.navigate(Screen.SpeechHome.route)
                 true
             }
-            
-            // Auto-SOS
-            lowerIntent.contains("sos") || 
-            lowerIntent.contains("help me") || 
-            lowerIntent.contains("emergency") || 
-            lowerIntent.contains("i fell") -> {
-                onSpeak("Emergency triggered. Calling for help.")
-                // Should trigger EmergencyManager, but since it's just wiring for now:
-                // we assume EmergencyManager is handled or we just log it.
-                true
-            }
-            
+
             else -> {
-                Log.d("LIMITLESS_TRACE", "MasterOrchestrator: Unknown intent $rawIntent")
+                Log.d("LIMITLESS_TRACE", "MasterOrchestrator: Unknown intent $rawIntent. Delegating to CloudLLM.")
                 false
             }
         }

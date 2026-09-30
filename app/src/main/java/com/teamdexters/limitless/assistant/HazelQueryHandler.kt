@@ -52,6 +52,7 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
+            Log.d("LIMITLESS_TRACE", "Speech:\n$rawQuery\n↓\nIntent:\nGeneralQuery\n↓\nCloud LLM")
             val responseText = try {
                 if (isNetworkAvailable() && isApiKeyPresent()) {
                     val result = geminiClient.queryGemini(rawQuery)

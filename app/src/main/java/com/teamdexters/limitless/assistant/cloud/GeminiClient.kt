@@ -35,7 +35,7 @@ class GeminiClient(
     private val apiKey: String
         get() = apiKeyOverride ?: secureKeyProvider.getGeminiKey() ?: ""
 
-    private var cachedModels: List<String>? = null
+    private var cachedCandidate: LlmCandidate? = null
 
     /**
      * Sends the prompt to Gemini REST endpoint with accessibility system instruction.
@@ -60,12 +60,12 @@ class GeminiClient(
 
         val providerName: String
         val isGemini: Boolean
-        val candidates: List<LlmCandidate>
+        val candidates: MutableList<LlmCandidate>
         
         if (finalKey.startsWith("gsk_")) {
             providerName = "Groq"
             isGemini = false
-            candidates = listOf(
+            candidates = mutableListOf(
                 LlmCandidate("llama-3.2-3b-preview", "https://api.groq.com/openai/v1/chat/completions"),
                 LlmCandidate("gemma2-9b-it", "https://api.groq.com/openai/v1/chat/completions"),
                 LlmCandidate("llama-3.1-8b-instant", "https://api.groq.com/openai/v1/chat/completions"),
@@ -75,16 +75,23 @@ class GeminiClient(
         } else if (finalKey.startsWith("xai-")) {
             providerName = "xAI Grok"
             isGemini = false
-            candidates = listOf(
+            candidates = mutableListOf(
                 LlmCandidate("grok-beta", "https://api.x.ai/v1/chat/completions")
             )
         } else {
             providerName = "Google Gemini"
             isGemini = true
-            candidates = listOf(
+            candidates = mutableListOf(
                 LlmCandidate("gemini-1.5-flash", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"),
                 LlmCandidate("gemini-1.5-pro", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
             )
+        }
+        
+        cachedCandidate?.let { cache ->
+            if (candidates.contains(cache)) {
+                candidates.remove(cache)
+                candidates.add(0, cache)
+            }
         }
         
         Log.d("LIMITLESS_TRACE", "[CloudLLM] Detected provider by key prefix: $providerName")
@@ -195,10 +202,11 @@ class GeminiClient(
 
                     if (extractedText.isNotBlank()) {
                         if (providerName == "Groq") {
-                            Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from Groq model $modelName")
+                            Log.d("LIMITLESS_TRACE", "Groq Model:\n$modelName\n↓\nResponse\n↓\nTTS")
                         } else {
-                            Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from $providerName")
+                            Log.d("LIMITLESS_TRACE", "$providerName Model:\n$modelName\n↓\nResponse\n↓\nTTS")
                         }
+                        cachedCandidate = candidate
                         return@withContext Result.success(extractedText)
                     } else {
                         lastException = Exception("Parsed text is empty from success body")
@@ -212,19 +220,24 @@ class GeminiClient(
                     }
                     errorReader.close()
                     val errorBody = errorBuilder.toString()
-                    Log.e("LIMITLESS_TRACE", "[CloudLLM] Error for model $modelName ($responseCode). Trying next candidate... Body: $errorBody")
+                    if (BuildConfig.DEBUG) {
+                        Log.e("LIMITLESS_TRACE", "[CloudLLM] Error for model $modelName ($responseCode). Trying next candidate... Body: $errorBody")
+                    }
                     lastErrorBody = errorBody
                     continue
                 }
             } catch (e: Exception) {
-                Log.e("LIMITLESS_TRACE", "[CloudLLM] Exception during request for model $modelName. Trying next candidate...", e)
-                e.printStackTrace()
+                if (BuildConfig.DEBUG) {
+                    Log.e("LIMITLESS_TRACE", "[CloudLLM] Exception during request for model $modelName. Trying next candidate...", e)
+                }
                 lastException = e
                 continue
             }
         }
         
-        Result.failure(lastException ?: Exception("All candidate models failed. Last error: $lastErrorBody"))
+        val attemptedStr = candidates.joinToString(", ") { it.model }
+        Log.e("LIMITLESS_TRACE", "[CloudLLM] $providerName request failed. Reason: No available models. Attempted: $attemptedStr")
+        Result.failure(Exception("$providerName request failed.\nReason: No available models.\nAttempted: $attemptedStr"))
     }
 
     /**

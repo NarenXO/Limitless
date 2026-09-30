@@ -85,12 +85,13 @@ fun HazelListeningOverlay(
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 10000L)
             }
             recognizer.startListening(intent)
             
-            // Auto-cancel after 8 seconds
+            // Auto-cancel after 25 seconds for safety instead of aggressively at 8s
             coroutineScope.launch {
-                delay(8000L)
+                delay(25000L)
                 recognizer.cancel()
             }
         }
