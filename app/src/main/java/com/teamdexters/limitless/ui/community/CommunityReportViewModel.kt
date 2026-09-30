@@ -1,21 +1,6 @@
 // CommunityReportViewModel.kt
 package com.teamdexters.limitless.ui.community
 
-enum class ViewMode { LIST, MAP }
-enum class ReportFilterCategory(val label: String) {
-    ALL("All"),
-    RAMP("Ramp Access"),
-    LIFT("Elevator / Lift"),
-    WASHROOM("Accessible Washroom"),
-    DOORWAY("Wide Doorway"),
-    VERIFIED("Team-Verified Only")
-}
-enum class SortOrder(val label: String) {
-    NEWEST("Newest First"),
-    TRUST_SCORE("Highest Trust Score"),
-    NEAREST("Nearest Distance")
-}
-
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -33,6 +18,21 @@ import com.teamdexters.limitless.data.local.entity.UserReportEntity
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.teamdexters.limitless.data.seed.DatabaseSeeder
+
+enum class ViewMode { LIST, MAP }
+enum class ReportFilterCategory(val label: String) {
+    ALL("All"),
+    RAMP("Ramp Access"),
+    LIFT("Elevator / Lift"),
+    WASHROOM("Accessible Washroom"),
+    DOORWAY("Wide Doorway"),
+    VERIFIED("Team-Verified Only")
+}
+enum class SortOrder(val label: String) {
+    NEWEST("Newest First"),
+    TRUST_SCORE("Highest Trust Score"),
+    NEAREST("Nearest Distance")
+}
 
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
@@ -98,8 +98,8 @@ class CommunityReportViewModel @Inject constructor(
                 ReportFilterCategory.RAMP -> report.hasRamp
                 ReportFilterCategory.LIFT -> report.hasElevator
                 ReportFilterCategory.WASHROOM -> report.hasAccessibleRestroom
-                ReportFilterCategory.DOORWAY -> report.hasWideDoorway
-                ReportFilterCategory.VERIFIED -> report.isVerified
+                ReportFilterCategory.DOORWAY -> report.category.equals("ENTRANCE", ignoreCase = true)
+                ReportFilterCategory.VERIFIED -> report.trustScore >= 50 || report.confirmationCount >= 5
             }
         }
         

@@ -1,4 +1,3 @@
-// CommunityReportScreen.kt
 package com.teamdexters.limitless.ui.community
 
 import android.Manifest
@@ -32,21 +31,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import com.google.accompanist.permissions.*
 
-/**
- * Phase 1: Community Report Screen – zero‑typing UI.
- * All interactive elements have empty contentDescription for accessibility compatibility.
- */
+import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.HighlightBox
+import androidx.compose.foundation.shape.CircleShape
+
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CommunityReportScreen(
     navController: androidx.navigation.NavHostController,
     viewModel: CommunityReportViewModel = hiltViewModel()
 ) {
-    // Categories – using generic icons for compilation
     val categories = listOf(
         Category("Ramp", Icons.Default.TrendingUp),
-        Category("Lift/Elevator", Icons.Default.ArrowUpward), // placeholder for elevator
-        Category("Wide Doorway", Icons.Default.MeetingRoom), // door icon
+        Category("Lift/Elevator", Icons.Default.ArrowUpward),
+        Category("Wide Doorway", Icons.Default.MeetingRoom),
         Category("Accessible Washroom", Icons.Default.Wc),
         Category("Parking", Icons.Default.LocalParking),
         Category("Other", Icons.Default.MoreHoriz)
@@ -55,25 +53,19 @@ fun CommunityReportScreen(
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val rating by viewModel.rating.collectAsState()
     val imageUri by viewModel.imageUri.collectAsState()
-    val location by viewModel.location.collectAsState()
     val submitResult by viewModel.submitResult.collectAsState()
-    val isOnline by viewModel.isOnline.collectAsState()
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
 
-    var showObstacleDialog by remember { mutableStateOf(false) }
-    var obstacleDescription by remember { mutableStateOf("") }
-
+    val viewMode by viewModel.viewMode.collectAsState()
+    val reportFilterCategory by viewModel.reportFilterCategory.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
     val reports by viewModel.filteredReports.collectAsState(initial = emptyList())
 
-    // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        viewModel.onImageSelected(uri)
-    }
+    ) { uri: Uri? -> viewModel.onImageSelected(uri) }
 
-    // Permission handling for location (simplified)
     val locationPermissionState = rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
 
     LaunchedEffect(submitResult) {
@@ -82,373 +74,244 @@ fun CommunityReportScreen(
         }
     }
 
-    if (showObstacleDialog) {
-        AlertDialog(
-            onDismissRequest = { showObstacleDialog = false },
-            title = { Text("Report an Obstacle") },
-            text = {
-                OutlinedTextField(
-                    value = obstacleDescription,
-                    onValueChange = { obstacleDescription = it },
-                    placeholder = { Text("Describe obstacle (e.g. Broken elevator, blocked ramp)") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    android.util.Log.d("LIMITLESS_TRACE", "Community Obstacle report submitted: $obstacleDescription")
-                    viewModel.submitObstacleReport(obstacleDescription)
-                    showObstacleDialog = false
-                    obstacleDescription = ""
-                }) {
-                    Text("Submit Obstacle")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showObstacleDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 64.dp,
+        sheetContainerColor = Color(0xFFF7F1EE),
         sheetContent = {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                val coroutineScope = rememberCoroutineScope()
-                // Search Bar
-                val searchQuery by viewModel.searchQuery.collectAsState()
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { 
-                        android.util.Log.d("LIMITLESS_TRACE", "Community Search query updated: $it")
-                        viewModel.updateSearchQuery(it) 
-                    },
-                    placeholder = { Text("Search places in Chennai...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                // Filter Chips
-                val filterCategory by viewModel.filterCategory.collectAsState()
-                val filterOptions = listOf("All", "Ramps", "Elevators", "Washrooms", "Obstacles")
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(filterOptions) { filter ->
-                        FilterChip(
-                            selected = filterCategory == filter,
-                            onClick = { 
-                                android.util.Log.d("LIMITLESS_TRACE", "Community Filter chip tapped: $filter")
-                                viewModel.updateFilterCategory(filter) 
-                            },
-                            label = { Text(filter) }
-                        )
-                    }
+            // REPORT FORM
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .heightIn(max = 600.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text("Swipe up to Submit a Report", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Community Reports (${reports.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Form content
                 androidx.compose.foundation.lazy.LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(reports) { report ->
-                        val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
-                        val timeDiff = System.currentTimeMillis() - report.timestamp
-                        val timeString = when {
-                            timeDiff < 3600000 -> "${maxOf(1, timeDiff / 60000)}m ago"
-                            timeDiff < 86400000 -> "${timeDiff / 3600000}h ago"
-                            timeDiff < 172800000 -> "Yesterday"
-                            else -> "${timeDiff / 86400000}d ago"
-                        }
-                        
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
-                        ) {
-                            Column {
-                                // Header: Avatar, Name, Time, Rating
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    item {
+                        Text(text = "Select Category", style = MaterialTheme.typography.titleMedium)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(categories) { category ->
+                                Card(
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clickable { viewModel.onCategorySelected(category) }
+                                        .semantics { contentDescription = "Select category ${category.name}" },
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = if (selectedCategory == category) BorderStroke(2.dp, Color(0xFFF791A9)) else null,
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .background(Color(0xFFF791A9), androidx.compose.foundation.shape.CircleShape),
-                                        contentAlignment = Alignment.Center
+                                    Column(
+                                        modifier = Modifier.fillMaxSize().padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
                                     ) {
-                                        Text(
-                                            text = "C",
-                                            color = Color.White,
-                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Community User",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                            color = Color(0xFF1F1F1F)
-                                        )
-                                        Text(
-                                            text = timeString,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                    Row {
-                                        (1..5).forEach { star ->
-                                            Icon(
-                                                imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                                                contentDescription = null,
-                                                tint = Color(0xFFFFC107),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Image
-                                if (!report.photoUri.isNullOrEmpty()) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(model = report.photoUri),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .height(200.dp)
-                                            .padding(horizontal = 16.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                    )
-                                }
-
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    // Tags and Description
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .background(Color(0xFFE0F2F4), RoundedCornerShape(16.dp))
-                                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = report.category,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF1F1F1F)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .background(Color(0xFFFFDBDF), RoundedCornerShape(16.dp))
-                                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = "Trust Score: ${report.trustScore}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF1F1F1F)
-                                            )
-                                        }
-                                    }
-                                    if (!report.description.startsWith("Rating:")) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text(
-                                            text = report.description,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color(0xFF1F1F1F)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = { 
-                                            android.util.Log.d("LIMITLESS_TRACE", "Community Report upvoted (Confirm Location) ID: ${report.id}")
-                                            viewModel.confirmReport(report.id) 
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0F2F4), contentColor = Color(0xFF1F1F1F))
-                                    ) {
-                                        Text("Confirm Location (+1) • ${report.confirmationCount}")
+                                        Icon(imageVector = category.icon, contentDescription = null, tint = TextPrimary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(text = category.name, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
                                     }
                                 }
                             }
                         }
                     }
+
+                    item {
+                        Text(text = "Rate Accessibility", style = MaterialTheme.typography.titleMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            (1..5).forEach { star ->
+                                Icon(
+                                    imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                    contentDescription = "Rate $star stars",
+                                    tint = if (star <= rating) Color(0xFFDDDD7B) else Color.Gray,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clickable { viewModel.onRatingSelected(star) }
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        Button(
+                            onClick = {
+                                if (!locationPermissionState.status.isGranted) {
+                                    locationPermissionState.launchPermissionRequest()
+                                } else {
+                                    viewModel.fetchCurrentLocation(context)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBAD6DA), contentColor = TextPrimary)
+                        ) {
+                            Text("Use Current Location")
+                        }
+                    }
+
+                    item {
+                        Button(
+                            onClick = { viewModel.submitReport() },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9), contentColor = Color.White)
+                        ) {
+                            Text(text = "Submit Report", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
                 }
             }
         }
     ) { innerPadding ->
+        // MAIN COMMUNITY FEED
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF7F1EE))
                 .padding(innerPadding)
         ) {
-            // Sync status bar
+            // Profile Card
+            UserProfileCard(modifier = Modifier.padding(16.dp))
+            
+            // View Toggle
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFE0F2F4))
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                    contentDescription = if (isOnline) "Online and Synced" else "Offline",
-                    tint = Color.DarkGray,
-                    modifier = Modifier.size(20.dp)
+                ViewModeTab(
+                    title = "📋 List Feed",
+                    isSelected = viewMode == ViewMode.LIST,
+                    onClick = { viewModel.setViewMode(ViewMode.LIST) },
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isOnline) "Synced with Community" else "Offline (Saved locally)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.DarkGray
+                ViewModeTab(
+                    title = "🗺️ Map View",
+                    isSelected = viewMode == ViewMode.MAP,
+                    onClick = { viewModel.setViewMode(ViewMode.MAP) },
+                    modifier = Modifier.weight(1f)
                 )
             }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Filter Chips
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Report Obstacle Quick Action
-                Button(
-                    onClick = { 
-                        showObstacleDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                items(ReportFilterCategory.values()) { filter ->
+                    FilterChip(
+                        selected = reportFilterCategory == filter,
+                        onClick = { viewModel.setFilterCategory(filter) },
+                        label = { Text(filter.label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = HighlightBox,
+                            selectedLabelColor = TextPrimary
+                        ),
+                        modifier = Modifier.semantics { contentDescription = "Filter by ${filter.label}" }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Sort Selector
+            var expandedSort by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                OutlinedButton(
+                    onClick = { expandedSort = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                    modifier = Modifier.semantics { contentDescription = "Sort by ${sortOrder.label}" }
                 ) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Report Obstacle", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("Sort: ${sortOrder.label}")
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                 }
-                
-                // Category selector
-            Text(text = "Select Category", style = MaterialTheme.typography.titleMedium)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(categories) { category ->
-                    Card(
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clickable { viewModel.onCategorySelected(category) }
-                            .semantics { contentDescription = "" },
-                        shape = RoundedCornerShape(8.dp),
-                        border = if (selectedCategory == category) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = category.icon,
-                                contentDescription = null,
-                                tint = Color.Unspecified
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = category.name, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-
-            // Rating selector
-            Text(text = "Rate Accessibility", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                (1..5).forEach { star ->
-                    Icon(
-                        imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "",
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable { viewModel.onRatingSelected(star) }
-                    )
-                }
-            }
-
-            // Photo upload
-            Text(text = "Add Photo", style = MaterialTheme.typography.titleMedium)
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clickable { 
-                        imagePickerLauncher.launch(
-                            androidx.activity.result.PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                            )
-                        )
-                    }
-                    .semantics { contentDescription = "" },
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
-            ) {
-                if (imageUri != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(model = imageUri),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = null,
-                            tint = Color.Gray,
-                            modifier = Modifier.size(64.dp)
+                DropdownMenu(expanded = expandedSort, onDismissRequest = { expandedSort = false }) {
+                    SortOrder.values().forEach { order ->
+                        DropdownMenuItem(
+                            text = { Text(order.label) },
+                            onClick = {
+                                viewModel.setSortOrder(order)
+                                expandedSort = false
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Select sort order ${order.label}" }
                         )
                     }
                 }
             }
-
-            // Location
-            Text(text = "Location", style = MaterialTheme.typography.titleMedium)
-            Button(
-                onClick = {
-                    if (!locationPermissionState.status.isGranted) {
-                        locationPermissionState.launchPermissionRequest()
-                    } else {
-                        viewModel.fetchCurrentLocation(context)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Content based on ViewMode
+            if (viewMode == ViewMode.LIST) {
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    items(reports) { report ->
+                        ReportCard(report)
                     }
-                },
-                modifier = Modifier.semantics { contentDescription = "" }
-            ) {
-                Text("Use Current Location")
-            }
-            location?.let { loc ->
-                Text(text = "Lat: ${loc.latitude}, Lng: ${loc.longitude}")
-            }
-
-            // Submit button
-            Button(
-                onClick = { viewModel.submitReport() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .semantics { contentDescription = "" },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9), contentColor = Color.White)
-            ) {
-                Text(text = "Submit Report")
-            }
+                }
+            } else {
+                CommunityMapView(
+                    reports = reports,
+                    modifier = Modifier.fillMaxSize().padding(16.dp).clip(RoundedCornerShape(12.dp))
+                )
             }
         }
     }
 }
 
-data class Category(val name: String, val icon: ImageVector)
+@Composable
+fun ViewModeTab(title: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.clickable { onClick() }.semantics { contentDescription = title },
+        shape = RoundedCornerShape(8.dp),
+        border = if (isSelected) BorderStroke(2.dp, Color(0xFFF791A9)) else null,
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) HighlightBox else Color(0xFFE0F2F4))
+    ) {
+        Box(modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
+        }
+    }
+}
 
+@Composable
+fun ReportCard(report: com.teamdexters.limitless.data.local.entity.UserReportEntity) {
+    Card(
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Report for ${report.locationName}" },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(36.dp).background(Color(0xFFBAD6DA), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("U", color = TextPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(report.locationName, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
+                    Text(report.category, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                Row {
+                    val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
+                    Icon(Icons.Default.Star, contentDescription = "Rating $rating", tint = Color(0xFFDDDD7B), modifier = Modifier.size(16.dp))
+                    Text("$rating/5", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(report.description, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+        }
+    }
+}
+
+data class Category(val name: String, val icon: ImageVector)
