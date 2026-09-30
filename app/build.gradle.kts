@@ -122,6 +122,9 @@ dependencies {
     // osmdroid (offline map tiles)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
     
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
     // Retrofit (for Supabase REST calls)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
@@ -131,6 +134,8 @@ dependencies {
     // TensorFlow Lite & ONNX Runtime
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
+    implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

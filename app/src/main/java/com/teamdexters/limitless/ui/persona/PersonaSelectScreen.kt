@@ -419,9 +419,7 @@ fun PersonaSelectScreen(
                     isListening = isListening,
                     listeningHint = listeningHint,
                     onMicTap = {
-                        startPersonaListening { persona ->
-                            savePersonaAndNavigate(persona, navController, database, coroutineScope)
-                        }
+                        startPersonaListening()
                     },
                     onPersonaSelected = { persona ->
                         savePersonaAndNavigate(persona, navController, database, coroutineScope)
