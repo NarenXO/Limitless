@@ -48,8 +48,16 @@ fun AccessibilityScannerScreen(
     val liveDetections by viewModel.liveDetections.collectAsState()
     val currentDoorWidth by viewModel.currentDoorWidth.collectAsState()
     val comprehensiveScore by viewModel.comprehensiveScore.collectAsState()
-    
     val categorizedResult by viewModel.categorizedResult.collectAsState()
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    LaunchedEffect(saveResult) {
+        if (saveResult == true) {
+            snackbarHostState.showSnackbar("Scan saved successfully!")
+        }
+    }
     
     // TTS Setup
     var ttsReady by remember { mutableStateOf(false) }
