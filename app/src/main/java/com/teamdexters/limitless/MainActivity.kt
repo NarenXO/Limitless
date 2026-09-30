@@ -82,6 +82,9 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var hazelActionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
+
     /**
      * Tracks whether the user has granted RECORD_AUDIO at runtime.
      * Initialized eagerly so the Compose tree always reads the correct value.
@@ -134,7 +137,8 @@ class MainActivity : ComponentActivity() {
                     micArbiter = micArbiter,
                     secureKeyProvider = secureKeyProvider,
                     mappedRoomDao = mappedRoomDao,
-                    roomConnectionDao = roomConnectionDao
+                    roomConnectionDao = roomConnectionDao,
+                    hazelActionDispatcher = hazelActionDispatcher
                 )
             }
         }
@@ -157,7 +161,8 @@ fun HazelAssistantWrapper(
     micArbiter: com.teamdexters.limitless.audio.MicArbiter,
     secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider,
     mappedRoomDao: com.teamdexters.limitless.data.local.dao.MappedRoomDao,
-    roomConnectionDao: com.teamdexters.limitless.data.local.dao.RoomConnectionDao
+    roomConnectionDao: com.teamdexters.limitless.data.local.dao.RoomConnectionDao,
+    hazelActionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -368,7 +373,8 @@ fun HazelAssistantWrapper(
                                 responseBannerText = text
                                 isBannerVisible = true
                             },
-                            onHandled = {}
+                            onHandled = {},
+                            hazelActionDispatcher = hazelActionDispatcher
                         )
                     }
                 )
@@ -432,7 +438,8 @@ private fun handleHazelIntent(
     scope: CoroutineScope,
     tts: TextToSpeech?,
     onShowBanner: (String) -> Unit,
-    onHandled: () -> Unit
+    onHandled: () -> Unit,
+    hazelActionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 ) {
     fun speak(text: String) {
         android.util.Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
@@ -478,12 +485,7 @@ private fun handleHazelIntent(
         is HazelIntent.GeneralQuery  -> {
             onHandled()
             
-            val dispatcher = com.teamdexters.limitless.hazel.HazelActionDispatcher(
-                navController = navController,
-                onSpeak = { text -> speak(text) }
-            )
-            
-            val handled = dispatcher.parseIntent(intent.rawQuery)
+            val handled = hazelActionDispatcher.parseIntent(intent.rawQuery)
             if (!handled) {
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,
@@ -505,12 +507,7 @@ private fun handleHazelIntent(
         is HazelIntent.Unknown -> {
             onHandled()
             
-            val dispatcher = com.teamdexters.limitless.hazel.HazelActionDispatcher(
-                navController = navController,
-                onSpeak = { text -> speak(text) }
-            )
-            
-            val handled = dispatcher.parseIntent(intent.rawQuery)
+            val handled = hazelActionDispatcher.parseIntent(intent.rawQuery)
             if (!handled) {
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,

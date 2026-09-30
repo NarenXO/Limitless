@@ -60,7 +60,13 @@ interface SecureKeyProviderEntryPoint {
 }
 
 @Composable
-fun BlindHomeScreen(onBack: () -> Unit = {}) {
+fun BlindHomeScreen(
+    onBack: () -> Unit = {},
+    viewModel: com.teamdexters.limitless.ui.blind.BlindViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
+    // Collect the vision result state from the ViewModel
+    val visionResult by viewModel.visionResult.collectAsState()
+
     // Intercept physical phone back gestures & hardware back buttons
     BackHandler(enabled = true) {
         android.util.Log.e("NAV_DEBUG", "System BackHandler triggered in BlindHomeScreen")
@@ -187,6 +193,16 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
         // This is handled gracefully - the detector will return empty results
 
         networkStatusTracker.register()
+    }
+    
+    // Collect Vision Command
+    LaunchedEffect(visionResult) {
+        visionResult?.let {
+            resultText = it
+            showResultBanner = true
+            ttsManager.speak(it)
+            viewModel.clearResult()
+        }
     }
 
     // Cleanup on dispose
