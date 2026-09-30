@@ -36,6 +36,42 @@ class GeminiClient(
         get() = apiKeyOverride ?: secureKeyProvider.getGeminiKey() ?: ""
 
     private var cachedCandidate: LlmCandidate? = null
+    private var dynamicGroqModels: List<String>? = null
+
+    private fun discoverGroqModels(apiKey: String): List<String>? {
+        if (dynamicGroqModels != null) return dynamicGroqModels
+        
+        try {
+            val url = java.net.URL("https://api.groq.com/openai/v1/models")
+            val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 3000
+                readTimeout = 3000
+                setRequestProperty("Authorization", "Bearer $apiKey")
+            }
+            if (connection.responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(connection.inputStream, "UTF-8"))
+                val rawJson = reader.use { it.readText() }
+                val jsonObject = org.json.JSONObject(rawJson)
+                val dataArray = jsonObject.optJSONArray("data")
+                if (dataArray != null) {
+                    val models = mutableListOf<String>()
+                    for (i in 0 until dataArray.length()) {
+                        val modelObj = dataArray.optJSONObject(i)
+                        modelObj?.optString("id")?.let { models.add(it) }
+                    }
+                    if (models.isNotEmpty()) {
+                        dynamicGroqModels = models
+                        android.util.Log.d("LIMITLESS_TRACE", "[CloudLLM] Discovered dynamic Groq models: $models")
+                        return models
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LIMITLESS_TRACE", "[CloudLLM] Failed to discover dynamic Groq models", e)
+        }
+        return null
+    }
 
     /**
      * Sends the prompt to Gemini REST endpoint with accessibility system instruction.
@@ -65,13 +101,22 @@ class GeminiClient(
         if (finalKey.startsWith("gsk_")) {
             providerName = "Groq"
             isGemini = false
-            candidates = mutableListOf(
-                LlmCandidate("llama-3.2-3b-preview", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("gemma2-9b-it", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("llama-3.1-8b-instant", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("llama-3.2-1b-preview", "https://api.groq.com/openai/v1/chat/completions")
-            )
+            val baseCandidates = listOf("deepseek-r1-distill-llama-70b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen-2.5-32b")
+            val activeModels = discoverGroqModels(finalKey)
+            
+            val validModels = if (activeModels != null) {
+                val prioritized = baseCandidates.filter { activeModels.contains(it) }.toMutableList()
+                if (prioritized.isEmpty()) {
+                    prioritized.addAll(activeModels.take(4))
+                }
+                prioritized
+            } else {
+                baseCandidates
+            }
+            
+            candidates = validModels.map { 
+                LlmCandidate(it, "https://api.groq.com/openai/v1/chat/completions")
+            }.toMutableList()
         } else if (finalKey.startsWith("xai-")) {
             providerName = "xAI Grok"
             isGemini = false
@@ -236,6 +281,7 @@ class GeminiClient(
         }
         
         val attemptedStr = candidates.joinToString(", ") { it.model }
+        Log.e("LIMITLESS_TRACE", "[CloudLLM] All cloud models failed. Triggering smart offline fallback.")
         Log.e("LIMITLESS_TRACE", "[CloudLLM] $providerName request failed. Reason: No available models. Attempted: $attemptedStr")
         Result.failure(Exception("$providerName request failed.\nReason: No available models.\nAttempted: $attemptedStr"))
     }
