@@ -35,47 +35,6 @@ class GeminiClient(
 
     private var cachedModels: List<String>? = null
 
-    private fun fetchAvailableModels(apiKey: String): List<String> {
-        if (cachedModels != null) return cachedModels!!
-        val availableModels = mutableListOf<String>()
-        try {
-            val urlString = "https://generativelanguage.googleapis.com/v1beta/models"
-            val url = URL(urlString)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = TIMEOUT_MS
-                readTimeout = TIMEOUT_MS
-                setRequestProperty("x-goog-api-key", apiKey)
-            }
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val reader = BufferedReader(InputStreamReader(connection.inputStream, "UTF-8"))
-                val responseStringBuilder = StringBuilder()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    responseStringBuilder.append(line)
-                }
-                reader.close()
-                val jsonResponse = JSONObject(responseStringBuilder.toString())
-                val modelsArray = jsonResponse.optJSONArray("models")
-                if (modelsArray != null) {
-                    for (i in 0 until modelsArray.length()) {
-                        val modelObj = modelsArray.optJSONObject(i)
-                        val name = modelObj?.optString("name")
-                        if (name != null && name.startsWith("models/")) {
-                            availableModels.add(name.removePrefix("models/"))
-                        }
-                    }
-                }
-            } else {
-                Log.e("LIMITLESS_TRACE", "[Gemini] Failed to fetch models, HTTP ${connection.responseCode}")
-            }
-        } catch (e: Exception) {
-            Log.e("LIMITLESS_TRACE", "[Gemini] Exception fetching models", e)
-        }
-        cachedModels = availableModels
-        return availableModels
-    }
-
     /**
      * Sends the prompt to Gemini REST endpoint with accessibility system instruction.
      * Enforces a 5-second timeout and fails gracefully if offline or unauthenticated.
@@ -97,12 +56,7 @@ class GeminiClient(
         
         Log.d("LIMITLESS_TRACE", "[Gemini] Final key length: ${finalKey.length}")
 
-        val availableModels = fetchAvailableModels(finalKey)
-        Log.d("LIMITLESS_TRACE", "[Gemini] Available models retrieved: ${availableModels.size}")
-        
-        val preferredModels = listOf("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-flash-latest")
-        val candidateModels = preferredModels.filter { it in availableModels }.ifEmpty { preferredModels }
-        Log.d("LIMITLESS_TRACE", "[Gemini] Filtered candidate models: $candidateModels")
+        val candidateModels = listOf("gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro")
         
         var lastException: Exception? = null
         var lastErrorBody: String? = null
@@ -180,9 +134,6 @@ class GeminiClient(
                     } else {
                         lastException = Exception("Parsed text is empty from success body")
                     }
-                } else if (responseCode == 404) {
-                    Log.d("LIMITLESS_TRACE", "[Gemini] Model $modelName returned 404, trying next candidate...")
-                    continue
                 } else {
                     val errorReader = BufferedReader(InputStreamReader(connection.errorStream, "UTF-8"))
                     val errorBuilder = StringBuilder()
@@ -192,14 +143,15 @@ class GeminiClient(
                     }
                     errorReader.close()
                     val errorBody = errorBuilder.toString()
-                    Log.e("LIMITLESS_TRACE", "[Gemini] Error body: $errorBody")
+                    Log.e("LIMITLESS_TRACE", "[Gemini] Error for model $modelName ($responseCode). Trying next candidate... Body: $errorBody")
                     lastErrorBody = errorBody
-                    return@withContext Result.failure(Exception("HTTP Error $responseCode: $errorBody"))
+                    continue
                 }
             } catch (e: Exception) {
-                Log.e("LIMITLESS_TRACE", "[Gemini] Exception during request", e)
+                Log.e("LIMITLESS_TRACE", "[Gemini] Exception during request for model $modelName. Trying next candidate...", e)
                 e.printStackTrace()
                 lastException = e
+                continue
             }
         }
         
