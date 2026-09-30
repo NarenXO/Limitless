@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.teamdexters.limitless.blind.BlindAIInvoker
 import com.teamdexters.limitless.ui.blind.*
 import com.teamdexters.limitless.ui.blind.nav.*
 import com.teamdexters.limitless.ui.theme.*
@@ -140,6 +141,9 @@ fun BlindHomeScreen() {
         if (!pathDetectorInitialized) {
             // Path detection will use vision only (no-op gracefully)
         }
+
+        // Initialize BlindAIInvoker for on-demand AI invocation
+        BlindAIInvoker.initialize(context)
     }
 
     // Cleanup on dispose
@@ -176,6 +180,7 @@ fun BlindHomeScreen() {
             ttsManager.release()
             objectDetector.close()
             networkStatusTracker.unregister()
+            BlindAIInvoker.release()
         }
     }
 
@@ -371,7 +376,7 @@ fun BlindHomeScreen() {
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Start Navigation button (Phase 5)
+                    // Start Navigation button
                     Button(
                         onClick = {
                             startNavigation(
@@ -401,7 +406,7 @@ fun BlindHomeScreen() {
                         )
                     }
 
-                    // Describe My Surroundings button (Phase 3)
+                    // Describe My Surroundings button
                     Button(
                         onClick = {
                             if (!isDescribing && latestFrame != null) {
@@ -449,52 +454,82 @@ fun BlindHomeScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Read Text button (placeholder for later phase)
+                        // Read Text button
                         Button(
                             onClick = {
-                                // Placeholder for Phase 2
-                                Toast.makeText(context, "Read Text coming in Phase 2", Toast.LENGTH_SHORT).show()
+                                scope.launch {
+                                    isProcessing = true
+                                    try {
+                                        val response = BlindAIInvoker.invokeVisionAI(context, "read text")
+                                        resultText = response
+                                        showResultBanner = true
+                                        ttsManager.speak(response)
+                                        HapticVocabulary.triggerOneShot(context, 150)
+                                        delay(8000)
+                                        showResultBanner = false
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Text reading failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(64.dp)
+                                .height(72.dp)
                                 .semantics {
-                                    contentDescription = "Read Text. Double tap to activate. Coming in Phase 2."
+                                    contentDescription = "Read Text. Double tap to read text from camera view."
                                 },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PersonaBlind,
                                 contentColor = TextPrimary
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isProcessing
                         ) {
                             Text(
-                                text = "Read Text",
+                                text = if (isProcessing) "Reading..." else "Read Text",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
                         }
 
-                        // Describe button (placeholder for later phase)
+                        // Describe button
                         Button(
                             onClick = {
-                                // Placeholder for Phase 3
-                                Toast.makeText(context, "Describe coming in Phase 3", Toast.LENGTH_SHORT).show()
+                                scope.launch {
+                                    isProcessing = true
+                                    try {
+                                        val response = BlindAIInvoker.invokeVisionAI(context, "describe surroundings")
+                                        resultText = response
+                                        showResultBanner = true
+                                        ttsManager.speak(response)
+                                        HapticVocabulary.triggerOneShot(context, 150)
+                                        delay(8000)
+                                        showResultBanner = false
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Scene description failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(64.dp)
+                                .height(72.dp)
                                 .semantics {
-                                    contentDescription = "Describe. Double tap to activate. Coming in Phase 3."
+                                    contentDescription = "Describe. Double tap to describe camera view."
                                 },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PersonaBlind,
                                 contentColor = TextPrimary
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isProcessing
                         ) {
                             Text(
-                                text = "Describe",
+                                text = if (isProcessing) "Describing..." else "Describe",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -504,7 +539,7 @@ fun BlindHomeScreen() {
                 }
             }
 
-            // Navigation overlay (Phase 5)
+            // Navigation overlay
             if (showNavigationOverlay && currentRoute != null) {
                 NavigationOverlay(
                     destination = currentRoute!!.destination,

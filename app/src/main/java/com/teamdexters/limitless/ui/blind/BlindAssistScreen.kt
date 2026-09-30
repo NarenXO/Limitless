@@ -1,6 +1,7 @@
 package com.teamdexters.limitless.ui.blind
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.VibrationEffect
@@ -10,8 +11,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Preview
-import androidx.camera.core.PreviewView
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.teamdexters.limitless.blind.BlindAIInvoker
 import com.teamdexters.limitless.blind.BlindCameraController
+import com.teamdexters.limitless.blind.BlindNavigationVoice
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.delay
@@ -80,7 +84,10 @@ fun BlindAssistScreen() {
     var isProcessingAI by remember { mutableStateOf(false) }
     var testQueryIndex by remember { mutableIntStateOf(0) }
 
-    // Test queries for Phase 3 offline fallback testing
+    // Navigation state
+    var showNavigationOverlay by remember { mutableStateOf(false) }
+
+    // Test queries for offline fallback testing
     val testQueries = listOf(
         "describe surroundings",
         "what's in front",
@@ -96,6 +103,7 @@ fun BlindAssistScreen() {
     LaunchedEffect(Unit) {
         cameraController.initialize()
         BlindAIInvoker.initialize(context)
+        BlindNavigationVoice.initialize(context)
         ttsManager.initialize { success ->
             if (!success) {
                 Toast.makeText(context, "Text-to-speech initialization failed", Toast.LENGTH_SHORT).show()
@@ -117,6 +125,7 @@ fun BlindAssistScreen() {
         onDispose {
             cameraController.release()
             BlindAIInvoker.release()
+            BlindNavigationVoice.release()
             ttsManager.release()
         }
     }
@@ -392,7 +401,16 @@ fun BlindAssistScreen() {
 
                         // Navigate button
                         Button(
-                            onClick = { handleAIInvocation("navigate to library") },
+                            onClick = {
+                                scope.launch {
+                                    val response = BlindNavigationVoice.startNavigation("main entrance")
+                                    aiResponse = response
+                                    showResponseBanner = true
+                                    triggerHaptic()
+                                    delay(8000)
+                                    showResponseBanner = false
+                                }
+                            },
                             modifier = Modifier
                                 .height(72.dp)
                                 .weight(1f)
@@ -426,7 +444,7 @@ fun BlindAssistScreen() {
             ) {
                 FloatingActionButton(
                     onClick = {
-                        // Cycle through test queries for Phase 3 offline fallback testing
+                        // Cycle through test queries for offline fallback testing
                         val query = testQueries[testQueryIndex]
                         testQueryIndex = (testQueryIndex + 1) % testQueries.size
                         handleAIInvocation(query)
