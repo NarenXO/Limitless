@@ -163,7 +163,6 @@ object BlindAIInvoker {
         geminiClient = null
         OfflineObjectDetector.release()
         OfflineTextReader.release()
-        OfflineColorDetector.release()
         BlindNavigationVoice.release()
         Log.d(TAG, "BlindAIInvoker: Released")
     }

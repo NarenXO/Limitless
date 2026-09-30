@@ -46,7 +46,7 @@ object CameraFrameManager {
         val text = "Camera Initializing..."
         val textWidth = paint.measureText(text)
         val x = (FALLBACK_WIDTH - textWidth) / 2
-        val y = FALLBACK_HEIGHT / 2
+        val y = FALLBACK_HEIGHT / 2f
         canvas.drawText(text, x, y, paint)
 
         Log.d(TAG, "CameraFrameManager: Created fallback bitmap (${FALLBACK_WIDTH}x${FALLBACK_HEIGHT})")

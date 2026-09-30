@@ -12,7 +12,6 @@ import android.hardware.SensorManager
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.camera.core.ContextCompat as CameraXCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 
@@ -61,7 +60,7 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
             .build()
             .also { imageAnalysis ->
                 imageAnalysis.setAnalyzer(
-                    CameraXCompat.getMainExecutor(context),
+                    ContextCompat.getMainExecutor(context),
                     this::analyzeFrame
                 )
             }
