@@ -4,7 +4,6 @@ import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,19 +20,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.rememberAsyncImagePainter
 import com.google.accompanist.permissions.*
 
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import androidx.compose.foundation.shape.CircleShape
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -52,31 +51,29 @@ fun CommunityReportScreen(
 
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val rating by viewModel.rating.collectAsState()
-    val imageUri by viewModel.imageUri.collectAsState()
     val submitResult by viewModel.submitResult.collectAsState()
     val scaffoldState = rememberBottomSheetScaffoldState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val viewMode by viewModel.viewMode.collectAsState()
     val reportFilterCategory by viewModel.reportFilterCategory.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val reports by viewModel.filteredReports.collectAsState(initial = emptyList())
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? -> viewModel.onImageSelected(uri) }
+    val analyticsData by viewModel.analyticsData.collectAsState()
 
     val locationPermissionState = rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
 
     LaunchedEffect(submitResult) {
         if (submitResult == true) {
             scaffoldState.snackbarHostState.showSnackbar("Report submitted successfully!")
+            scaffoldState.bottomSheetState.hide()
         }
     }
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 64.dp,
+        sheetPeekHeight = 0.dp, // Hide completely by default, show on CTA tap
         sheetContainerColor = Color(0xFFF7F1EE),
         sheetContent = {
             // REPORT FORM
@@ -88,10 +85,9 @@ fun CommunityReportScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Swipe up to Submit a Report", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("Submit Accessibility Report", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
                 
-                // Form content
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -148,7 +144,8 @@ fun CommunityReportScreen(
                                     viewModel.fetchCurrentLocation(context)
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBAD6DA), contentColor = TextPrimary)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBAD6DA), contentColor = TextPrimary),
+                            modifier = Modifier.height(52.dp)
                         ) {
                             Text("Use Current Location")
                         }
@@ -169,109 +166,163 @@ fun CommunityReportScreen(
         }
     ) { innerPadding ->
         // MAIN COMMUNITY FEED
-        val syncStatus by viewModel.syncStatus.collectAsState()
-        val analyticsData by viewModel.analyticsData.collectAsState()
+        var isBannerExpanded by remember { mutableStateOf(false) }
 
         androidx.compose.foundation.lazy.LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF7F1EE))
                 .padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 100.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             
+            // Header
             item {
-                // Profile Card
-                UserProfileCard(
-                    syncStatus = syncStatus,
-                    onSyncClick = { viewModel.triggerCloudSync() },
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)
-                )
-            }
-
-            item {
-                // Analytics Dashboard
-                CommunityAnalyticsCard(
-                    analyticsData = analyticsData,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            
-            item {
-                // View Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ViewModeTab(
-                        title = "📋 List Feed",
-                        isSelected = viewMode == ViewMode.LIST,
-                        onClick = { viewModel.setViewMode(ViewMode.LIST) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ViewModeTab(
-                        title = "🗺️ Map View",
-                        isSelected = viewMode == ViewMode.MAP,
-                        onClick = { viewModel.setViewMode(ViewMode.MAP) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-            
-            item {
-                // Filter Chips
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(ReportFilterCategory.values()) { filter ->
-                        FilterChip(
-                            selected = reportFilterCategory == filter,
-                            onClick = { viewModel.setFilterCategory(filter) },
-                            label = { Text(filter.label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = HighlightBox,
-                                selectedLabelColor = TextPrimary
-                            ),
-                            modifier = Modifier.semantics { contentDescription = "Filter by ${filter.label}" }
-                        )
-                    }
-                }
-            }
-            
-            item {
-                // Sort Selector
-                var expandedSort by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    OutlinedButton(
-                        onClick = { expandedSort = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                        modifier = Modifier.semantics { contentDescription = "Sort by ${sortOrder.label}" }
-                    ) {
-                        Text("Sort: ${sortOrder.label}")
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                    }
-                    DropdownMenu(expanded = expandedSort, onDismissRequest = { expandedSort = false }) {
-                        SortOrder.values().forEach { order ->
-                            DropdownMenuItem(
-                                text = { Text(order.label) },
-                                onClick = {
-                                    viewModel.setSortOrder(order)
-                                    expandedSort = false
-                                },
-                                modifier = Modifier.semantics { contentDescription = "Select sort order ${order.label}" }
+                Column(modifier = Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
+                    Text("Community Accessibility", fontSize = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // View Mode Switcher
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            onClick = { viewModel.setViewMode(ViewMode.LIST) },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(26.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewMode == ViewMode.LIST) Color(0xFFF791A9) else Color(0xFFE0F2F4),
+                                contentColor = if (viewMode == ViewMode.LIST) Color.White else TextPrimary
                             )
+                        ) {
+                            Text("Feed List", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { viewModel.setViewMode(ViewMode.MAP) },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(26.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewMode == ViewMode.MAP) Color(0xFFF791A9) else Color(0xFFE0F2F4),
+                                contentColor = if (viewMode == ViewMode.MAP) Color.White else TextPrimary
+                            )
+                        ) {
+                            Text("Map View", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         }
                     }
                 }
             }
             
+            // Expandable Profile/Analytics Banner
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clickable { isBannerExpanded = !isBannerExpanded },
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                        if (!isBannerExpanded) {
+                            Text("Sanjeevi • 15 Contributed • 95/100 Trust Score [ Tap for Stats ▾ ]", color = TextPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        } else {
+                            Text("Sanjeevi • 15 Contributed • 95/100 Trust Score [ Tap to Collapse ▴ ]", color = TextPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Total Reports: ${analyticsData?.totalReports ?: 0}", color = TextPrimary)
+                            Text("Verified Accessible: ${analyticsData?.verifiedCount ?: 0}", color = TextPrimary)
+                            Text("Average Rating: ${analyticsData?.averageScore ?: 0}/5", color = TextPrimary)
+                            Text("Ramp Access: ${((analyticsData?.rampPercentage ?: 0f) * 100).toInt()}% • Elevators: ${((analyticsData?.elevatorPercentage ?: 0f) * 100).toInt()}%", color = TextPrimary)
+                        }
+                    }
+                }
+            }
+
+            // Submit Report CTA Button (Top)
+            item {
+                Button(
+                    onClick = { coroutineScope.launch { scaffoldState.bottomSheetState.expand() } },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(54.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9), contentColor = Color.White)
+                ) {
+                    Text("+ Submit Accessibility Report (Zero Typing)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+
+            // Filters & Sort
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Filter Chips Row
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(ReportFilterCategory.values()) { filter ->
+                            val isSelected = reportFilterCategory == filter
+                            Box(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(if (isSelected) HighlightBox else Color(0xFFE0F2F4))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) Color(0xFFF791A9) else Color.Transparent,
+                                        shape = RoundedCornerShape(24.dp)
+                                    )
+                                    .clickable { viewModel.setFilterCategory(filter) }
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(filter.label, color = TextPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Sort Dropdown Pill
+                    var expandedSort by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        Button(
+                            onClick = { expandedSort = true },
+                            modifier = Modifier.height(48.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0F2F4), contentColor = TextPrimary)
+                        ) {
+                            Text("Sort: ${sortOrder.label} ▾", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
+                        DropdownMenu(expanded = expandedSort, onDismissRequest = { expandedSort = false }) {
+                            SortOrder.values().forEach { order ->
+                                DropdownMenuItem(
+                                    text = { Text(order.label) },
+                                    onClick = {
+                                        viewModel.setSortOrder(order)
+                                        expandedSort = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Content based on ViewMode
             if (viewMode == ViewMode.LIST) {
                 items(reports) { report ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         ReportCard(report)
+                    }
+                }
+                
+                // Submit Report CTA Button (Bottom)
+                item {
+                    Button(
+                        onClick = { coroutineScope.launch { scaffoldState.bottomSheetState.expand() } },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(54.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9), contentColor = Color.White)
+                    ) {
+                        Text("+ Submit Accessibility Report (Zero Typing)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
             } else {
@@ -288,25 +339,11 @@ fun CommunityReportScreen(
 }
 
 @Composable
-fun ViewModeTab(title: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.clickable { onClick() }.semantics { contentDescription = title },
-        shape = RoundedCornerShape(8.dp),
-        border = if (isSelected) BorderStroke(2.dp, Color(0xFFF791A9)) else null,
-        colors = CardDefaults.cardColors(containerColor = if (isSelected) HighlightBox else Color(0xFFE0F2F4))
-    ) {
-        Box(modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
-        }
-    }
-}
-
-@Composable
 fun ReportCard(report: com.teamdexters.limitless.data.local.entity.UserReportEntity) {
     Card(
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Report for ${report.locationName}" },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -314,20 +351,44 @@ fun ReportCard(report: com.teamdexters.limitless.data.local.entity.UserReportEnt
                     modifier = Modifier.size(36.dp).background(Color(0xFFBAD6DA), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("U", color = TextPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Icon(Icons.Default.Place, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(report.locationName, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
-                    Text(report.category, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text(report.category, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
                 }
-                Row {
-                    val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
-                    Icon(Icons.Default.Star, contentDescription = "Rating $rating", tint = Color(0xFFDDDD7B), modifier = Modifier.size(16.dp))
-                    Text("$rating/5", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                
+                val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
+                val isVerified = rating >= 4 || report.trustScore >= 70
+                if (isVerified) {
+                    Box(
+                        modifier = Modifier.background(Color(0xFFBAD6DA), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Verified Accessible", fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val rating = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
+                Row {
+                    (1..5).forEach { star ->
+                        Icon(
+                            imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = null,
+                            tint = if (star <= rating) Color(0xFFDDDD7B) else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("$rating / 5", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = TextPrimary)
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
             Text(report.description, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
         }
     }
