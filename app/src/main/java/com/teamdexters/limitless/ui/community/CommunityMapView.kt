@@ -26,6 +26,7 @@ import org.osmdroid.views.overlay.Marker
 @Composable
 fun CommunityMapView(
     reports: List<UserReportEntity>,
+    onMapError: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -49,7 +50,7 @@ fun CommunityMapView(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBDF))
         ) {
             Text(
-                text = "Map view currently unavailable offline. Showing report list.",
+                text = "Map offline preview unavailable. Showing location list.",
                 modifier = Modifier.padding(16.dp),
                 color = TextPrimary
             )
@@ -76,6 +77,7 @@ fun CommunityMapView(
                 } catch (e: Throwable) {
                     android.util.Log.e("LIMITLESS_CRASH", "Failed to init MapView", e)
                     mapError = true
+                    onMapError?.invoke()
                     android.view.View(ctx)
                 }
             },

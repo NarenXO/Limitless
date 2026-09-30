@@ -159,16 +159,15 @@ fun AccessibilityScannerScreen(
                             }
                         }
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(HighlightBox),
-                            contentAlignment = Alignment.Center
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = HighlightBox),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(
+                                modifier = Modifier.padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(24.dp)
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 Icon(
                                     imageVector = androidx.compose.material.icons.Icons.Default.CameraAlt,
@@ -178,9 +177,17 @@ fun AccessibilityScannerScreen(
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = "Camera permission required to scan building accessibility",
+                                    text = "Camera Permission Required",
                                     color = TextPrimary,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Limitless needs camera access to detect ramps, stairs, doorways, and read signage.",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))

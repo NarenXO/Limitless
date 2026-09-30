@@ -274,6 +274,7 @@ fun CommunityReportScreen(
             } else {
                 CommunityMapView(
                     reports = reports,
+                    onMapError = { viewModel.setViewMode(ViewMode.LIST) },
                     modifier = Modifier.fillMaxSize().padding(16.dp).clip(RoundedCornerShape(12.dp))
                 )
             }

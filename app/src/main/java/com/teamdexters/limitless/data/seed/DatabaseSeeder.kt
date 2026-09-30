@@ -13,17 +13,15 @@ object DatabaseSeeder {
 
     suspend fun seedIfEmpty(userReportDao: UserReportDao, context: Context) {
         withContext(Dispatchers.IO) {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val hasSeeded = prefs.getBoolean(KEY_HAS_SEEDED_CHENNAI, false)
+            val reportCount = userReportDao.getReportCount()
 
-            if (!hasSeeded) {
+            if (reportCount == 0) {
                 try {
                     val reports = ChennaiSeedData.getSeedReports()
                     reports.forEach { report ->
                         userReportDao.insertReport(report)
                     }
                     
-                    prefs.edit().putBoolean(KEY_HAS_SEEDED_CHENNAI, true).apply()
                     Log.d("DatabaseSeeder", "Successfully seeded Chennai dataset.")
                 } catch (e: Exception) {
                     Log.e("DatabaseSeeder", "Error seeding data: ${e.message}")

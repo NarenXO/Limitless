@@ -37,6 +37,9 @@ interface UserReportDao {
     @Query("SELECT * FROM user_reports")
     suspend fun getAllReportsOnce(): List<UserReportEntity>
 
+    @Query("SELECT COUNT(*) FROM user_reports")
+    suspend fun getReportCount(): Int
+
     /**
      * Retrieves all user reports that are pending synchronization with the remote database.
      * Used for syncing local data to Supabase.

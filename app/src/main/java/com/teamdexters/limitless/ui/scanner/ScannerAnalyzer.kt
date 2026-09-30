@@ -73,12 +73,39 @@ class ScannerAnalyzer(private val context: Context) {
                 
             objectDetector = ObjectDetector.createFromOptions(context, options)
         } catch (e: Throwable) {
-            android.util.Log.e("ScannerAnalyzer", "Error setting up ObjectDetector", e)
+            android.util.Log.w("LIMITLESS_SCANNER", "MediaPipe TFLite asset init failed, using ML Kit fallback.", e)
             objectDetector = null
         }
     }
 
     fun detectObjectsLive(bitmap: Bitmap): List<DetectedObject> {
+        if (objectDetector == null) {
+            val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+            val labeler = com.google.mlkit.vision.label.ImageLabeling.getClient(
+                com.google.mlkit.vision.label.defaults.ImageLabelerOptions.DEFAULT_OPTIONS
+            )
+            labeler.process(image).addOnSuccessListener { labels ->
+                val detections = mutableListOf<DetectedObject>()
+                for (label in labels) {
+                    val text = label.text.lowercase()
+                    val conf = label.confidence
+                    if (conf <= 0.5f) continue
+                    val accType = when {
+                        text.contains("ramp") || text.contains("wheelchair ramp") -> AccessibilityObjectType.RAMP
+                        text.contains("stairs") || text.contains("staircase") -> AccessibilityObjectType.STAIRS
+                        text.contains("handrail") || text.contains("railing") -> AccessibilityObjectType.HANDRAIL
+                        text.contains("door") || text.contains("doorway") || text.contains("entrance") -> AccessibilityObjectType.DOORWAY
+                        else -> AccessibilityObjectType.OTHER
+                    }
+                    if (accType != AccessibilityObjectType.OTHER) {
+                        detections.add(DetectedObject(text, conf, RectF(0f, 0f, 0f, 0f), accType))
+                    }
+                }
+                liveDetections = detections
+            }
+            return liveDetections.toList()
+        }
+
         val mpImage = BitmapImageBuilder(bitmap).build()
         try {
             objectDetector?.detectAsync(mpImage, System.currentTimeMillis())
