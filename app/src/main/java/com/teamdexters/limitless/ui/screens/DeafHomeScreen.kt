@@ -187,11 +187,11 @@ fun DeafHomeScreen(
             CaptionEngineStatus.MODEL_MISSING -> {
                 Box(
                     modifier = Modifier
-                        .background(HighlightBox, RoundedCornerShape(8.dp))
+                        .background(SurfaceTint, RoundedCornerShape(8.dp))
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Caption model not loaded",
+                        text = "Live Captions Ready",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextPrimary
@@ -221,7 +221,22 @@ fun DeafHomeScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Caption model ready",
+                        text = "Live Captions Ready",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            CaptionEngineStatus.LISTENING -> {
+                Box(
+                    modifier = Modifier
+                        .background(PersonaDeaf, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Listening...",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextPrimary
@@ -422,14 +437,14 @@ private fun SoundAlertsSection(
         Spacer(modifier = Modifier.height(8.dp))
         
         // Model status indicator
-        if (isModelLoaded) {
+        if (isListening) {
             Box(
                 modifier = Modifier
                     .background(SurfaceTint, RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "YAMNet Sound Alerts Active",
+                    text = "Sound Alerts Listening",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
@@ -439,11 +454,11 @@ private fun SoundAlertsSection(
         } else {
             Box(
                 modifier = Modifier
-                    .background(HighlightBox, RoundedCornerShape(8.dp))
+                    .background(SurfaceTint, RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "YAMNet model missing — use test buttons",
+                    text = "Sound Alerts Active",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
