@@ -52,14 +52,14 @@ object OfflineTextReader {
             val extractedText = result.text.trim()
             if (extractedText.isBlank()) {
                 Log.d(TAG, "OfflineTextReader: No text detected")
-                "No readable text detected. Move closer and hold steady."
+                "No text found in camera view. Move closer to the text."
             } else {
                 Log.d(TAG, "OfflineTextReader: Extracted text: ${extractedText.take(50)}...")
-                "The text says: $extractedText"
+                "I see text: $extractedText"
             }
         } catch (e: Exception) {
             Log.e(TAG, "OfflineTextReader: Error reading text", e)
-            "No readable text detected. Move closer and hold steady."
+            "No text found in camera view. Move closer to the text."
         }
     }
 

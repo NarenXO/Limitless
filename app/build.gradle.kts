@@ -163,4 +163,7 @@ dependencies {
     // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Palette for color detection
+    implementation("androidx.palette:palette:1.0.0")
 }

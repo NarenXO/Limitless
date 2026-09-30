@@ -95,9 +95,9 @@ class PathFeatureDetectorV2(private val context: Context) {
         ttsManager: TTSManager,
         scope: CoroutineScope
     ): List<PathFeature> {
-        // If TFLite model is not available, run active floor analysis instead
+        // If TFLite model is not available, we do NOT run heuristic floor analysis anymore.
+        // This avoids spamming the user with canned strings. We only trust real ML detections.
         if (!isInitialized || detector == null) {
-            runFloorAnalysis(bitmap, frameWidth, frameHeight, ttsManager, scope)
             return emptyList()
         }
 
@@ -274,80 +274,7 @@ class PathFeatureDetectorV2(private val context: Context) {
         }
     }
 
-    /**
-     * Active real-time floor analysis for when no TFLite path model is loaded.
-     *
-     * Analyses the lower 50% region of the frame:
-     *  - High brightness + low contrast variation → "Path ahead appears clear and well lit."
-     *  - Low brightness (avg < 30% of 255)       → "Low lighting on path ahead. Caution advised."
-     *  - High contrast variation                  → "Possible surface change or step detected ahead."
-     *
-     * Enforces 8-second cooldown to prevent warning spam.
-     */
-    private fun runFloorAnalysis(
-        bitmap: Bitmap,
-        frameWidth: Int,
-        frameHeight: Int,
-        ttsManager: TTSManager,
-        scope: CoroutineScope
-    ) {
-        val currentTime = System.currentTimeMillis()
-        val cooldownKey = "floor_analysis"
-        val lastSpoken = lastSpokenFeatures[cooldownKey]
-        if (lastSpoken != null && (currentTime - lastSpoken) < COOLDOWN_MS) return
-
-        try {
-            // Sample the lower 50% of the frame (floor region)
-            val floorStartY = frameHeight / 2
-            val sampleStep = 8 // Sample every 8 pixels for performance
-
-            var totalBrightness = 0L
-            var sampleCount = 0
-            val brightnessValues = mutableListOf<Int>()
-
-            for (y in floorStartY until frameHeight step sampleStep) {
-                for (x in 0 until frameWidth step sampleStep) {
-                    if (x < bitmap.width && y < bitmap.height) {
-                        val pixel = bitmap.getPixel(x, y)
-                        val r = android.graphics.Color.red(pixel)
-                        val g = android.graphics.Color.green(pixel)
-                        val b = android.graphics.Color.blue(pixel)
-                        val brightness = ((r * 0.299 + g * 0.587 + b * 0.114)).toInt()
-                        totalBrightness += brightness
-                        brightnessValues.add(brightness)
-                        sampleCount++
-                    }
-                }
-            }
-
-            if (sampleCount == 0) return
-
-            val avgBrightness = totalBrightness / sampleCount
-            val brightnessFraction = avgBrightness / 255.0
-
-            // Calculate contrast variation (standard deviation)
-            val variance = brightnessValues.fold(0.0) { acc, v ->
-                val diff = v - avgBrightness
-                acc + diff * diff
-            } / sampleCount
-            val stdDev = kotlin.math.sqrt(variance)
-
-            val guidance = when {
-                brightnessFraction < 0.30 ->
-                    "Low lighting on path ahead. Caution advised."
-                stdDev > 55.0 ->
-                    "Possible surface change or step detected ahead. Proceed carefully."
-                else ->
-                    "Path ahead appears clear and well lit."
-            }
-
-            lastSpokenFeatures[cooldownKey] = currentTime
-            scope.launch { ttsManager.speak(guidance) }
-
-        } catch (_: Exception) {
-            // Silently ignore analysis errors
-        }
-    }
+    // Heuristic floor analysis (runFloorAnalysis) has been removed to stop canned fake spam.
 
     /**
      * Check if the detector is ready to use.

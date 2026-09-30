@@ -69,6 +69,22 @@ object BlindAIInvoker {
             }
         }
 
+        // --- 100% REAL-TIME LOCAL SDK OVERRIDES ---
+        // Force Text and Color to use local ML Kit & Palette immediately, skipping cloud delay.
+        if (intent == BlindVoiceCommandHandler.BlindIntent.READ_TEXT) {
+            val (frame, rotation) = CameraFrameManager.getLatestFrame()
+            val result = OfflineTextReader.readText(frame, rotation)
+            Log.d(TAG, "BlindAIInvoker: Executed REAL-TIME OCR result='$result'")
+            return result
+        }
+
+        if (intent == BlindVoiceCommandHandler.BlindIntent.WHAT_COLOR) {
+            val (frame, _) = CameraFrameManager.getLatestFrame()
+            val result = OfflineColorDetector.detectColor(frame)
+            Log.d(TAG, "BlindAIInvoker: Executed REAL-TIME Color result='$result'")
+            return result
+        }
+
         // Get latest frame (Phase 3: will convert to Base64 for vision API)
         val (frame, rotation) = CameraFrameManager.getLatestFrame()
 
@@ -85,7 +101,8 @@ object BlindAIInvoker {
                     // Get Base64 image for Gemini Vision API (optimized with 50% JPEG quality)
                     val (base64Image, _) = CameraFrameManager.getLatestFrameAsBase64()
                     Log.d(TAG, "BlindAIInvoker: Sending Base64 frame to Gemini (size=${base64Image.length})")
-                    val result = geminiClient?.queryGemini(prompt, base64Image)
+                    val scenePrompt = "Describe what is physically shown in this camera image in 1-2 short sentences. Be specific about objects, text, and colors visible."
+                    val result = geminiClient?.queryGemini(scenePrompt, base64Image)
                     result?.getOrNull() ?: ""
                 } catch (e: Exception) {
                     Log.e(TAG, "BlindAIInvoker: Gemini API error", e)

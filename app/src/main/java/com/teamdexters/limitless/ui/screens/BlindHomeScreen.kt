@@ -90,17 +90,7 @@ fun BlindHomeScreen() {
     }
 
     val transcriptEntries = remember { mutableStateListOf<Pair<String, String>>() }
-    val ttsManager = remember { 
-        TTSManager(context).apply {
-            onSpeechInvoked = { text ->
-                val isFromOrchestrator = transcriptEntries.lastOrNull()?.second == text
-                if (!isFromOrchestrator) {
-                    transcriptEntries.add(Pair("", text))
-                    if (transcriptEntries.size > 10) transcriptEntries.removeAt(0)
-                }
-            }
-        }
-    }
+    val ttsManager = remember { TTSManager(context) }
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -164,10 +154,9 @@ fun BlindHomeScreen() {
                 Log.d("LIMITLESS_TRACE", "BlindHomeScreen: OrchestratorState=$state")
             },
             onResult = { userCmd, text ->
+                // Clear old transcript text when a new request is processed
+                transcriptEntries.clear()
                 transcriptEntries.add(Pair(userCmd, text))
-                if (transcriptEntries.size > 10) {
-                    transcriptEntries.removeAt(0)
-                }
             }
         )
     }

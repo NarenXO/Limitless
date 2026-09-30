@@ -26,35 +26,20 @@ object OfflineColorDetector {
      */
     suspend fun detectColor(bitmap: Bitmap): String {
         return try {
-            val centerX = bitmap.width / 2
-            val centerY = bitmap.height / 2
-            val sampleSize = 21
-            val halfSample = sampleSize / 2
+            val cropWidth = (bitmap.width * 0.2f).toInt()
+            val cropHeight = (bitmap.height * 0.2f).toInt()
+            val startX = (bitmap.width - cropWidth) / 2
+            val startY = (bitmap.height - cropHeight) / 2
 
-            var totalRed = 0
-            var totalGreen = 0
-            var totalBlue = 0
-            var pixelCount = 0
+            val centerBitmap = Bitmap.createBitmap(bitmap, startX, startY, cropWidth, cropHeight)
+            val palette = androidx.palette.graphics.Palette.from(centerBitmap).generate()
+            val dominantSwatch = palette.dominantSwatch ?: palette.swatches.maxByOrNull { it.population }
 
-            for (x in (centerX - halfSample)..(centerX + halfSample)) {
-                for (y in (centerY - halfSample)..(centerY + halfSample)) {
-                    if (x in 0 until bitmap.width && y in 0 until bitmap.height) {
-                        val pixel = bitmap.getPixel(x, y)
-                        totalRed += Color.red(pixel)
-                        totalGreen += Color.green(pixel)
-                        totalBlue += Color.blue(pixel)
-                        pixelCount++
-                    }
-                }
-            }
-
-            if (pixelCount > 0) {
-                val avgRed = totalRed / pixelCount
-                val avgGreen = totalGreen / pixelCount
-                val avgBlue = totalBlue / pixelCount
-                val colorName = mapRgbToColorName(avgRed, avgGreen, avgBlue)
-                Log.d(TAG, "OfflineColorDetector: Detected color=$colorName RGB=($avgRed,$avgGreen,$avgBlue)")
-                "The dominant color in front of you is $colorName."
+            if (dominantSwatch != null) {
+                val rgb = dominantSwatch.rgb
+                val colorName = mapRgbToColorName(Color.red(rgb), Color.green(rgb), Color.blue(rgb))
+                Log.d(TAG, "OfflineColorDetector: Palette detected color=$colorName")
+                "The color in the center of your camera is $colorName."
             } else {
                 Log.d(TAG, "OfflineColorDetector: No dominant color found")
                 "I cannot determine the dominant color in this view."

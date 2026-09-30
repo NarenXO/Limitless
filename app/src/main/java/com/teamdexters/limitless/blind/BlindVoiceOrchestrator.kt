@@ -43,8 +43,6 @@ class BlindVoiceOrchestrator(
     private val onResult: (String, String) -> Unit
 ) {
 
-    private const val TAG_COMPANION = "LIMITLESS_TRACE"
-
     companion object {
         private const val TAG = "LIMITLESS_TRACE"
         /** Cooldown between end of TTS response and next listen cycle (ms). */
