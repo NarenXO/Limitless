@@ -103,6 +103,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
 
+    @Inject
+    lateinit var mappedRoomDao: com.teamdexters.limitless.data.local.dao.MappedRoomDao
+
+    @Inject
+    lateinit var roomConnectionDao: com.teamdexters.limitless.data.local.dao.RoomConnectionDao
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -125,7 +131,9 @@ class MainActivity : ComponentActivity() {
                     database = database,
                     micGranted = micGranted.value,
                     micArbiter = micArbiter,
-                    secureKeyProvider = secureKeyProvider
+                    secureKeyProvider = secureKeyProvider,
+                    mappedRoomDao = mappedRoomDao,
+                    roomConnectionDao = roomConnectionDao
                 )
             }
         }
@@ -146,7 +154,9 @@ fun HazelAssistantWrapper(
     database: LimitlessDatabase,
     micGranted: Boolean,
     micArbiter: com.teamdexters.limitless.audio.MicArbiter,
-    secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
+    secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider,
+    mappedRoomDao: com.teamdexters.limitless.data.local.dao.MappedRoomDao,
+    roomConnectionDao: com.teamdexters.limitless.data.local.dao.RoomConnectionDao
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -303,6 +313,14 @@ fun HazelAssistantWrapper(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 8.dp, end = 8.dp)
+                )
+
+                com.teamdexters.limitless.ui.components.DemoResetPanel(
+                    mappedRoomDao = mappedRoomDao,
+                    roomConnectionDao = roomConnectionDao,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 40.dp)
                 )
 
                 // ── Mic-denied chip: subtle top-left notice ──────────────────
