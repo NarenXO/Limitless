@@ -30,10 +30,16 @@ class LiveNavigationEngine(private val context: Context) {
 
     private var activeSteps: List<SpatialRouteStep> = emptyList()
 
+    private var ttsReady = false
+
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US
+                ttsReady = true
+                Log.d("LIMITLESS_TRACE", "LiveNavigationEngine TTS ready")
+            } else {
+                Log.e("LIMITLESS_TRACE", "LiveNavigationEngine TTS failed: $status")
             }
         }
     }
@@ -64,7 +70,7 @@ class LiveNavigationEngine(private val context: Context) {
 
     fun stopNavigation() {
         _isNavigating.value = false
-        tts?.speak("Navigation stopped.", TextToSpeech.QUEUE_FLUSH, null, null)
+        if (ttsReady) tts?.speak("Navigation stopped.", TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     private fun announceCurrentStep() {
@@ -72,7 +78,7 @@ class LiveNavigationEngine(private val context: Context) {
         val text = "Step ${_currentStepIndex.value + 1} of ${activeSteps.size}. ${step.instructionText}. Landmark: ${step.landmarkReference}."
         Log.d("LIMITLESS_TRACE", "LiveNav: $text")
 
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        if (ttsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
 
         // Directional Haptic Cues
         when (step.hapticCueType) {
@@ -86,7 +92,7 @@ class LiveNavigationEngine(private val context: Context) {
     private fun announceDestinationReached() {
         _isNavigating.value = false
         val text = "You have reached your destination!"
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        if (ttsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
         vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 150, 100, 150, 100, 300), -1))
     }
 
