@@ -9,6 +9,8 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teamdexters.limitless.core.audio.AudioRouter
+import com.teamdexters.limitless.core.audio.SoundCategory
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.core.hazel.HazelCommand
 import com.teamdexters.limitless.haptics.HapticManager
@@ -27,7 +29,8 @@ class DeafViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val secureKeyProvider: SecureKeyProvider,
     private val hazelActionDispatcher: HazelActionDispatcher,
-    private val hapticManager: HapticManager
+    private val hapticManager: HapticManager,
+    private val audioRouter: AudioRouter
 ) : ViewModel() {
 
     private val _liveCaptions = MutableStateFlow("")
@@ -35,6 +38,12 @@ class DeafViewModel @Inject constructor(
 
     private val _detectedAlerts = MutableStateFlow<List<String>>(emptyList())
     val detectedAlerts: StateFlow<List<String>> = _detectedAlerts.asStateFlow()
+
+    private val _currentSoundCategory = MutableStateFlow<SoundCategory?>(null)
+    val currentSoundCategory: StateFlow<SoundCategory?> = _currentSoundCategory.asStateFlow()
+
+    private val _decibelLevel = MutableStateFlow(0f)
+    val decibelLevel: StateFlow<Float> = _decibelLevel.asStateFlow()
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
@@ -47,38 +56,72 @@ class DeafViewModel @Inject constructor(
             hazelActionDispatcher.systemCommand.collect { command ->
                 when (command) {
                     is HazelCommand.StartSOS -> {
-                        // Will be implemented later for SOS
                         addAlert("SOS Triggered via voice")
+                        hapticManager.playSOSLoopPattern()
                     }
                     else -> {}
+                }
+            }
+        }
+
+        audioRouter.onSpeechDetected = {
+            viewModelScope.launch(Dispatchers.Main) {
+                startSpeechRecognizer()
+            }
+        }
+
+        audioRouter.onSoundDetected = { category, label, score ->
+            viewModelScope.launch(Dispatchers.Default) {
+                when (category) {
+                    SoundCategory.EMERGENCY -> { hapticManager.playDangerPattern(); addAlert("Emergency: $label") }
+                    SoundCategory.HOME -> { hapticManager.playDoorPattern(); addAlert("Home: $label") }
+                    SoundCategory.HUMAN -> { hapticManager.playApplausePattern(); addAlert("Human: $label") }
+                    else -> {}
+                }
+                viewModelScope.launch(Dispatchers.Main) {
+                    _currentSoundCategory.value = category
+                    kotlinx.coroutines.delay(2000)
+                    if (_currentSoundCategory.value == category) {
+                        _currentSoundCategory.value = null
+                    }
                 }
             }
         }
     }
 
     fun startListening() {
+        audioRouter.startSensing()
+    }
+
+    private fun startSpeechRecognizer() {
         if (isListening) return
         
+        audioRouter.setSpeechTranscribing(true)
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
                 setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onRmsChanged(rmsdB: Float) {
+                        _decibelLevel.value = rmsdB
+                    }
                     override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
+                    override fun onEndOfSpeech() {
+                        audioRouter.setSpeechTranscribing(false)
+                        isListening = false
+                    }
                     override fun onError(error: Int) {
                         Log.e("LIMITLESS_TRACE", "DeafCore -> SpeechRecognizer error: $error")
+                        audioRouter.setSpeechTranscribing(false)
                         isListening = false
-                        startListening()
                     }
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         matches?.firstOrNull()?.let { text ->
                             processRecognizedText(text)
                         }
+                        audioRouter.setSpeechTranscribing(false)
                         isListening = false
-                        startListening()
                     }
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -133,11 +176,16 @@ class DeafViewModel @Inject constructor(
     }
 
     fun stopListening() {
+        audioRouter.stopSensing()
         speechRecognizer?.stopListening()
         speechRecognizer?.destroy()
         speechRecognizer = null
         isListening = false
-        Log.d("LIMITLESS_TRACE", "DeafCore -> SpeechRecognizer stopped")
+        Log.d("LIMITLESS_TRACE", "DeafCore -> Listening stopped")
+    }
+    
+    fun dismissSOS() {
+        hapticManager.stop()
     }
     
     override fun onCleared() {

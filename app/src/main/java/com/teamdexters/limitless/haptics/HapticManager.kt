@@ -23,7 +23,10 @@ class HapticManager @Inject constructor(
 
     fun playNameCallPattern() {
         val pattern = longArrayOf(0, 100, 50, 100, 50, 100)
-        
+        playPattern(pattern)
+    }
+
+    private fun playPattern(pattern: LongArray) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val effect = VibrationEffect.createWaveform(pattern, -1)
             vibrator.vibrate(effect)
@@ -31,5 +34,36 @@ class HapticManager @Inject constructor(
             @Suppress("DEPRECATION")
             vibrator.vibrate(pattern, -1)
         }
+    }
+
+    fun playDangerPattern() {
+        val pattern = longArrayOf(0, 1500, 500, 1500)
+        playPattern(pattern)
+    }
+
+    fun playDoorPattern() {
+        val pattern = longArrayOf(0, 200, 100, 200)
+        playPattern(pattern)
+    }
+
+    fun playApplausePattern() {
+        val pattern = longArrayOf(0, 50, 50, 50, 50, 50, 50)
+        playPattern(pattern)
+    }
+
+    fun playSOSLoopPattern() {
+        val pattern = longArrayOf(0, 1000, 200, 1000)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Repeat from index 1 to keep looping [1000, 200, 1000, 200...]
+            val effect = VibrationEffect.createWaveform(pattern, 1)
+            vibrator.vibrate(effect)
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(pattern, 1)
+        }
+    }
+
+    fun stop() {
+        vibrator.cancel()
     }
 }
