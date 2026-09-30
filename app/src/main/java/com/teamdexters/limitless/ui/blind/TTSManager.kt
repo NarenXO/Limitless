@@ -17,6 +17,9 @@ class TTSManager(private val context: Context) {
     private var tts: TextToSpeech? = null
     private var isInitialized = false
 
+    /** Callback invoked whenever speech is triggered. Useful for live transcripts. */
+    var onSpeechInvoked: ((String) -> Unit)? = null
+
     /**
      * Initialize the TextToSpeech engine.
      * Must be called before speaking any text.
@@ -57,6 +60,7 @@ class TTSManager(private val context: Context) {
                 })
             }
 
+            onSpeechInvoked?.invoke(text)
             ttsEngine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_utterance")
         }
     }
@@ -86,6 +90,7 @@ class TTSManager(private val context: Context) {
                     }
                 })
 
+                onSpeechInvoked?.invoke(text)
                 ttsEngine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_utterance")
             } ?: run {
                 continuation.resume(Unit)
