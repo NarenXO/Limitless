@@ -65,10 +65,12 @@ class GeminiClient(
                 requestMethod = "POST"
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
-                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("x-goog-api-key", finalKey)
                 doOutput = true
             }
             Log.d("LIMITLESS_TRACE", "[Gemini] HTTP request sent (POST)")
+            Log.d("LIMITLESS_TRACE", "[Gemini] Sending request with x-goog-api-key header")
             Log.d("LIMITLESS_TRACE", "[Gemini] Has Authorization header: ${connection.getRequestProperty("Authorization") != null}")
 
             val requestJson = JSONObject().apply {
