@@ -87,5 +87,75 @@ fun LimitlessNavHost(
                 onBackClick = { navController.popBackStack() }
             )
         }
+        
+        // Mapping Home
+        composable("mapping-home") {
+            com.teamdexters.limitless.ui.roommapping.MappingHomeScreen(
+                mappedRoomDao = database.mappedRoomDao(),
+                roomConnectionDao = database.roomConnectionDao(),
+                onMapNewRoom = { navController.navigate("qr-scan") },
+                onOpenRoom = { roomId -> navController.navigate("room-connection/$roomId") }
+            )
+        }
+        
+        // QR Scan
+        composable("qr-scan") {
+            com.teamdexters.limitless.ui.roommapping.QRScanScreen(
+                onRoomDetected = { roomId -> navController.navigate("room-capture/$roomId") }
+            )
+        }
+        
+        // Room Capture
+        composable(
+            route = "room-capture/{roomId}",
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
+            com.teamdexters.limitless.ui.roommapping.RoomCaptureScreen(
+                roomId = roomId,
+                onAnalyzeRoom = { savedPaths, rId -> 
+                    navController.navigate("room-analysis/$rId")
+                }
+            )
+        }
+        
+        // Room Analysis
+        composable(
+            route = "room-analysis/{roomId}",
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
+            
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val baseDir = java.io.File(context.filesDir, "mapped_rooms/$roomId")
+            val photoPaths = listOf(
+                java.io.File(baseDir, "photo_0.jpg").absolutePath,
+                java.io.File(baseDir, "photo_1.jpg").absolutePath,
+                java.io.File(baseDir, "photo_2.jpg").absolutePath,
+                java.io.File(baseDir, "photo_3.jpg").absolutePath
+            ).filter { java.io.File(it).exists() }
+            
+            com.teamdexters.limitless.ui.roommapping.RoomAnalysisScreen(
+                roomId = roomId,
+                photoPaths = photoPaths,
+                mappedRoomDao = database.mappedRoomDao(),
+                onRoomSaved = { navController.navigate("room-connection/$roomId") }
+            )
+        }
+        
+        // Room Connection
+        composable(
+            route = "room-connection/{roomId}",
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
+            com.teamdexters.limitless.ui.roommapping.RoomConnectionScreen(
+                currentRoomId = roomId,
+                mappedRoomDao = database.mappedRoomDao(),
+                roomConnectionDao = database.roomConnectionDao(),
+                onMapAnotherRoom = { navController.navigate("qr-scan") },
+                onDoneMapping = { navController.navigate("mapping-home") }
+            )
+        }
     }
 }
