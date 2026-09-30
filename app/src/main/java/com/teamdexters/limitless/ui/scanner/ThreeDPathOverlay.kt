@@ -91,5 +91,29 @@ fun ThreeDPathOverlay(
                 )
             }
         }
+
+        // Draw Floating 3D Pin at Destination / Hazard
+        val pinY = vpY + h * 0.02f
+        val pinRadius = w * 0.03f
+        
+        // Stick
+        drawLine(
+            color = Color.White.copy(alpha = 0.9f),
+            start = Offset(vpX, endY),
+            end = Offset(vpX, pinY),
+            strokeWidth = 4f
+        )
+        // Head
+        drawCircle(
+            color = pathColor,
+            radius = pinRadius,
+            center = Offset(vpX, pinY - pinRadius)
+        )
+        drawCircle(
+            color = Color.White,
+            radius = pinRadius,
+            center = Offset(vpX, pinY - pinRadius),
+            style = Stroke(width = 4f)
+        )
     }
 }

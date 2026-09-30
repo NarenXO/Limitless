@@ -41,24 +41,29 @@ fun ScoreBreakdownCard(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .background(Color(result.badgeColorHex), CircleShape),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
             ) {
-                Text(
-                    text = "${result.totalScore}",
-                    color = Color.White,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(result.badgeColorHex), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${result.totalScore}",
+                        color = Color(0xFF1F1F1F),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text("Overall Accessibility", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 20.sp)
+                    Text("Score based on AI Analysis", color = TextPrimary.copy(alpha = 0.7f), fontSize = 14.sp)
+                }
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Overall Accessibility", fontWeight = FontWeight.Bold, color = TextPrimary)
-
-            Spacer(modifier = Modifier.height(24.dp))
 
             ScoreBarRow(icon = Icons.Default.CameraAlt, title = "Object Detection (30%)", score = result.objectScore)
             ScoreBarRow(icon = Icons.Default.TextFields, title = "Signage OCR (20%)", score = result.ocrScore)

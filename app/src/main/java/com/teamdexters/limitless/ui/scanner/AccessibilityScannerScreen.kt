@@ -63,7 +63,11 @@ fun AccessibilityScannerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF7F1EE))
+                .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Live CameraX Preview
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -72,7 +76,7 @@ fun AccessibilityScannerScreen(
             val cameraPermissionState = com.google.accompanist.permissions.rememberPermissionState(android.Manifest.permission.CAMERA)
             val isCameraGranted = cameraPermissionState.status == com.google.accompanist.permissions.PermissionStatus.Granted
 
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -248,9 +252,10 @@ fun AccessibilityScannerScreen(
                     ) {
                         if (scanObjects.isNotEmpty()) {
                             item {
+                                val detectedLabels = scanObjects.map { it.label.lowercase().replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }.distinct().joinToString(", ")
                                 androidx.compose.material3.SuggestionChip(
                                     onClick = {},
-                                    label = { Text("Objects Detected", color = TextPrimary) },
+                                    label = { Text("Objects: $detectedLabels", color = TextPrimary) },
                                     colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
                                 )
                             }
