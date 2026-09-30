@@ -482,12 +482,21 @@ private fun handleHazelIntent(
         is HazelIntent.MobilityAssist-> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
         is HazelIntent.GeneralQuery  -> {
             onHandled()
-            queryHandler.handleGeneralQuery(
-                rawQuery = intent.rawQuery,
-                scope = scope,
-                tts = tts,
-                onResponseReady = onShowBanner
+            
+            val dispatcher = com.teamdexters.limitless.hazel.HazelActionDispatcher(
+                navController = navController,
+                onSpeak = { text -> speak(text) }
             )
+            
+            val handled = dispatcher.dispatch(intent.rawQuery)
+            if (!handled) {
+                queryHandler.handleGeneralQuery(
+                    rawQuery = intent.rawQuery,
+                    scope = scope,
+                    tts = tts,
+                    onResponseReady = onShowBanner
+                )
+            }
         }
         is HazelIntent.VisionQuery  -> {
             onHandled()
@@ -500,12 +509,21 @@ private fun handleHazelIntent(
         }
         is HazelIntent.Unknown -> {
             onHandled()
-            queryHandler.handleGeneralQuery(
-                rawQuery = intent.rawQuery,
-                scope = scope,
-                tts = tts,
-                onResponseReady = onShowBanner
+            
+            val dispatcher = com.teamdexters.limitless.hazel.HazelActionDispatcher(
+                navController = navController,
+                onSpeak = { text -> speak(text) }
             )
+            
+            val handled = dispatcher.dispatch(intent.rawQuery)
+            if (!handled) {
+                queryHandler.handleGeneralQuery(
+                    rawQuery = intent.rawQuery,
+                    scope = scope,
+                    tts = tts,
+                    onResponseReady = onShowBanner
+                )
+            }
         }
     }
 }
