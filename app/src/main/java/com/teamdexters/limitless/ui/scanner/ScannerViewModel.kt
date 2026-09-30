@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
 import com.teamdexters.limitless.data.local.entity.AccessibilityScoreEntity
+import com.teamdexters.limitless.hazel.CameraFrameManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
-    private val scoreDao: AccessibilityScoreDao
+    private val scoreDao: AccessibilityScoreDao,
+    private val cameraFrameManager: CameraFrameManager
 ) : ViewModel() {
 
     private val analyzer = ScannerAnalyzer()
@@ -69,6 +71,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun startScan(bitmap: Bitmap, rotationDegrees: Int) {
+        cameraFrameManager.updateLatestFrame(bitmap)
         viewModelScope.launch {
             _isScanning.value = true
             

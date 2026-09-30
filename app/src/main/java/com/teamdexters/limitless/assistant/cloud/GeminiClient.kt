@@ -27,6 +27,7 @@ class GeminiClient(
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
         private const val SYSTEM_INSTRUCTION = "You are Hazel, a friendly accessibility AI assistant. Answer the user's question directly, accurately, and naturally in 1-2 conversational sentences suitable for speech synthesis. Do NOT mention you are an AI, do NOT mention offline mode, hackathons, or team names."
+        private const val VISION_SYSTEM_INSTRUCTION = "You are Hazel. Describe what you see directly in 1-2 short, concise sentences suitable for voice output. Do not mention image processing or cameras."
         private const val TIMEOUT_MS = 5000
     }
 
@@ -70,9 +71,10 @@ class GeminiClient(
             Log.d("LIMITLESS_TRACE", "[Gemini] HTTP request sent (POST)")
             Log.d("LIMITLESS_TRACE", "[Gemini] Has Authorization header: ${connection.getRequestProperty("Authorization") != null}")
 
+            val sysPrompt = if (base64Image != null && prompt.contains("vision")) VISION_SYSTEM_INSTRUCTION else SYSTEM_INSTRUCTION
             val requestJson = JSONObject().apply {
                 put("system_instruction", JSONObject().apply {
-                    put("parts", JSONArray().put(JSONObject().put("text", SYSTEM_INSTRUCTION)))
+                    put("parts", JSONArray().put(JSONObject().put("text", sysPrompt)))
                 })
                 
                 val partsArray = JSONArray()
@@ -140,6 +142,13 @@ class GeminiClient(
             e.printStackTrace()
             Result.failure(e)
         }
+    }
+
+    suspend fun generateVisionResponse(prompt: String, base64Image: String): String {
+        // Tag prompt so the queryGemini method knows to use VISION_SYSTEM_INSTRUCTION
+        val taggedPrompt = "$prompt [vision]" 
+        val result = queryGemini(taggedPrompt, base64Image)
+        return result.getOrElse { "I'm having trouble analyzing the image right now." }
     }
 
     /**

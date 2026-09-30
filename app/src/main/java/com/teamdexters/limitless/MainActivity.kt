@@ -81,6 +81,9 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @javax.inject.Inject
+    lateinit var cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager
+
     /**
      * Tracks whether the user has granted RECORD_AUDIO at runtime.
      * Initialized eagerly so the Compose tree always reads the correct value.
@@ -117,7 +120,8 @@ class MainActivity : ComponentActivity() {
             LimitlessTheme {
                 HazelAssistantWrapper(
                     database = database,
-                    micGranted = micGranted.value
+                    micGranted = micGranted.value,
+                    cameraFrameManager = cameraFrameManager
                 )
             }
         }
@@ -136,7 +140,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HazelAssistantWrapper(
     database: LimitlessDatabase,
-    micGranted: Boolean
+    micGranted: Boolean,
+    cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -170,13 +175,14 @@ fun HazelAssistantWrapper(
         android.util.Log.d("LIMITLESS_TRACE", "Network status changed: ${if(networkStatus is com.teamdexters.limitless.util.NetworkStatus.Online) "ONLINE" else "OFFLINE"}")
     }
 
-    // Hazel query handler with network status tracker and conversation memory
+    // Hazel query handler with network status tracker, conversation memory, and vision capabilities
     val queryHandler = remember(networkStatusTracker, database) {
         val memoryStore = com.teamdexters.limitless.hazel.HazelMemoryStore(database.hazelConversationDao())
         HazelQueryHandler(
             context = context,
             networkStatusTracker = networkStatusTracker,
-            hazelMemoryStore = memoryStore
+            hazelMemoryStore = memoryStore,
+            cameraFrameManager = cameraFrameManager
         )
     }
 

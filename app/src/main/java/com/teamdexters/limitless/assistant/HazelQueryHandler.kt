@@ -28,7 +28,8 @@ class HazelQueryHandler(
     private val context: Context,
     private val geminiClient: GeminiClient = GeminiClient(),
     private val networkStatusTracker: NetworkStatusProvider? = null,
-    private val hazelMemoryStore: HazelMemoryStore? = null
+    private val hazelMemoryStore: HazelMemoryStore? = null,
+    private val cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager? = null
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
@@ -54,6 +55,45 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
+            val lowerQuery = rawQuery.lowercase()
+            val visionKeywords = listOf("what is in front", "describe this", "what do you see", "read this", "what color", "look at this", "what am i holding", "scan this")
+            val isVisionQuery = visionKeywords.any { lowerQuery.contains(it) }
+
+            if (isVisionQuery) {
+                val base64Image = cameraFrameManager?.getLatestFrameAsBase64()
+                if (base64Image != null) {
+                    val result = geminiClient.generateVisionResponse(rawQuery, base64Image)
+                    hazelMemoryStore?.saveTurn(
+                        userMessage = rawQuery,
+                        hazelResponse = result,
+                        persona = "general",
+                        intent = "vision",
+                        wasActionExecuted = false
+                    )
+                    Log.d("LIMITLESS_TRACE", "Hazel Vision Query processed successfully")
+                    withContext(Dispatchers.Main) {
+                        onResponseReady(result)
+                        speakResponse(tts, result)
+                    }
+                    return@launch
+                } else {
+                    // Fallback when no frame is available
+                    val fallbackResponse = "I cannot see through the camera right now. Please ensure camera access is enabled."
+                    hazelMemoryStore?.saveTurn(
+                        userMessage = rawQuery,
+                        hazelResponse = fallbackResponse,
+                        persona = "general",
+                        intent = "vision",
+                        wasActionExecuted = false
+                    )
+                    withContext(Dispatchers.Main) {
+                        onResponseReady(fallbackResponse)
+                        speakResponse(tts, fallbackResponse)
+                    }
+                    return@launch
+                }
+            }
+
             val historyContext = hazelMemoryStore?.getFormattedHistoryForPrompt(3) ?: ""
             val fullPrompt = if (historyContext.isNotEmpty()) {
                 "$historyContext\nUser: $rawQuery"
@@ -133,9 +173,8 @@ class HazelQueryHandler(
             val offlineFallback = "I'm having trouble connecting right now. You can try asking me to open a specific tool like the Scanner or Community map."
             
             val responseText = if (isOnline && isApiKeyPresent()) {
-                val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
-                if (latestFrame != null) {
-                    val base64Image = bitmapToBase64(latestFrame)
+                val base64Image = cameraFrameManager?.getLatestFrameAsBase64()
+                if (base64Image != null) {
                     val result = geminiClient.queryGemini(query, base64Image)
                     result.getOrElse { e ->
                         Log.w(TAG, "Gemini Vision query failed: ${e.message}")
