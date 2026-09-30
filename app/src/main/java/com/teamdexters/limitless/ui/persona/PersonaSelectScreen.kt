@@ -149,7 +149,7 @@ fun PersonaSelectScreen(
             if (best.isNotEmpty()) {
                 onResult(best)
             } else {
-                onRetry()
+                onRetry(SpeechRecognizer.ERROR_NO_MATCH)
             }
         }
         override fun onError(error: Int) {
