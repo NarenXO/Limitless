@@ -36,8 +36,8 @@ fun MobilityHomeScreen(
     val isSeeding by viewModel.isSeeding.collectAsState()
 
     var selectedDestinationId by remember { mutableStateOf<String?>(null) }
-    // Hardcode starting room to "room_entrance" for now since CurrentLocationTracker is not fully mockable in this prompt scope
-    val startRoomId = "room_entrance"
+    // Current location is handled by the viewModel, pass null for dynamic resolution
+    val startRoomId: String? = null
 
     LazyColumn(
         modifier = Modifier
@@ -75,7 +75,7 @@ fun MobilityHomeScreen(
                             .background(Color.White, RoundedCornerShape(8.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Text("You are near: Main Entrance", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Bold)
+                        Text("Location: Main Entrance (Default)", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -84,7 +84,7 @@ fun MobilityHomeScreen(
         if (isSeeding) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFFF791A9))
+                    LinearProgressIndicator(color = Color(0xFFF791A9))
                 }
             }
         } else {
@@ -141,7 +141,7 @@ fun MobilityHomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Path String
-                    val pathString = if (activeRoute!!.steps.isNotEmpty()) {
+                    val pathString = if (activeRoute?.steps?.isNotEmpty() == true) {
                         activeRoute!!.steps.first().fromRoomName + " -> " + activeRoute!!.steps.joinToString(" -> ") { it.toRoomName }
                     } else "Arrived"
                     Text(
@@ -154,7 +154,7 @@ fun MobilityHomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Step List
-                    activeRoute!!.steps.forEach { step ->
+                    activeRoute?.steps?.forEach { step ->
                         RouteStepItem(step)
                         Spacer(modifier = Modifier.height(8.dp))
                     }

@@ -38,14 +38,19 @@ class MobilityViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            if (roomDao.getRoomCount().first() == 0) {
-                val seeder = DemoRoomSeeder(application, roomDao, connectionDao)
-                seeder.seedIfEmpty()
-                android.util.Log.d("LIMITLESS_TRACE", "MobilityViewModel: Pre-seeded 5 campus demo rooms")
+            try {
+                if (roomDao.getRoomCount().first() == 0) {
+                    val seeder = DemoRoomSeeder(application, roomDao, connectionDao)
+                    seeder.seedIfEmpty()
+                    android.util.Log.d("LIMITLESS_TRACE", "MobilityViewModel: Pre-seeded 5 campus demo rooms")
+                }
+                val builtGraph = graphBuilder.buildGraph()
+                _graph.value = builtGraph
+            } catch (e: Exception) {
+                android.util.Log.e("LIMITLESS_TRACE", "MobilityViewModel init error: ${e.localizedMessage}")
+            } finally {
+                _isSeeding.value = false
             }
-            val builtGraph = graphBuilder.buildGraph()
-            _graph.value = builtGraph
-            _isSeeding.value = false
         }
     }
 
