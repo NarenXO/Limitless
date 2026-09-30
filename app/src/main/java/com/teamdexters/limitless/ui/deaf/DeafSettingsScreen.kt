@@ -56,7 +56,14 @@ import java.util.Locale
 fun DeafSettingsScreen() {
     val context = LocalContext.current
     
-    val initialContacts = remember { EmergencyContactStore.getContacts(context) }
+    val initialContacts = remember { 
+        try {
+            EmergencyContactStore.getContacts(context)
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to load contacts", e)
+            listOf(EmergencyContact("Emergency Contact", "112", 1))
+        }
+    }
     
     var contact1Name by remember { mutableStateOf(initialContacts.getOrNull(0)?.name ?: "") }
     var contact1Phone by remember { mutableStateOf(initialContacts.getOrNull(0)?.phone ?: "") }
@@ -66,21 +73,43 @@ fun DeafSettingsScreen() {
     var contact3Phone by remember { mutableStateOf(initialContacts.getOrNull(2)?.phone ?: "") }
     
     var showConsentDialog by remember { mutableStateOf(false) }
-    var speechSpeed by remember { mutableStateOf(EmergencyContactStore.loadSpeechSpeed(context)) }
-    var speechPitch by remember { mutableStateOf(EmergencyContactStore.loadSpeechPitch(context)) }
+    var speechSpeed by remember { mutableStateOf(
+        try {
+            EmergencyContactStore.loadSpeechSpeed(context)
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to load speech speed", e)
+            1.0f
+        }
+    )}
+    var speechPitch by remember { mutableStateOf(
+        try {
+            EmergencyContactStore.loadSpeechPitch(context)
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to load speech pitch", e)
+            1.0f
+        }
+    )}
     
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     
     DisposableEffect(Unit) {
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.US
+        try {
+            tts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    tts?.language = Locale.US
+                }
             }
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to initialize TTS", e)
         }
         
         onDispose {
-            tts?.stop()
-            tts?.shutdown()
+            try {
+                tts?.stop()
+                tts?.shutdown()
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to shutdown TTS", e)
+            }
         }
     }
     
@@ -93,7 +122,11 @@ fun DeafSettingsScreen() {
             vibrate(context, 200)
         } catch (e: Exception) {
             Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Could not open SMS app", e)
-            Toast.makeText(context, "Could not open SMS app", Toast.LENGTH_SHORT).show()
+            try {
+                Toast.makeText(context, "Could not open SMS app", Toast.LENGTH_SHORT).show()
+            } catch (toastE: Exception) {
+                Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Could not show toast", toastE)
+            }
         }
     }
     
@@ -296,20 +329,29 @@ fun DeafSettingsScreen() {
         
         Button(
             onClick = {
-                val contacts = listOfNotNull(
-                    if (contact1Name.isNotEmpty() || contact1Phone.isNotEmpty()) 
-                        EmergencyContact(contact1Name.ifEmpty { "Primary" }, contact1Phone.ifEmpty { "112" }, 1) 
-                    else null,
-                    if (contact2Name.isNotEmpty() || contact2Phone.isNotEmpty()) 
-                        EmergencyContact(contact2Name.ifEmpty { "Secondary" }, contact2Phone.ifEmpty { "112" }, 2) 
-                    else null,
-                    if (contact3Name.isNotEmpty() || contact3Phone.isNotEmpty()) 
-                        EmergencyContact(contact3Name.ifEmpty { "Tertiary" }, contact3Phone.ifEmpty { "112" }, 3) 
-                    else null
-                )
-                EmergencyContactStore.saveContacts(context, contacts)
-                Toast.makeText(context, "Contacts saved successfully", Toast.LENGTH_SHORT).show()
-                vibrate(context, 100)
+                try {
+                    val contacts = listOfNotNull(
+                        if (contact1Name.isNotEmpty() || contact1Phone.isNotEmpty()) 
+                            EmergencyContact(contact1Name.ifEmpty { "Primary" }, contact1Phone.ifEmpty { "112" }, 1) 
+                        else null,
+                        if (contact2Name.isNotEmpty() || contact2Phone.isNotEmpty()) 
+                            EmergencyContact(contact2Name.ifEmpty { "Secondary" }, contact2Phone.ifEmpty { "112" }, 2) 
+                        else null,
+                        if (contact3Name.isNotEmpty() || contact3Phone.isNotEmpty()) 
+                            EmergencyContact(contact3Name.ifEmpty { "Tertiary" }, contact3Phone.ifEmpty { "112" }, 3) 
+                        else null
+                    )
+                    EmergencyContactStore.saveContacts(context, contacts)
+                    Toast.makeText(context, "Contacts saved successfully", Toast.LENGTH_SHORT).show()
+                    vibrate(context, 100)
+                } catch (e: Exception) {
+                    Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to save contacts", e)
+                    try {
+                        Toast.makeText(context, "Failed to save contacts", Toast.LENGTH_SHORT).show()
+                    } catch (toastE: Exception) {
+                        Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Could not show toast", toastE)
+                    }
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -332,10 +374,14 @@ fun DeafSettingsScreen() {
         
         Button(
             onClick = {
-                if (EmergencyContactStore.hasSosConsent(context)) {
-                    triggerSos()
-                } else {
-                    showConsentDialog = true
+                try {
+                    if (EmergencyContactStore.hasSosConsent(context)) {
+                        triggerSos()
+                    } else {
+                        showConsentDialog = true
+                    }
+                } catch (e: Exception) {
+                    Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to check SOS consent", e)
                 }
             },
             modifier = Modifier
@@ -359,10 +405,14 @@ fun DeafSettingsScreen() {
         
         OutlinedButton(
             onClick = {
-                EmergencyContactStore.setSosConsent(context, false)
-                Toast.makeText(context, "SOS consent revoked. You will be prompted before the next SOS trigger.", Toast.LENGTH_LONG).show()
-                vibrate(context, 100)
-                Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: SOS consent revoked by user")
+                try {
+                    EmergencyContactStore.setSosConsent(context, false)
+                    Toast.makeText(context, "SOS consent revoked. You will be prompted before the next SOS trigger.", Toast.LENGTH_LONG).show()
+                    vibrate(context, 100)
+                    Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: SOS consent revoked by user")
+                } catch (e: Exception) {
+                    Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to revoke SOS consent", e)
+                }
             },
             modifier = Modifier.fillMaxWidth(),
             border = BorderStroke(1.dp, Color(0xFFBAD6DA)),
@@ -448,12 +498,16 @@ fun DeafSettingsScreen() {
         
         Button(
             onClick = {
-                EmergencyContactStore.saveSpeechSpeed(context, speechSpeed)
-                EmergencyContactStore.saveSpeechPitch(context, speechPitch)
-                tts?.setSpeechRate(speechSpeed)
-                tts?.setPitch(speechPitch)
-                tts?.speak("This is a test of your speech speed settings", TextToSpeech.QUEUE_FLUSH, null, "tts_test")
-                Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: TTS test speed=$speechSpeed pitch=$speechPitch")
+                try {
+                    EmergencyContactStore.saveSpeechSpeed(context, speechSpeed)
+                    EmergencyContactStore.saveSpeechPitch(context, speechPitch)
+                    tts?.setSpeechRate(speechSpeed)
+                    tts?.setPitch(speechPitch)
+                    tts?.speak("This is a test of your speech speed settings", TextToSpeech.QUEUE_FLUSH, null, "tts_test")
+                    Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: TTS test speed=$speechSpeed pitch=$speechPitch")
+                } catch (e: Exception) {
+                    Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Failed to test TTS", e)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()

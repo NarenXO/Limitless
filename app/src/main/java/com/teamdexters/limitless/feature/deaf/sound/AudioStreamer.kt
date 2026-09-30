@@ -3,6 +3,7 @@ package com.teamdexters.limitless.feature.deaf.sound
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ class AudioStreamer {
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
         private const val BUFFER_SIZE_MULTIPLIER = 4
+        private const val TAG = "LIMITLESS_TRACE"
     }
     
     /**
@@ -46,8 +48,10 @@ class AudioStreamer {
                 bufferSize
             )
             
+            Log.d(TAG, "AudioStreamer: AudioRecord initialized successfully")
             audioRecord != null
         } catch (e: Exception) {
+            Log.e(TAG, "AudioStreamer: Failed to initialize AudioRecord", e)
             false
         }
     }
@@ -61,6 +65,7 @@ class AudioStreamer {
         
         try {
             recorder.startRecording()
+            Log.d(TAG, "AudioStreamer: Recording started")
             
             val bufferSize = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE,
@@ -93,8 +98,9 @@ class AudioStreamer {
     fun stopStreaming() {
         try {
             audioRecord?.stop()
+            Log.d(TAG, "AudioStreamer: Recording stopped")
         } catch (e: Exception) {
-            // Ignore stop errors
+            Log.e(TAG, "AudioStreamer: Error stopping recording", e)
         }
     }
     

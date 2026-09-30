@@ -21,6 +21,7 @@ class SoundClassifier(private val context: Context?) {
     
     private var interpreter: Interpreter? = null
     private var isModelLoaded = false
+    private var isClassifierAvailable = true
     
     companion object {
         private const val MODEL_PATH = "yamnet.tflite"
@@ -66,28 +67,40 @@ class SoundClassifier(private val context: Context?) {
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
-            if (context == null) return@withContext false
+            if (context == null) {
+                Log.e("LIMITLESS_TRACE", "SoundClassifier: Context is null")
+                return@withContext false
+            }
             
             // Check if model file exists in assets
             val modelExists = try {
                 context.assets.open(MODEL_PATH).close()
                 true
             } catch (e: IOException) {
+                Log.e("LIMITLESS_TRACE", "SoundClassifier: Model file not found in assets: $MODEL_PATH", e)
                 false
             }
             
             if (!modelExists) {
+                Log.e("LIMITLESS_TRACE", "SoundClassifier: Model file missing, cannot initialize")
                 return@withContext false
             }
             
-            // Load TFLite model
-            val modelBuffer = loadModelFile()
-            val options = Interpreter.Options().setNumThreads(4)
-            interpreter = Interpreter(modelBuffer, options)
-            isModelLoaded = true
-            true
+            // Load TFLite model - wrap in try-catch to handle native library crashes
+            try {
+                val modelBuffer = loadModelFile()
+                val options = Interpreter.Options().setNumThreads(4)
+                interpreter = Interpreter(modelBuffer, options)
+                isModelLoaded = true
+                Log.d("LIMITLESS_TRACE", "SoundClassifier: Model loaded successfully")
+                true
+            } catch (e: Throwable) {
+                Log.e("LIMITLESS_TRACE", "SoundClassifier: TFLite interpreter creation failed (native library crash)", e)
+                isModelLoaded = false
+                false
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("LIMITLESS_TRACE", "SoundClassifier: Failed to initialize model", e)
             false
         }
     }
@@ -110,7 +123,7 @@ class SoundClassifier(private val context: Context?) {
      * @param audioData FloatArray of audio samples (16kHz, mono)
      */
     fun classifyAudio(audioData: FloatArray): VibrationVocabulary.SoundType? {
-        if (!isModelLoaded || interpreter == null) {
+        if (!isClassifierAvailable || !isModelLoaded || interpreter == null) {
             return null
         }
         
@@ -162,8 +175,8 @@ class SoundClassifier(private val context: Context?) {
             }
             
             null
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (e: Throwable) {
+            Log.e("LIMITLESS_TRACE", "SoundClassifier: Inference error (native library crash)", e)
             null
         }
     }
@@ -287,7 +300,11 @@ class SoundClassifier(private val context: Context?) {
      * Release resources.
      */
     fun release() {
-        interpreter?.close()
+        try {
+            interpreter?.close()
+        } catch (e: Throwable) {
+            Log.e("LIMITLESS_TRACE", "SoundClassifier: Error closing interpreter", e)
+        }
         interpreter = null
         isModelLoaded = false
     }

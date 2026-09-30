@@ -14,21 +14,12 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for managing sound alerts and vibration patterns.
  */
-class SoundAlertViewModel(private val context: Context?) : ViewModel() {
+class SoundAlertViewModel : ViewModel() {
     
-    private val vibrationVocabulary = try {
-        if (context != null) VibrationVocabulary(context) else null
-    } catch (e: Exception) {
-        null
-    }
-    
-    private val soundClassifier = try {
-        if (context != null) SoundClassifier(context) else null
-    } catch (e: Exception) {
-        null
-    }
-    
-    private val audioStreamer = AudioStreamer()
+    private var context: Context? = null
+    private var vibrationVocabulary: VibrationVocabulary? = null
+    private var soundClassifier: SoundClassifier? = null
+    private var audioStreamer: AudioStreamer? = null
     
     private val _activeAlert = MutableStateFlow<SoundAlert?>(null)
     val activeAlert: StateFlow<SoundAlert?> = _activeAlert.asStateFlow()
@@ -42,9 +33,46 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
     private var alertDismissJob: Job? = null
     private var modelLoadJob: Job? = null
     private var audioStreamingJob: Job? = null
+    private var enginesInitialized = false
     
-    init {
-        loadModel()
+    /**
+     * Set the context for the ViewModel.
+     * Call this from Compose with LocalContext.current.
+     */
+    fun setContext(ctx: Context) {
+        this.context = ctx
+        
+        // Initialize engines only once when context is available
+        if (!enginesInitialized) {
+            enginesInitialized = true
+            
+            // Initialize VibrationVocabulary
+            vibrationVocabulary = try {
+                VibrationVocabulary(ctx)
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Failed to create VibrationVocabulary", e)
+                null
+            }
+            
+            // Initialize SoundClassifier
+            soundClassifier = try {
+                SoundClassifier(ctx)
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Failed to create SoundClassifier", e)
+                null
+            }
+            
+            // Initialize AudioStreamer
+            audioStreamer = try {
+                AudioStreamer()
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Failed to create AudioStreamer", e)
+                null
+            }
+            
+            // Load model after engines are initialized
+            loadModel()
+        }
     }
     
     /**
@@ -52,7 +80,14 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
      */
     private fun loadModel() {
         modelLoadJob = viewModelScope.launch {
-            val isLoaded = soundClassifier?.initialize() ?: false
+            // Defer loading until context is set
+            // If context is null, soundClassifier will also be null
+            val classifier = soundClassifier
+            val isLoaded = if (context != null && classifier != null) {
+                classifier.initialize()
+            } else {
+                false
+            }
             _isModelLoaded.value = isLoaded
         }
     }
@@ -160,7 +195,7 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
      * Start listening for environmental sounds.
      */
     private fun startListening() {
-        if (!audioStreamer.initialize()) {
+        if (audioStreamer == null || !audioStreamer!!.initialize()) {
             Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Failed to initialize AudioStreamer")
             _isListening.value = false
             return
@@ -168,7 +203,7 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
         
         audioStreamingJob = viewModelScope.launch {
             try {
-                audioStreamer.startStreaming().collect { audioData ->
+                audioStreamer!!.startStreaming().collect { audioData ->
                     // Convert ByteArray to FloatArray for YAMNet
                     val floatArray = convertToFloatArray(audioData)
                     processAudio(floatArray)
@@ -188,8 +223,8 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
     private fun stopListening() {
         audioStreamingJob?.cancel()
         audioStreamingJob = null
-        audioStreamer.stopStreaming()
-        audioStreamer.release()
+        audioStreamer?.stopStreaming()
+        audioStreamer?.release()
         Log.d("LIMITLESS_TRACE", "SoundAlertViewModel: Stopped live environmental listening")
     }
     
@@ -237,7 +272,7 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
         audioStreamingJob?.cancel()
         vibrationVocabulary?.cancel()
         soundClassifier?.release()
-        audioStreamer.release()
+        audioStreamer?.release()
     }
 }
 

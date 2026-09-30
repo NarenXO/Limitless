@@ -35,6 +35,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teamdexters.limitless.feature.deaf.caption.CaptionEngineStatus
 import com.teamdexters.limitless.feature.deaf.caption.CaptionUiState
@@ -79,6 +86,12 @@ fun DeafSoundFlashScreen(
     captionViewModel: CaptionViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    
+    // Initialize ViewModels with context
+    LaunchedEffect(Unit) {
+        soundViewModel.setContext(context)
+        captionViewModel.setContext(context)
+    }
     
     var activeCard by remember { mutableStateOf<SoundCard?>(null) }
     var isFlashActive by remember { mutableStateOf(false) }

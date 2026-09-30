@@ -63,24 +63,47 @@ class VoskCaptionEngine(private val context: Context?) {
             // Check if model is valid
             if (modelDir.exists() && isModelValid(modelDir)) {
                 // Initialize real Vosk Model and Recognizer
-                model = Model(modelDir.absolutePath)
-                recognizer = Recognizer(model, SAMPLE_RATE)
-                isInitialized = true
-                useFallback = false
-                Log.d(TAG, "VoskCaptionEngine: Vosk model loaded successfully")
-                true
+                try {
+                    model = Model(modelDir.absolutePath)
+                    recognizer = Recognizer(model, SAMPLE_RATE)
+                    isInitialized = true
+                    useFallback = false
+                    Log.d(TAG, "VoskCaptionEngine: Vosk model loaded successfully")
+                    true
+                } catch (e: Throwable) {
+                    Log.e(TAG, "VoskCaptionEngine: Failed to load Vosk model (native library crash), trying fallback", e)
+                    // Fallback to Android SpeechRecognizer
+                    useFallback = true
+                    try {
+                        withContext(Dispatchers.Main) {
+                            initializeSpeechRecognizer()
+                        }
+                    } catch (innerE: Exception) {
+                        Log.e(TAG, "VoskCaptionEngine: Failed to initialize fallback on main thread", innerE)
+                    }
+                    Log.d(TAG, "VoskCaptionEngine: Using Android SpeechRecognizer fallback after Vosk load failure")
+                    true
+                }
             } else {
-                // Fallback to Android SpeechRecognizer
+                // Fallback to Android SpeechRecognizer - must run on main thread
                 useFallback = true
-                initializeSpeechRecognizer()
+                withContext(Dispatchers.Main) {
+                    initializeSpeechRecognizer()
+                }
                 Log.d(TAG, "VoskCaptionEngine: Using Android SpeechRecognizer fallback")
                 true
             }
         } catch (e: Exception) {
             Log.e(TAG, "VoskCaptionEngine: Initialization failed, trying fallback", e)
-            // Try fallback on any error
+            // Try fallback on any error - must run on main thread
             useFallback = true
-            initializeSpeechRecognizer()
+            try {
+                withContext(Dispatchers.Main) {
+                    initializeSpeechRecognizer()
+                }
+            } catch (innerE: Exception) {
+                Log.e(TAG, "VoskCaptionEngine: Failed to initialize fallback on main thread", innerE)
+            }
             Log.d(TAG, "VoskCaptionEngine: Using Android SpeechRecognizer fallback after error")
             true
         }
@@ -88,14 +111,17 @@ class VoskCaptionEngine(private val context: Context?) {
     
     /**
      * Initialize Android SpeechRecognizer as fallback.
+     * Must be called on the main thread.
      */
     private fun initializeSpeechRecognizer(): Boolean {
         return try {
             if (context == null) return false
             
             if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                // SpeechRecognizer must be created on the main thread
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
                 isInitialized = true
+                Log.d(TAG, "VoskCaptionEngine: SpeechRecognizer initialized successfully")
                 true
             } else {
                 Log.e(TAG, "VoskCaptionEngine: SpeechRecognizer not available on this device")
@@ -118,6 +144,7 @@ class VoskCaptionEngine(private val context: Context?) {
             
             val assets = context.assets.list(MODEL_PATH)
             if (assets.isNullOrEmpty()) {
+                Log.w(TAG, "VoskCaptionEngine: Model directory not found in assets, will use fallback")
                 throw IOException("Model directory not found in assets")
             }
             
@@ -145,6 +172,7 @@ class VoskCaptionEngine(private val context: Context?) {
                 src.close()
             }
         } catch (e: Exception) {
+            Log.e(TAG, "VoskCaptionEngine: Failed to copy model from assets", e)
             throw IOException("Failed to copy model from assets", e)
         }
     }
@@ -201,44 +229,54 @@ class VoskCaptionEngine(private val context: Context?) {
         val rec = recognizer ?: return@flow
         
         audioChunks.collect { chunk ->
-            // Convert ByteArray to short array for Vosk (16-bit PCM)
-            val numSamples = chunk.size / 2
-            val shortBuffer = ShortArray(numSamples)
-            for (i in 0 until numSamples) {
-                val low = chunk[i * 2].toInt() and 0xFF
-                val high = chunk[i * 2 + 1].toInt() shl 8
-                shortBuffer[i] = (high or low).toShort()
-            }
-            
-            // Feed audio to recognizer
-            if (rec.acceptWaveForm(shortBuffer, shortBuffer.size)) {
-                // Final result available
-                val resultJson = rec.result
-                val text = parseVoskResult(resultJson)
-                if (text.isNotEmpty()) {
-                    emit(CaptionUpdate(text, isFinal = true))
+            try {
+                // Convert ByteArray to short array for Vosk (16-bit PCM)
+                val numSamples = chunk.size / 2
+                val shortBuffer = ShortArray(numSamples)
+                for (i in 0 until numSamples) {
+                    val low = chunk[i * 2].toInt() and 0xFF
+                    val high = chunk[i * 2 + 1].toInt() shl 8
+                    shortBuffer[i] = (high or low).toShort()
                 }
-            } else {
-                // Partial result available
-                val partialJson = rec.partialResult
-                val text = parseVoskResult(partialJson)
-                if (text.isNotEmpty()) {
-                    emit(CaptionUpdate(text, isFinal = false))
+                
+                // Feed audio to recognizer
+                if (rec.acceptWaveForm(shortBuffer, shortBuffer.size)) {
+                    // Final result available
+                    val resultJson = rec.result
+                    val text = parseVoskResult(resultJson)
+                    if (text.isNotEmpty()) {
+                        emit(CaptionUpdate(text, isFinal = true))
+                    }
+                } else {
+                    // Partial result available
+                    val partialJson = rec.partialResult
+                    val text = parseVoskResult(partialJson)
+                    if (text.isNotEmpty()) {
+                        emit(CaptionUpdate(text, isFinal = false))
+                    }
                 }
+            } catch (e: Throwable) {
+                Log.e(TAG, "VoskCaptionEngine: Native library error during audio processing", e)
+                // Continue to next chunk, don't crash the app
             }
         }
         
         // Emit any remaining final result
-        val finalResult = rec.finalResult
-        val text = parseVoskResult(finalResult)
-        if (text.isNotEmpty()) {
-            emit(CaptionUpdate(text, isFinal = true))
+        try {
+            val finalResult = rec.finalResult
+            val text = parseVoskResult(finalResult)
+            if (text.isNotEmpty()) {
+                emit(CaptionUpdate(text, isFinal = true))
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "VoskCaptionEngine: Native library error getting final result", e)
         }
     }
     
     /**
      * Start listening with Android SpeechRecognizer fallback.
      * This is used when Vosk model is not available.
+     * Must be called on the main thread.
      */
     fun startListeningWithFallback() {
         if (!useFallback || speechRecognizer == null) {
@@ -338,17 +376,31 @@ class VoskCaptionEngine(private val context: Context?) {
      * Reset the recognizer state.
      */
     fun reset() {
-        recognizer?.reset()
+        try {
+            recognizer?.reset()
+        } catch (e: Throwable) {
+            Log.e(TAG, "VoskCaptionEngine: Error resetting recognizer", e)
+        }
     }
     
     /**
      * Release resources.
      */
     fun release() {
-        recognizer?.close()
+        try {
+            recognizer?.close()
+        } catch (e: Throwable) {
+            Log.e(TAG, "VoskCaptionEngine: Error closing recognizer", e)
+        }
         recognizer = null
-        model?.close()
+        
+        try {
+            model?.close()
+        } catch (e: Throwable) {
+            Log.e(TAG, "VoskCaptionEngine: Error closing model", e)
+        }
         model = null
+        
         isInitialized = false
     }
     

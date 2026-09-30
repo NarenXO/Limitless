@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
-import com.teamdexters.limitless.ui.theme.LimitlessPrimary
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.ui.theme.manropeFontFamily
 
