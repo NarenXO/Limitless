@@ -14,8 +14,6 @@ import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.teamdexters.limitless.data.local.dao.UserReportDao
-import com.teamdexters.limitless.data.local.dao.MappedRoomDao
-import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
 import com.teamdexters.limitless.data.local.entity.UserReportEntity
 
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -24,16 +22,9 @@ import com.teamdexters.limitless.data.seed.DatabaseSeeder
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
     private val userReportDao: UserReportDao,
-    private val mappedRoomDao: MappedRoomDao,
-    private val roomConnectionDao: RoomConnectionDao,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
-    init {
-        // TODO(Naren): Call DatabaseSeeder.seedIfEmpty(dao, context) inside Application.onCreate for global app pre-population
-        viewModelScope.launch {
-            DatabaseSeeder.seedIfEmpty(userReportDao, mappedRoomDao, roomConnectionDao, context)
-        }
-    }
+    
     private val _selectedCategory = MutableStateFlow<Category?>(null)
     val selectedCategory: StateFlow<Category?> = _selectedCategory
 

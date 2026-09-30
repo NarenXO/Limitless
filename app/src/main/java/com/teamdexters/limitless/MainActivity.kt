@@ -316,13 +316,7 @@ fun HazelAssistantWrapper(
                         .padding(top = 8.dp, end = 8.dp)
                 )
 
-                com.teamdexters.limitless.ui.components.DemoResetPanel(
-                    mappedRoomDao = mappedRoomDao,
-                    roomConnectionDao = roomConnectionDao,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 8.dp, end = 40.dp)
-                )
+
 
                 // ── Mic-denied chip: subtle top-left notice ──────────────────
                 MicDeniedChip(

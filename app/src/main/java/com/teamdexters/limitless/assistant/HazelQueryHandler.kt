@@ -52,8 +52,16 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
-            val result = geminiClient.queryGemini(rawQuery)
-            val responseText = result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
+            val responseText = try {
+                if (isNetworkAvailable() && isApiKeyPresent()) {
+                    val result = geminiClient.queryGemini(rawQuery)
+                    result.getOrElse { getOfflineResponse(rawQuery) }
+                } else {
+                    getOfflineResponse(rawQuery)
+                }
+            } catch (e: Exception) {
+                getOfflineResponse(rawQuery)
+            }
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
@@ -113,28 +121,48 @@ class HazelQueryHandler(
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
-            val offlineFallback = "I'm having trouble connecting right now. You can try asking me to open a specific tool like the Scanner or Community map."
             
             val responseText = if (isOnline && isApiKeyPresent()) {
                 val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
                 if (latestFrame != null) {
                     val base64Image = bitmapToBase64(latestFrame)
-                    val result = geminiClient.queryGemini(query, base64Image)
-                    result.getOrElse { e ->
-                        Log.w(TAG, "Gemini Vision query failed: ${e.message}")
-                        "I had trouble analyzing the image. Please try again."
+                    try {
+                        val result = geminiClient.queryGemini(query, base64Image)
+                        result.getOrElse { getOfflineResponse(query) }
+                    } catch (e: Exception) {
+                        getOfflineResponse(query)
                     }
                 } else {
-                    "My camera isn't active right now, so I can't see anything."
+                    getOfflineResponse(query)
                 }
             } else {
-                offlineFallback
+                getOfflineResponse(query)
             }
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
                 speakResponse(tts, responseText)
             }
+        }
+    }
+
+    private fun getOfflineResponse(userQuery: String): String {
+        val lowerQuery = userQuery.lowercase(Locale.ROOT)
+        return when {
+            lowerQuery.contains("hi") || lowerQuery.contains("hello") ->
+                "Hello! I am Rhasspy, your accessibility assistant. How can I help you today?"
+            lowerQuery.contains("time") || lowerQuery.contains("date") -> {
+                val formatter = java.text.SimpleDateFormat("h:mm a, EEEE, MMMM d", Locale.getDefault())
+                "It is currently " + formatter.format(java.util.Date())
+            }
+            lowerQuery.contains("screen") || lowerQuery.contains("where am i") ->
+                "You are currently using the Limitless application."
+            lowerQuery.contains("what can you do") || lowerQuery.contains("help") ->
+                "I can describe your surroundings, read text, trigger emergency SOS, and find accessible routes."
+            lowerQuery.contains("navigate") || lowerQuery.contains("route") ->
+                "Routing you to your destination. Please scan a QR waypoint if prompted."
+            else ->
+                "Rhasspy is active and ready to assist you in offline mode."
         }
     }
 
