@@ -56,9 +56,8 @@ class OfflineTranslator(private val context: Context) {
             val targetLangCode = mapLanguageToCode(targetLanguage)
             
             if (sourceLangCode == null || targetLangCode == null) {
-                _downloadStatus.value = DownloadStatus.Ready
-                _isReady.value = true
-                return true
+                _downloadStatus.value = DownloadStatus.Error
+                return false
             }
             
             // Check if models are already downloaded
@@ -78,26 +77,19 @@ class OfflineTranslator(private val context: Context) {
                     .requireWifi()
                     .build()
                 
-                try {
-                    currentTranslator?.downloadModelIfNeeded(conditions)?.await()
-                    _downloadStatus.value = DownloadStatus.Ready
-                    _isReady.value = true
-                    return true
-                } catch (e: Exception) {
-                    // If download fails, check if model is already available locally
-                    _downloadStatus.value = DownloadStatus.Ready
-                    _isReady.value = true
-                    return true
-                }
+                currentTranslator?.downloadModelIfNeeded(conditions)?.await()
+                _downloadStatus.value = DownloadStatus.Ready
+                _isReady.value = true
+                return true
             }
             
-            _downloadStatus.value = DownloadStatus.Ready
-            _isReady.value = true
-            return true
+            _downloadStatus.value = DownloadStatus.Error
+            return false
         } catch (e: Exception) {
-            _downloadStatus.value = DownloadStatus.Ready
-            _isReady.value = true
-            return true
+            e.printStackTrace()
+            _downloadStatus.value = DownloadStatus.Error
+            _isReady.value = false
+            return false
         }
     }
     
@@ -106,13 +98,14 @@ class OfflineTranslator(private val context: Context) {
      */
     suspend fun translate(text: String): String {
         if (currentTranslator == null || !_isReady.value) {
-            return text
+            throw IllegalStateException("Translator not initialized or models not downloaded")
         }
         
         return try {
             currentTranslator?.translate(text)?.await() ?: text
         } catch (e: Exception) {
-            text
+            e.printStackTrace()
+            throw e
         }
     }
     

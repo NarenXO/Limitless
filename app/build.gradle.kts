@@ -108,12 +108,13 @@ dependencies {
     // Retrofit (for Supabase REST calls)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
-    // Vosk-android (offline STT) - Commented out due to compilation issues
-    // implementation("com.alphacephei:vosk-android:0.3.32@aar")
-    // implementation("net.java.dev.jna:jna:5.13.0@aar")
+    // Vosk-android (offline STT)
+    implementation("com.alphacephei:vosk-android:0.3.32@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
     
     // TensorFlow Lite
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

@@ -93,10 +93,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
                 originalText = text
             )
             
-            val translated = if (offlineTranslator?.isReady?.value == true) {
-                offlineTranslator.translate(text)
-            } else {
-                "Model not ready"
+            val translated = try {
+                if (offlineTranslator?.isReady?.value == true) {
+                    offlineTranslator.translate(text)
+                } else {
+                    "Model not ready"
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                "Translation error: ${e.message}"
             }
             
             _uiState.value = _uiState.value.copy(
@@ -140,7 +145,7 @@ data class TranslationUiState(
     val targetLanguage: String = "Tamil",
     val originalText: String = "",
     val translatedText: String = "",
-    val modelStatus: ModelStatus = ModelStatus.READY
+    val modelStatus: ModelStatus = ModelStatus.DOWNLOADING
 )
 
 /**

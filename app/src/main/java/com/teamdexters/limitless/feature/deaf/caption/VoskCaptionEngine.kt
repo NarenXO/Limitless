@@ -2,24 +2,28 @@ package com.teamdexters.limitless.feature.deaf.caption
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import org.vosk.Model
+import org.vosk.Recognizer
 import java.io.File
 import java.io.IOException
 
 /**
  * Vosk caption engine that performs offline speech-to-text recognition.
  * Uses native Vosk library for real-time speech recognition.
- * Note: Vosk library integration requires native dependencies to be properly configured.
  */
 class VoskCaptionEngine(private val context: Context?) {
     
+    private var model: Model? = null
+    private var recognizer: Recognizer? = null
     private var isInitialized = false
     
     companion object {
         private const val MODEL_PATH = "vosk-model-small-en-us"
+        private const val SAMPLE_RATE = 16000.0f
     }
     
     /**
@@ -39,15 +43,16 @@ class VoskCaptionEngine(private val context: Context?) {
             
             // Check if model is valid
             if (modelDir.exists() && isModelValid(modelDir)) {
-                // In production, initialize real Vosk Model and Recognizer here
-                // For now, simulate initialization
+                // Initialize real Vosk Model and Recognizer
+                model = Model(modelDir.absolutePath)
+                recognizer = Recognizer(model, SAMPLE_RATE)
                 isInitialized = true
                 true
             } else {
                 false
             }
         } catch (e: Exception) {
-            // Vosk library not available or model missing
+            e.printStackTrace()
             false
         }
     }
@@ -135,31 +140,56 @@ class VoskCaptionEngine(private val context: Context?) {
     /**
      * Process audio chunks and emit caption updates.
      * Returns a Flow of CaptionUpdate containing partial and final results.
-     * Note: Real Vosk integration would feed audio to recognizer.acceptWaveForm()
+     * Feeds real audio chunks to Vosk's acceptWaveForm() and parses JSON output.
      */
     fun processAudio(audioChunks: Flow<ByteArray>): Flow<CaptionUpdate> = flow {
-        // In production, this would:
-        // 1. Feed audio chunks to Vosk's acceptWaveForm()
-        // 2. Emit partial results from getPartialResult()
-        // 3. Emit final results from getResult()
+        val rec = recognizer ?: return@flow
         
-        // For now, simulate captions
-        val sampleTexts = listOf(
-            "Hello, how are you?",
-            "This is a test of the caption system.",
-            "The speech recognition is working.",
-            "Real-time captions are being generated."
-        )
-        
-        var index = 0
         audioChunks.collect { chunk ->
-            delay(100)
-            
-            if (index < sampleTexts.size) {
-                val text = sampleTexts[index]
-                emit(CaptionUpdate(text, isFinal = true))
-                index++
+            // Convert ByteArray to short array for Vosk (16-bit PCM)
+            val numSamples = chunk.size / 2
+            val shortBuffer = ShortArray(numSamples)
+            for (i in 0 until numSamples) {
+                val low = chunk[i * 2].toInt() and 0xFF
+                val high = chunk[i * 2 + 1].toInt() shl 8
+                shortBuffer[i] = (high or low).toShort()
             }
+            
+            // Feed audio to recognizer
+            if (rec.acceptWaveForm(shortBuffer, shortBuffer.size)) {
+                // Final result available
+                val resultJson = rec.result
+                val text = parseVoskResult(resultJson)
+                if (text.isNotEmpty()) {
+                    emit(CaptionUpdate(text, isFinal = true))
+                }
+            } else {
+                // Partial result available
+                val partialJson = rec.partialResult
+                val text = parseVoskResult(partialJson)
+                if (text.isNotEmpty()) {
+                    emit(CaptionUpdate(text, isFinal = false))
+                }
+            }
+        }
+        
+        // Emit any remaining final result
+        val finalResult = rec.finalResult
+        val text = parseVoskResult(finalResult)
+        if (text.isNotEmpty()) {
+            emit(CaptionUpdate(text, isFinal = true))
+        }
+    }
+    
+    /**
+     * Parse Vosk JSON result to extract text.
+     */
+    private fun parseVoskResult(json: String): String {
+        return try {
+            val jsonObj = JSONObject(json)
+            jsonObj.optString("text", "")
+        } catch (e: Exception) {
+            ""
         }
     }
     
@@ -167,14 +197,17 @@ class VoskCaptionEngine(private val context: Context?) {
      * Reset the recognizer state.
      */
     fun reset() {
-        // In production: recognizer?.reset()
+        recognizer?.reset()
     }
     
     /**
      * Release resources.
      */
     fun release() {
-        // In production: recognizer?.close(), model?.close()
+        recognizer?.close()
+        recognizer = null
+        model?.close()
+        model = null
         isInitialized = false
     }
     
