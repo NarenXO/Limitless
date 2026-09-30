@@ -26,9 +26,11 @@ class GeminiClient(
     private val apiKeyOverride: String? = null
 ) {
     companion object {
-        private const val SYSTEM_INSTRUCTION = "You are Hazel, a friendly accessibility AI assistant. Answer the user's question directly, accurately, and naturally in 1-2 conversational sentences suitable for speech synthesis. Do NOT mention you are an AI, do NOT mention offline mode, hackathons, or team names."
+        private const val SYSTEM_INSTRUCTION = "You are Rhasspy, a friendly accessibility AI assistant. Answer directly in 1-2 short sentences for voice TTS."
         private const val TIMEOUT_MS = 5000
     }
+    
+    data class LlmCandidate(val model: String, val endpoint: String)
 
     private val apiKey: String
         get() = apiKeyOverride ?: secureKeyProvider.getGeminiKey() ?: ""
@@ -56,53 +58,65 @@ class GeminiClient(
         
         Log.d("LIMITLESS_TRACE", "[Gemini] Final key length: ${finalKey.length}")
 
-        val candidateModels = listOf("gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro")
+        val candidates = listOf(
+            LlmCandidate("grok-beta", "https://api.x.ai/v1/chat/completions"),
+            LlmCandidate("llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions"),
+            LlmCandidate("gemini-1.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+        )
         
         var lastException: Exception? = null
         var lastErrorBody: String? = null
 
-        for (modelName in candidateModels) {
+        for (candidate in candidates) {
+            val modelName = candidate.model
+            val endpoint = candidate.endpoint
             try {
-                val urlString = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$finalKey"
-                val url = URL(urlString)
-                Log.d("LIMITLESS_TRACE", "[Gemini] Request URL: $urlString")
-                Log.d("LIMITLESS_TRACE", "[Gemini] Model: $modelName")
+                val url = URL(endpoint)
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] Request URL: $endpoint")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] Model: $modelName")
 
                 val connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = TIMEOUT_MS
                     readTimeout = TIMEOUT_MS
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("x-goog-api-key", finalKey)
+                    setRequestProperty("Authorization", "Bearer $finalKey")
                     doOutput = true
                 }
-                Log.d("LIMITLESS_TRACE", "[Gemini] HTTP request sent (POST)")
-                Log.d("LIMITLESS_TRACE", "[Gemini] Sending request with x-goog-api-key header")
-                Log.d("LIMITLESS_TRACE", "[Gemini] Has Authorization header: ${connection.getRequestProperty("Authorization") != null}")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] HTTP request sent (POST)")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] Sending request with Authorization header")
 
                 val requestJson = JSONObject().apply {
-                    put("system_instruction", JSONObject().apply {
-                        put("parts", JSONArray().put(JSONObject().put("text", SYSTEM_INSTRUCTION)))
+                    put("model", modelName)
+                    
+                    val messagesArray = JSONArray()
+                    messagesArray.put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", SYSTEM_INSTRUCTION)
                     })
                     
-                    val partsArray = JSONArray()
-                    partsArray.put(JSONObject().put("text", prompt))
-                    
                     if (base64Image != null) {
-                        val inlineData = JSONObject().apply {
-                            put("mime_type", "image/jpeg")
-                            put("data", base64Image)
-                        }
-                        partsArray.put(JSONObject().put("inline_data", inlineData))
+                        val contentArray = JSONArray()
+                        contentArray.put(JSONObject().put("type", "text").put("text", prompt))
+                        contentArray.put(JSONObject().apply {
+                            put("type", "image_url")
+                            put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$base64Image"))
+                        })
+                        messagesArray.put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", contentArray)
+                        })
+                    } else {
+                        messagesArray.put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", prompt)
+                        })
                     }
-                    
-                    put("contents", JSONArray().put(
-                        JSONObject().put("parts", partsArray)
-                    ))
+                    put("messages", messagesArray)
                 }
 
-                Log.d("LIMITLESS_TRACE", "[Gemini] Prompt created: ${requestJson.toString()}")
-                Log.d("LIMITLESS_TRACE", "[Gemini] POST started")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] Prompt created: ${requestJson.toString()}")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] POST started")
 
                 OutputStreamWriter(connection.outputStream, "UTF-8").use { writer ->
                     writer.write(requestJson.toString())
@@ -110,8 +124,8 @@ class GeminiClient(
                 }
 
                 val responseCode = connection.responseCode
-                Log.d("LIMITLESS_TRACE", "[Gemini] HTTP response code: $responseCode")
-                Log.d("LIMITLESS_TRACE", "[Gemini] Headers: ${connection.headerFields}")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] HTTP response code: $responseCode")
+                Log.d("LIMITLESS_TRACE", "[CloudLLM] Headers: ${connection.headerFields}")
 
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     val reader = BufferedReader(InputStreamReader(connection.inputStream, "UTF-8"))
@@ -123,13 +137,13 @@ class GeminiClient(
                     reader.close()
 
                     val rawJson = responseStringBuilder.toString()
-                    Log.d("LIMITLESS_TRACE", "[Gemini] Success body (Raw JSON): $rawJson")
+                    Log.d("LIMITLESS_TRACE", "[CloudLLM] Success body (Raw JSON): $rawJson")
 
                     val extractedText = parseGeminiResponse(rawJson)
-                    Log.d("LIMITLESS_TRACE", "[Gemini] Parsed Text: $extractedText")
+                    Log.d("LIMITLESS_TRACE", "[CloudLLM] Parsed Text: $extractedText")
 
                     if (extractedText.isNotBlank()) {
-                        Log.d("LIMITLESS_TRACE", "[Gemini] Successfully generated response using model $modelName")
+                        Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from Grok API")
                         return@withContext Result.success(extractedText)
                     } else {
                         lastException = Exception("Parsed text is empty from success body")
@@ -143,12 +157,12 @@ class GeminiClient(
                     }
                     errorReader.close()
                     val errorBody = errorBuilder.toString()
-                    Log.e("LIMITLESS_TRACE", "[Gemini] Error for model $modelName ($responseCode). Trying next candidate... Body: $errorBody")
+                    Log.e("LIMITLESS_TRACE", "[CloudLLM] Error for model $modelName ($responseCode). Trying next candidate... Body: $errorBody")
                     lastErrorBody = errorBody
                     continue
                 }
             } catch (e: Exception) {
-                Log.e("LIMITLESS_TRACE", "[Gemini] Exception during request for model $modelName. Trying next candidate...", e)
+                Log.e("LIMITLESS_TRACE", "[CloudLLM] Exception during request for model $modelName. Trying next candidate...", e)
                 e.printStackTrace()
                 lastException = e
                 continue
@@ -159,27 +173,18 @@ class GeminiClient(
     }
 
     /**
-     * Parses the JSON response structure from Gemini generateContent API.
+     * Parses the JSON response structure from OpenAI compatible chat completions API.
      */
     fun parseGeminiResponse(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            val candidates = jsonObject.optJSONArray("candidates") ?: return ""
-            if (candidates.length() == 0) return ""
-            val firstCandidate = candidates.getJSONObject(0)
-            val content = firstCandidate.optJSONObject("content") ?: return ""
-            val parts = content.optJSONArray("parts") ?: return ""
-            if (parts.length() == 0) return ""
-            val text = parts.getJSONObject(0).optString("text", "").trim()
-            if (text.isNotEmpty()) text else fallbackRegexParse(jsonString)
+            val choices = jsonObject.optJSONArray("choices") ?: return ""
+            if (choices.length() == 0) return ""
+            val firstChoice = choices.getJSONObject(0)
+            val message = firstChoice.optJSONObject("message") ?: return ""
+            message.optString("content", "").trim()
         } catch (e: Throwable) {
-            fallbackRegexParse(jsonString)
+            ""
         }
-    }
-
-    private fun fallbackRegexParse(jsonString: String): String {
-        val regex = Regex("\"text\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"")
-        val match = regex.find(jsonString)
-        return match?.groupValues?.get(1)?.replace("\\\"", "\"")?.trim() ?: ""
     }
 }
