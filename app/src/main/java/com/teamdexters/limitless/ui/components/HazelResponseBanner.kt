@@ -8,9 +8,11 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,9 +31,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessPrimary
 import com.teamdexters.limitless.ui.theme.LimitlessTypography
+import com.teamdexters.limitless.ui.theme.PersonaSpeech
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 
@@ -70,36 +72,49 @@ fun HazelResponseBanner(
         exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
         modifier = modifier
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
-                .background(HighlightBox, RoundedCornerShape(12.dp))
+                .background(PersonaSpeech, RoundedCornerShape(12.dp))
                 .border(1.dp, LimitlessPrimary, RoundedCornerShape(12.dp))
                 .clickable { onDismiss() }
-                .padding(16.dp)
                 .semantics {
                     liveRegion = LiveRegionMode.Polite
                     contentDescription = "Hazel says: $text"
-                },
-            verticalAlignment = Alignment.CenterVertically
+                }
         ) {
-            Icon(
-                imageVector = Icons.Default.VolumeUp,
-                contentDescription = null,
-                tint = TextPrimary,
-                modifier = Modifier.size(24.dp)
+            // Banner top bar
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(LimitlessPrimary, RoundedCornerShape(topStart = 11.dp, topEnd = 11.dp))
             )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Text(
-                text = text,
-                style = LimitlessTypography.bodyMedium,
-                color = TextPrimary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.VolumeUp,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+    
+                Spacer(modifier = Modifier.width(12.dp))
+    
+                Text(
+                    text = text,
+                    style = LimitlessTypography.bodyMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
