@@ -14,6 +14,7 @@ object EmergencyContactStore {
     private const val KEY_CONTACT_PHONE = "contact_phone"
     private const val KEY_SPEECH_SPEED = "speech_speed"
     private const val KEY_SPEECH_PITCH = "speech_pitch"
+    private const val KEY_SOS_CONSENT_GRANTED = "limitless_sos_consent_granted"
     
     private const val DEFAULT_NAME = "Emergency Contact"
     private const val DEFAULT_PHONE = "112"
@@ -84,5 +85,24 @@ object EmergencyContactStore {
     fun loadSpeechPitch(context: Context): Float {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getFloat(KEY_SPEECH_PITCH, DEFAULT_PITCH)
+    }
+    
+    /**
+     * Set SOS consent status.
+     */
+    fun setSosConsent(context: Context, consented: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean(KEY_SOS_CONSENT_GRANTED, consented)
+            .apply()
+        Log.d("LIMITLESS_TRACE", "EmergencyContactStore: SOS consent set to $consented")
+    }
+    
+    /**
+     * Check if SOS consent has been granted.
+     */
+    fun hasSosConsent(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_SOS_CONSENT_GRANTED, false)
     }
 }

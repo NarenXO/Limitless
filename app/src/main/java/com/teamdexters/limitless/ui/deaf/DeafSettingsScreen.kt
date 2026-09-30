@@ -10,8 +10,8 @@ import android.os.VibratorManager
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -34,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -51,6 +51,19 @@ fun DeafSettingsScreen() {
     
     var contactName by remember { mutableStateOf(EmergencyContactStore.loadContactName(context)) }
     var contactPhone by remember { mutableStateOf(EmergencyContactStore.loadContactPhone(context)) }
+    var showConsentDialog by remember { mutableStateOf(false) }
+    
+    val triggerSos = {
+        try {
+            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$contactPhone"))
+            smsIntent.putExtra("sms_body", "EMERGENCY: I need help! My location: https://maps.google.com/?q=13.0827,80.2707")
+            context.startActivity(smsIntent)
+            vibrate(context, 200)
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Could not open SMS app", e)
+            Toast.makeText(context, "Could not open SMS app", Toast.LENGTH_SHORT).show()
+        }
+    }
     
     Column(
         modifier = Modifier
@@ -145,14 +158,10 @@ fun DeafSettingsScreen() {
         
         Button(
             onClick = {
-                try {
-                    val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$contactPhone"))
-                    smsIntent.putExtra("sms_body", "EMERGENCY: I need help! My location: https://maps.google.com/?q=13.0827,80.2707")
-                    context.startActivity(smsIntent)
-                    vibrate(context, 200)
-                } catch (e: Exception) {
-                    Log.e("LIMITLESS_TRACE", "DeafSettingsScreen: Could not open SMS app", e)
-                    Toast.makeText(context, "Could not open SMS app", Toast.LENGTH_SHORT).show()
+                if (EmergencyContactStore.hasSosConsent(context)) {
+                    triggerSos()
+                } else {
+                    showConsentDialog = true
                 }
             },
             modifier = Modifier
@@ -171,6 +180,43 @@ fun DeafSettingsScreen() {
                 fontFamily = manropeFontFamily
             )
         }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        OutlinedButton(
+            onClick = {
+                EmergencyContactStore.setSosConsent(context, false)
+                Toast.makeText(context, "SOS consent revoked. You will be prompted before the next SOS trigger.", Toast.LENGTH_LONG).show()
+                vibrate(context, 100)
+                Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: SOS consent revoked by user")
+            },
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, Color(0xFFBAD6DA)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFF1F1F1F)
+            )
+        ) {
+            Text(
+                text = "Revoke SOS Consent",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1F1F1F),
+                fontFamily = manropeFontFamily
+            )
+        }
+    }
+    
+    if (showConsentDialog) {
+        SosConsentDialog(
+            onConsent = {
+                EmergencyContactStore.setSosConsent(context, true)
+                showConsentDialog = false
+                triggerSos()
+            },
+            onDismiss = {
+                showConsentDialog = false
+            }
+        )
     }
 }
 
