@@ -298,8 +298,8 @@ fun AccessibilityScannerScreen(
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
-                            Text("Lighting & Environment", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
-                            Text(lightingText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
+                            Text("Environment & Lighting", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text("Lighting Level: $lightingText", color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(24.dp))
                             
