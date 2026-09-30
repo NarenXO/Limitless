@@ -3,14 +3,10 @@ package com.teamdexters.limitless.blind
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Log
-import androidx.palette.graphics.Palette
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 /**
- * Offline color detector using Android Palette.
- * Extracts dominant color and maps to named colors.
+ * Offline color detector.
+ * Samples center region and maps to named colors using HSV analysis.
  */
 object OfflineColorDetector {
 
@@ -23,33 +19,33 @@ object OfflineColorDetector {
      */
     suspend fun detectColor(bitmap: Bitmap): String {
         return try {
-            // Extract center region for color analysis
             val centerX = bitmap.width / 2
             val centerY = bitmap.height / 2
-            val sampleSize = min(bitmap.width, bitmap.height) / 4
-            val sampleX = max(0, centerX - sampleSize / 2)
-            val sampleY = max(0, centerY - sampleSize / 2)
-            val sampleWidth = min(sampleSize, bitmap.width - sampleX)
-            val sampleHeight = min(sampleSize, bitmap.height - sampleY)
+            val sampleSize = 21
+            val halfSample = sampleSize / 2
 
-            val sampledBitmap = Bitmap.createBitmap(
-                bitmap,
-                sampleX,
-                sampleY,
-                sampleWidth,
-                sampleHeight
-            )
+            var totalRed = 0
+            var totalGreen = 0
+            var totalBlue = 0
+            var pixelCount = 0
 
-            // Generate palette from sampled region
-            val palette = Palette.from(sampledBitmap).generate()
+            for (x in (centerX - halfSample)..(centerX + halfSample)) {
+                for (y in (centerY - halfSample)..(centerY + halfSample)) {
+                    if (x in 0 until bitmap.width && y in 0 until bitmap.height) {
+                        val pixel = bitmap.getPixel(x, y)
+                        totalRed += Color.red(pixel)
+                        totalGreen += Color.green(pixel)
+                        totalBlue += Color.blue(pixel)
+                        pixelCount++
+                    }
+                }
+            }
 
-            // Get dominant swatch
-            val dominantSwatch = palette.dominantSwatch
-                ?: palette.mutedSwatch
-                ?: palette.vibrantSwatch
-
-            if (dominantSwatch != null) {
-                val rgb = dominantSwatch.rgb
+            if (pixelCount > 0) {
+                val avgRed = totalRed / pixelCount
+                val avgGreen = totalGreen / pixelCount
+                val avgBlue = totalBlue / pixelCount
+                val rgb = Color.rgb(avgRed, avgGreen, avgBlue)
                 val colorName = mapRgbToColorName(rgb)
                 Log.d(TAG, "OfflineColorDetector: Detected color=$colorName RGB=$rgb")
                 "The dominant color in front of you is $colorName."
@@ -108,12 +104,5 @@ object OfflineColorDetector {
         }
 
         return colorName
-    }
-
-    /**
-     * Release resources.
-     */
-    fun release() {
-        Log.d(TAG, "OfflineColorDetector: Released")
     }
 }

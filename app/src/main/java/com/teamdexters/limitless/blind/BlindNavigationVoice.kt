@@ -8,7 +8,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import com.teamdexters.limitless.ui.blind.TTSManager
-import com.teamdexters.limitless.ui.blind.nav.BlindNavAdapter
+import com.teamdexters.limitless.ui.blind.nav.MockRoute
+import com.teamdexters.limitless.ui.blind.nav.MockRouter
+import com.teamdexters.limitless.ui.blind.nav.MockRouteStep
 import com.teamdexters.limitless.ui.blind.nav.TurnType
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -38,7 +40,7 @@ object BlindNavigationVoice {
     private var isNavigating = false
     private var currentStepIndex = 0
     private var destination: String? = null
-    private var currentRoute: BlindNavAdapter.MockRoute? = null
+    private var currentRoute: MockRoute? = null
     private var ttsManager: TTSManager? = null
     private var vibrator: Vibrator? = null
 
@@ -133,7 +135,7 @@ object BlindNavigationVoice {
         // TODO(Naren): Connect BlindNavigationVoice to Salman's AccessibleRouter API
 
         // For now, use mock router
-        currentRoute = BlindNavAdapter.MockRouter.getRoute(destination)
+        currentRoute = MockRouter.getRoute(destination)
         this.destination = destination
         currentStepIndex = 0
         isNavigating = true

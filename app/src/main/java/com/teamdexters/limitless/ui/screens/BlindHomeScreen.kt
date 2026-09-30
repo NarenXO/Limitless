@@ -53,19 +53,28 @@ fun BlindHomeScreen() {
     // Vision narration loading state
     var isDescribing by remember { mutableStateOf(false) }
 
-    // Camera permission handling
-    val cameraPermission = remember {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+    // Camera permission — mutableStateOf so permission grant causes recomposition
+    // and the camera preview re-evaluates its binding state.
+    var cameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        cameraPermission = isGranted
         if (!isGranted) {
+            Log.w("LIMITLESS_TRACE", "BlindHomeScreen: Camera permission denied")
             Toast.makeText(context, "Camera permission required", Toast.LENGTH_SHORT).show()
+            // Speak TTS so blind users understand why features are unavailable
+            ttsManager.speak("Camera permission needed for vision features.")
+        } else {
+            Log.d("LIMITLESS_TRACE", "BlindHomeScreen: Camera permission granted")
         }
     }
 
@@ -190,38 +199,42 @@ fun BlindHomeScreen() {
     }
 
     // Real-time object detection loop (800ms throttled)
+    // Reads from CameraFrameManager — always has a frame (fallback bitmap on cold start).
     LaunchedEffect(Unit) {
         scope.launch {
             while (true) {
                 delay(800) // 800ms throttling as required
 
-                val frame = latestFrame
-                val rotation = latestRotation
+                // Use CameraFrameManager directly — never null, fallback bitmap on cold start
+                val (frame, rotation) = CameraFrameManager.getLatestFrame()
 
-                if (frame != null) {
-                    // Update VisionNarrationClient with latest frame
-                    VisionNarrationClient.updateLatestFrame(frame, rotation)
+                // Mirror into latestFrame/latestRotation state for triggerVisionNarration compat
+                latestFrame = frame
+                latestRotation = rotation
 
-                    // Detect objects with rotation handling
-                    val objects = objectDetector.detectObjects(frame, rotation)
+                // Update VisionNarrationClient with latest frame
+                VisionNarrationClient.updateLatestFrame(frame, rotation)
 
-                    // Narrate only new objects with haptic feedback
-                    objectNarrator.narrateObjects(objects, frame.width, frame.height)
-                }
+                // Detect objects with rotation handling
+                val objects = objectDetector.detectObjects(frame, rotation)
+
+                // Narrate only new objects with haptic feedback
+                objectNarrator.narrateObjects(objects, frame.width, frame.height)
             }
         }
     }
 
     // Path feature detection loop (1000ms throttled to save battery)
+    // Reads from CameraFrameManager — always has a frame (fallback bitmap on cold start).
     LaunchedEffect(Unit) {
         scope.launch {
             while (true) {
                 delay(1000) // 1000ms throttling for path features
 
-                val frame = latestFrame
-                val rotation = latestRotation
+                // Use CameraFrameManager directly — never null
+                val (frame, rotation) = CameraFrameManager.getLatestFrame()
 
-                if (frame != null && pathFeatureDetector.isReady()) {
+                if (pathFeatureDetector.isReady()) {
                     // Detect path features
                     val pathFeatures = pathFeatureDetector.detectPathFeatures(
                         bitmap = frame,
@@ -276,10 +289,12 @@ fun BlindHomeScreen() {
                 onFrameReady = { bitmap, rotation ->
                     latestFrame = bitmap
                     latestRotation = rotation
-                    // BlindCameraPreview already logs frame updates via CameraFrameManager
                     Log.d("LIMITLESS_TRACE", "CameraFrameManager: Frame updated successfully (${bitmap.width}x${bitmap.height})")
                 },
                 onError = { exception ->
+                    Log.e("LIMITLESS_TRACE", "CameraX binding failed", exception)
+                    // Speak TTS so blind users hear the camera error
+                    ttsManager.speak("Unable to access camera hardware.")
                     Toast.makeText(context, "Camera error: ${exception.message}", Toast.LENGTH_SHORT).show()
                 }
             )

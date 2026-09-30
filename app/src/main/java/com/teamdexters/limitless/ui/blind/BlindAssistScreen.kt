@@ -52,27 +52,42 @@ fun BlindAssistScreen() {
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
-    // Camera permission handling
-    val cameraPermission = remember {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+    // Camera permission — mutableStateOf so permission grant triggers recomposition
+    // and the AndroidView.update block re-evaluates cameraStarted.
+    var cameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        cameraPermission = isGranted
         if (!isGranted) {
+            Log.w("LIMITLESS_TRACE", "BlindAssistScreen: Camera permission denied")
             Toast.makeText(context, "Camera permission required", Toast.LENGTH_SHORT).show()
+            // Speak TTS so blind users understand why features are unavailable
+            ttsManager.speak("Camera permission needed for vision features.")
+        } else {
+            Log.d("LIMITLESS_TRACE", "BlindAssistScreen: Camera permission granted")
+            // Reset binding guard so the AndroidView.update block can now bind the camera
+            cameraStarted = false
         }
     }
 
     LaunchedEffect(Unit) {
         if (!cameraPermission) {
+            Log.d("LIMITLESS_TRACE", "BlindAssistScreen: Requesting CAMERA permission")
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
+
+    // TTS manager — declared early so permission launcher lambda can capture it
+    val ttsManager = remember { TTSManager(context) }
 
     // Camera controller
     val cameraController = remember { BlindCameraController(context) }
@@ -98,9 +113,6 @@ fun BlindAssistScreen() {
         "detect obstacles",
         "what color"
     )
-
-    // TTS manager
-    val ttsManager = remember { TTSManager(context) }
 
     // Initialize camera controller and AI invoker
     LaunchedEffect(Unit) {
@@ -228,8 +240,11 @@ fun BlindAssistScreen() {
                                     preview,
                                     imageAnalysis
                                 )
-                                Log.d("LIMITLESS_TRACE", "BlindAssistScreen: CameraX bound — ImageAnalysis active, frames will flow to CameraFrameManager")
+                                Log.d("LIMITLESS_TRACE", "BlindAssistScreen: CameraX bound — Preview + ImageAnalysis active, frames flowing to CameraFrameManager")
                             } catch (e: Exception) {
+                                Log.e("LIMITLESS_TRACE", "CameraX binding failed", e)
+                                // Speak TTS so blind users know the camera failed
+                                ttsManager.speak("Unable to access camera hardware.")
                                 Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                         }, ContextCompat.getMainExecutor(context))
