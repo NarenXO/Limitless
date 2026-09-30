@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 /**
  * Blind Assist Screen with CameraX PreviewView.
  * Features 1 FPS camera duty cycling, proximity sensor gating, and on-demand AI invocation.
+ * Full-screen camera with translucent top bar, result banner, bottom action bar, and floating mic button.
  */
 @Composable
 fun BlindAssistScreen() {
@@ -71,11 +72,22 @@ fun BlindAssistScreen() {
     // Camera controller
     val cameraController = remember { BlindCameraController(context) }
     var isCameraPaused by remember { mutableStateOf(false) }
+    var cameraStatus by remember { mutableStateOf("Camera Active") }
 
     // AI invocation state
     var aiResponse by remember { mutableStateOf("") }
     var showResponseBanner by remember { mutableStateOf(false) }
     var isProcessingAI by remember { mutableStateOf(false) }
+    var testQueryIndex by remember { mutableIntStateOf(0) }
+
+    // Test queries for Phase 3 offline fallback testing
+    val testQueries = listOf(
+        "describe surroundings",
+        "what's in front",
+        "read text",
+        "detect obstacles",
+        "what color"
+    )
 
     // TTS manager
     val ttsManager = remember { TTSManager(context) }
@@ -96,6 +108,7 @@ fun BlindAssistScreen() {
         while (true) {
             delay(200)
             isCameraPaused = cameraController.isPaused()
+            cameraStatus = if (isCameraPaused) "Camera Paused" else "Camera Active"
         }
     }
 
@@ -128,15 +141,13 @@ fun BlindAssistScreen() {
         }
     }
 
-    // Handle AI invocation
-    fun handleAIInvocation() {
+    // Handle AI invocation with specific query
+    fun handleAIInvocation(query: String) {
         if (isProcessingAI) return
 
         scope.launch {
             isProcessingAI = true
             try {
-                // Default query for Phase 2 (Phase 3: will use voice input)
-                val query = "describe surroundings"
                 val response = BlindAIInvoker.invokeVisionAI(context, query)
 
                 aiResponse = response
@@ -165,7 +176,7 @@ fun BlindAssistScreen() {
             .background(LimitlessBackground)
     ) {
         if (cameraPermission) {
-            // Camera preview
+            // Camera preview (base layer)
             AndroidView(
                 factory = { ctx ->
                     PreviewView(ctx).apply {
@@ -205,28 +216,68 @@ fun BlindAssistScreen() {
                 }
             )
 
-            // Proximity pause indicator
-            if (isCameraPaused) {
-                Box(
+            // Top Bar: Translucent SurfaceTint pill with title + camera status + proximity indicator
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .align(Alignment.TopCenter),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = SurfaceTint.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
-                        .align(Alignment.TopCenter),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 8.dp)
                 ) {
-                    Surface(
-                        color = SurfaceTint,
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Title
                         Text(
-                            text = "Camera Paused (Proximity Covered)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp,
+                            text = "Blind Assist",
+                            style = LimitlessTypography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                             color = TextPrimary,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            modifier = Modifier.semantics {
+                                contentDescription = "Blind Assist screen title"
+                            }
                         )
+
+                        // Camera status
+                        Text(
+                            text = cameraStatus,
+                            style = LimitlessTypography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Camera status: $cameraStatus"
+                            }
+                        )
+
+                        // Proximity pause indicator chip
+                        if (isCameraPaused) {
+                            Surface(
+                                color = HighlightBox,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Camera paused because proximity sensor is covered"
+                                }
+                            ) {
+                                Text(
+                                    text = "Proximity Covered",
+                                    style = LimitlessTypography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -236,6 +287,7 @@ fun BlindAssistScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
+                    .padding(top = 80.dp)
             ) {
                 HazelResponseBanner(
                     text = aiResponse,
@@ -245,7 +297,127 @@ fun BlindAssistScreen() {
                 )
             }
 
-            // Mic FAB button
+            // Floating semi-transparent bottom action bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                Surface(
+                    color = SurfaceTint.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Describe button
+                        Button(
+                            onClick = { handleAIInvocation("describe surroundings") },
+                            modifier = Modifier
+                                .height(72.dp)
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .semantics {
+                                    contentDescription = "Describe surroundings button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Describe",
+                                style = LimitlessTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+
+                        // Read Text button
+                        Button(
+                            onClick = { handleAIInvocation("read text") },
+                            modifier = Modifier
+                                .height(72.dp)
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .semantics {
+                                    contentDescription = "Read text button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Read Text",
+                                style = LimitlessTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+
+                        // Obstacles button
+                        Button(
+                            onClick = { handleAIInvocation("detect obstacles") },
+                            modifier = Modifier
+                                .height(72.dp)
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .semantics {
+                                    contentDescription = "Detect obstacles button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Obstacles",
+                                style = LimitlessTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+
+                        // Navigate button
+                        Button(
+                            onClick = { handleAIInvocation("navigate to library") },
+                            modifier = Modifier
+                                .height(72.dp)
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .semantics {
+                                    contentDescription = "Navigate button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Navigate",
+                                style = LimitlessTypography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Floating Mic FAB button (72dp height, PersonaBlind background)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -253,14 +425,23 @@ fun BlindAssistScreen() {
                 contentAlignment = Alignment.BottomEnd
             ) {
                 FloatingActionButton(
-                    onClick = { handleAIInvocation() },
-                    modifier = Modifier.size(72.dp),
+                    onClick = {
+                        // Cycle through test queries for Phase 3 offline fallback testing
+                        val query = testQueries[testQueryIndex]
+                        testQueryIndex = (testQueryIndex + 1) % testQueries.size
+                        handleAIInvocation(query)
+                    },
+                    modifier = Modifier
+                        .size(72.dp)
+                        .semantics {
+                            contentDescription = "Ask AI assistant with voice command"
+                        },
                     containerColor = PersonaBlind,
                     contentColor = TextPrimary
                 ) {
                     Icon(
                         imageVector = Icons.Default.Mic,
-                        contentDescription = "Ask AI",
+                        contentDescription = null,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -274,7 +455,10 @@ fun BlindAssistScreen() {
                 Text(
                     text = "Camera permission required",
                     color = TextPrimary,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = LimitlessTypography.bodyLarge,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Camera permission is required to use Blind Assist"
+                    }
                 )
             }
         }

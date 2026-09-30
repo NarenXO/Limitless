@@ -303,7 +303,13 @@ data class PathFeature(
     val confidence: Float,
     val boundingBox: Rect,
     val label: String
-)
+) {
+    constructor(
+        label: String,
+        confidence: Float,
+        boundingBox: Rect
+    ) : this(type = PathFeatureType.RAMP, confidence = confidence, boundingBox = boundingBox, label = label)
+}
 
 /**
  * Enum representing path feature types.

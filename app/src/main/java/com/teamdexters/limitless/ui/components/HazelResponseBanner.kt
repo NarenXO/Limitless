@@ -30,8 +30,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teamdexters.limitless.ui.theme.HighlightBox
-import com.teamdexters.limitless.ui.theme.LimitlessPrimary
 import com.teamdexters.limitless.ui.theme.LimitlessTypography
+import com.teamdexters.limitless.ui.theme.SurfaceTint
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 
@@ -75,18 +75,18 @@ fun HazelResponseBanner(
                 .fillMaxWidth()
                 .padding(16.dp)
                 .background(HighlightBox, RoundedCornerShape(12.dp))
-                .border(1.dp, LimitlessPrimary, RoundedCornerShape(12.dp))
+                .border(1.dp, SurfaceTint, RoundedCornerShape(12.dp))
                 .clickable { onDismiss() }
                 .padding(16.dp)
                 .semantics {
                     liveRegion = LiveRegionMode.Polite
-                    contentDescription = "Hazel says: $text"
+                    contentDescription = "Assistant response: $text"
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.VolumeUp,
-                contentDescription = null,
+                contentDescription = "Speaker icon indicating spoken response",
                 tint = TextPrimary,
                 modifier = Modifier.size(24.dp)
             )

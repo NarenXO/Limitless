@@ -225,12 +225,3 @@ class PathFeatureDetector(private val context: Context) {
         isInitialized = false
     }
 }
-
-/**
- * Data class representing a detected path feature.
- */
-data class PathFeature(
-    val label: String,
-    val confidence: Float,
-    val boundingBox: Rect
-)

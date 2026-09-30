@@ -140,12 +140,3 @@ class RealTimeObjectDetector(private val context: Context) {
         isInitialized = false
     }
 }
-
-/**
- * Data class representing a detected object.
- */
-data class DetectedObject(
-    val label: String,
-    val confidence: Float,
-    val boundingBox: Rect
-)

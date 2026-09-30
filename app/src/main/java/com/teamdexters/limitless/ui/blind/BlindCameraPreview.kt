@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -47,13 +49,11 @@ fun BlindCameraPreview(
     }
 
     // Camera permission launcher
-    val cameraPermissionLauncher = remember {
-        androidx.activity.compose.rememberLauncherForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            if (!isGranted) {
-                onError(SecurityException("Camera permission required"))
-            }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            onError(SecurityException("Camera permission required"))
         }
     }
 
@@ -122,7 +122,7 @@ private fun startCamera(
                 .also {
                     it.setAnalyzer(
                         ContextCompat.getMainExecutor(context),
-                        FrameAnalyzer(onFrameReady)
+                        BlindFrameAnalyzer(onFrameReady)
                     )
                 }
 
@@ -150,7 +150,7 @@ private fun startCamera(
  * Image analysis analyzer that converts camera frames to Bitmaps.
  * Runs continuously for real-time object detection.
  */
-private class FrameAnalyzer(
+private class BlindFrameAnalyzer(
     private val onFrameReady: (android.graphics.Bitmap, Int) -> Unit
 ) : ImageAnalysis.Analyzer {
 
@@ -202,7 +202,7 @@ private class FrameAnalyzer(
         val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
         val out = ByteArrayOutputStream()
         yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 100, out)
-        val imageBytes = out.toByteArray
+        val imageBytes = out.toByteArray()
 
         val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
         

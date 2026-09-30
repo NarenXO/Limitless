@@ -14,17 +14,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.teamdexters.limitless.ui.theme.LimitlessPrimary
+import com.teamdexters.limitless.ui.theme.PersonaBlind
 import com.teamdexters.limitless.ui.theme.TextPrimary
 
 /**
- * Floating action button for triggering Hazel assistant.
+ * Floating action button for triggering assistant.
  * Features:
- * - Flat styling using LimitlessPrimary color
+ * - Flat styling using PersonaBlind color
  * - 2D flat mic icon with TextPrimary tint
- * - Minimum 56dp size for accessibility
+ * - Minimum 72dp size for accessibility
  * - Proper TalkBack content description
- * 
+ *
  * @param onClick Callback when the button is clicked
  * @param modifier Optional modifier for positioning and sizing
  */
@@ -35,19 +35,19 @@ fun HazelFloatingMicButton(
 ) {
     Box(
         modifier = modifier
-            .size(56.dp)
-            .background(LimitlessPrimary, CircleShape)
+            .size(72.dp)
+            .background(PersonaBlind, CircleShape)
             .clickable(onClick = onClick)
             .semantics {
-                contentDescription = "Ask Hazel Assistant"
+                contentDescription = "Ask AI assistant with voice command"
             },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Mic,
-            contentDescription = null,
+            contentDescription = "Microphone icon for voice commands",
             tint = TextPrimary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(32.dp)
         )
     }
 }
