@@ -34,15 +34,34 @@ enum class SortOrder(val label: String) {
     NEAREST("Nearest Distance")
 }
 
+enum class SyncStatus { IDLE, SYNCING, SYNCED, OFFLINE, ERROR }
+
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
     private val userReportDao: UserReportDao,
+    private val syncManager: com.teamdexters.limitless.data.sync.SupabaseSyncManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val _syncStatus = MutableStateFlow(SyncStatus.IDLE)
+    val syncStatus: StateFlow<SyncStatus> = _syncStatus
+
     init {
-        // TODO(Naren): Call DatabaseSeeder.seedIfEmpty(dao, context) inside Application.onCreate for global app pre-population
         viewModelScope.launch {
             DatabaseSeeder.seedIfEmpty(userReportDao, context)
+            triggerCloudSync()
+        }
+    }
+
+    fun triggerCloudSync() {
+        viewModelScope.launch {
+            _syncStatus.value = SyncStatus.SYNCING
+            val result = syncManager.syncCommunityReports()
+            _syncStatus.value = when (result) {
+                is com.teamdexters.limitless.data.sync.SyncResult.Success -> SyncStatus.SYNCED
+                is com.teamdexters.limitless.data.sync.SyncResult.Offline -> SyncStatus.OFFLINE
+                is com.teamdexters.limitless.data.sync.SyncResult.Error -> SyncStatus.ERROR
+            }
         }
     }
     private val _selectedCategory = MutableStateFlow<Category?>(null)
@@ -159,6 +178,7 @@ class CommunityReportViewModel @Inject constructor(
             try {
                 userReportDao.insertReport(report)
                 _submitResult.value = true
+                triggerCloudSync()
             } catch (e: Exception) {
                 _submitResult.value = false
             }
@@ -186,6 +206,7 @@ class CommunityReportViewModel @Inject constructor(
             
             try {
                 userReportDao.insertReport(report)
+                triggerCloudSync()
             } catch (e: Exception) {
                 // handle error if needed
             }

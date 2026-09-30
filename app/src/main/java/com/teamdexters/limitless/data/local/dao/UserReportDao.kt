@@ -34,6 +34,9 @@ interface UserReportDao {
     @Query("SELECT * FROM user_reports ORDER BY timestamp DESC")
     fun getAllReports(): Flow<List<UserReportEntity>>
 
+    @Query("SELECT * FROM user_reports")
+    suspend fun getAllReportsOnce(): List<UserReportEntity>
+
     /**
      * Retrieves all user reports that are pending synchronization with the remote database.
      * Used for syncing local data to Supabase.

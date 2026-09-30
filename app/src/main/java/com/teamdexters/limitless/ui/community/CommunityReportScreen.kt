@@ -175,8 +175,14 @@ fun CommunityReportScreen(
                 .background(Color(0xFFF7F1EE))
                 .padding(innerPadding)
         ) {
+            val syncStatus by viewModel.syncStatus.collectAsState()
+            
             // Profile Card
-            UserProfileCard(modifier = Modifier.padding(16.dp))
+            UserProfileCard(
+                syncStatus = syncStatus,
+                onSyncClick = { viewModel.triggerCloudSync() },
+                modifier = Modifier.padding(16.dp)
+            )
             
             // View Toggle
             Row(
