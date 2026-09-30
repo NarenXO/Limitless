@@ -484,7 +484,8 @@ private fun handleHazelIntent(
                 tts = tts,
                 currentPersona = currentPersona,
                 currentRoute = currentRoute,
-                onResponseReady = onShowBanner
+                onResponseReady = onShowBanner,
+                onNavigate = { route -> navController.navigate(route) }
             )
         }
         is HazelIntent.VisionQuery  -> {
@@ -495,7 +496,8 @@ private fun handleHazelIntent(
                 tts = tts,
                 currentPersona = currentPersona,
                 currentRoute = currentRoute,
-                onResponseReady = onShowBanner
+                onResponseReady = onShowBanner,
+                onNavigate = { route -> navController.navigate(route) }
             )
         }
         is HazelIntent.Unknown -> {
@@ -506,7 +508,8 @@ private fun handleHazelIntent(
                 tts = tts,
                 currentPersona = currentPersona,
                 currentRoute = currentRoute,
-                onResponseReady = onShowBanner
+                onResponseReady = onShowBanner,
+                onNavigate = { route -> navController.navigate(route) }
             )
         }
     }

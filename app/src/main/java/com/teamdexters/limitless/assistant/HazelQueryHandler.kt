@@ -30,7 +30,8 @@ class HazelQueryHandler(
     private val networkStatusTracker: NetworkStatusProvider? = null,
     private val hazelMemoryStore: HazelMemoryStore? = null,
     private val cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager? = null,
-    private val hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider? = null
+    private val hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider? = null,
+    private val actionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher? = null
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
@@ -55,7 +56,8 @@ class HazelQueryHandler(
         tts: TextToSpeech?,
         currentPersona: String = "",
         currentRoute: String? = null,
-        onResponseReady: (String) -> Unit
+        onResponseReady: (String) -> Unit,
+        onNavigate: ((String) -> Unit)? = null
     ) {
         scope.launch {
             val lowerQuery = rawQuery.lowercase()
@@ -92,6 +94,29 @@ class HazelQueryHandler(
                     withContext(Dispatchers.Main) {
                         onResponseReady(fallbackResponse)
                         speakResponse(tts, fallbackResponse)
+                    }
+                    return@launch
+                }
+            }
+
+            // Phase 4: Action Dispatcher
+            val action = actionDispatcher?.parseIntent(rawQuery) ?: com.teamdexters.limitless.hazel.HazelAction.None
+            if (action !is com.teamdexters.limitless.hazel.HazelAction.None) {
+                val actionResult = actionDispatcher?.executeAction(action)
+                if (actionResult != null) {
+                    hazelMemoryStore?.saveTurn(
+                        userMessage = rawQuery,
+                        hazelResponse = actionResult.spokenFeedback,
+                        persona = currentPersona.ifBlank { "general" },
+                        intent = "action",
+                        wasActionExecuted = true
+                    )
+                    withContext(Dispatchers.Main) {
+                        onResponseReady(actionResult.spokenFeedback)
+                        speakResponse(tts, actionResult.spokenFeedback)
+                        actionResult.targetRoute?.let { route ->
+                            onNavigate?.invoke(route)
+                        }
                     }
                     return@launch
                 }
@@ -176,7 +201,8 @@ class HazelQueryHandler(
         tts: TextToSpeech?,
         currentPersona: String = "",
         currentRoute: String? = null,
-        onResponseReady: (String) -> Unit
+        onResponseReady: (String) -> Unit,
+        onNavigate: ((String) -> Unit)? = null
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
