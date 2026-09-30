@@ -19,7 +19,6 @@ app/src/main/assets/vosk-model-small-en-us/
 
 # YAMNet model (large binary, not in repo)
 app/src/main/assets/yamnet.tflite
-app/src/main/assets/yamnet_placeholder.tflite
 
 # Gradle wrapper — must always be committed
 !gradle/wrapper/gradle-wrapper.jar

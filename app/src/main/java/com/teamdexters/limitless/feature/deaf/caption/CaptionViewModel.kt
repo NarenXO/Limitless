@@ -47,7 +47,7 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
      */
     private fun loadModel() {
         modelLoadJob = viewModelScope.launch(Dispatchers.IO) {
-            val isLoaded = voskEngine?.initialize() ?: true
+            val isLoaded = voskEngine?.initialize() ?: false
             
             if (isLoaded) {
                 _uiState.value = _uiState.value.copy(

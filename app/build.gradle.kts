@@ -108,7 +108,7 @@ dependencies {
     // Retrofit (for Supabase REST calls)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
-    // Vosk-android (offline STT) - Stub implementation for now
+    // Vosk-android (offline STT) - Commented out due to compilation issues
     // implementation("com.alphacephei:vosk-android:0.3.32@aar")
     // implementation("net.java.dev.jna:jna:5.13.0@aar")
     
