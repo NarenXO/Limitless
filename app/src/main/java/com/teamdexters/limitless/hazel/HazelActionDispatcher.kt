@@ -8,51 +8,67 @@ class HazelActionDispatcher(
     private val navController: NavController,
     private val onSpeak: (String) -> Unit
 ) {
-    fun dispatch(rawIntent: String): Boolean {
+    fun parseIntent(rawIntent: String): Boolean {
         val lowerIntent = rawIntent.lowercase()
         Log.d("LIMITLESS_TRACE", "MasterOrchestrator: Dispatched intent $rawIntent successfully")
         
         return when {
-            // Blind Vision Intent
-            lowerIntent.contains("what's in front of me") || 
-            lowerIntent.contains("describe surroundings") || 
-            lowerIntent.contains("read text") -> {
+            // Blind Vision
+            lowerIntent.contains("in front") || 
+            lowerIntent.contains("front of me") || 
+            lowerIntent.contains("describe") || 
+            lowerIntent.contains("what's around") || 
+            lowerIntent.contains("what am i holding") -> {
                 onSpeak("Navigating to Blind and Low Vision mode for you.")
                 navController.navigate(Screen.BlindHome.route)
                 true
             }
             
-            // Routing Intent
+            // Blind OCR
+            lowerIntent.contains("read text") || 
+            lowerIntent.contains("read label") || 
+            lowerIntent.contains("read sign") || 
+            lowerIntent.contains("what does it say") -> {
+                onSpeak("Navigating to Blind and Low Vision mode for you.")
+                navController.navigate(Screen.BlindHome.route)
+                true
+            }
+            
+            // Mobility Navigation
             lowerIntent.contains("navigate to") || 
+            lowerIntent.contains("take me to") || 
             lowerIntent.contains("move from here to") || 
-            lowerIntent.contains("tell me the route") -> {
+            lowerIntent.contains("tell me the route to") -> {
                 onSpeak("Navigating to Mobility and Wheelchair mode for you.")
                 navController.navigate(Screen.MobilityHome.route)
                 true
             }
             
-            // Room Intent
+            // Room Accessibility
             lowerIntent.contains("is ") && lowerIntent.contains(" accessible") || 
-            lowerIntent.contains("does ") && lowerIntent.contains(" have a ramp") -> {
+            lowerIntent.contains("does ") && lowerIntent.contains(" have a ramp") ||
+            lowerIntent.contains("check ") -> {
                 onSpeak("Navigating to Mobility and Wheelchair mode for you.")
                 navController.navigate(Screen.MobilityHome.route)
                 true
             }
             
-            // Emergency Intent
+            // Speech AAC
+            lowerIntent.contains("say ") || 
+            lowerIntent.contains("speak ") -> {
+                onSpeak("Navigating to Speech Impaired mode for you.")
+                navController.navigate(Screen.SpeechHome.route)
+                true
+            }
+            
+            // Auto-SOS
             lowerIntent.contains("sos") || 
-            lowerIntent.contains("help me") -> {
+            lowerIntent.contains("help me") || 
+            lowerIntent.contains("emergency") || 
+            lowerIntent.contains("i fell") -> {
                 onSpeak("Emergency triggered. Calling for help.")
                 // Should trigger EmergencyManager, but since it's just wiring for now:
                 // we assume EmergencyManager is handled or we just log it.
-                true
-            }
-            
-            // Speech Intent
-            lowerIntent.contains("speak") || 
-            lowerIntent.contains("say") -> {
-                onSpeak("Navigating to Speech Impaired mode for you.")
-                navController.navigate(Screen.SpeechHome.route)
                 true
             }
             

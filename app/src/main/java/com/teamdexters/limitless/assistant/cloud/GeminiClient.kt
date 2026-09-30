@@ -66,9 +66,11 @@ class GeminiClient(
             providerName = "Groq"
             isGemini = false
             candidates = listOf(
+                LlmCandidate("llama-3.2-3b-preview", "https://api.groq.com/openai/v1/chat/completions"),
+                LlmCandidate("gemma2-9b-it", "https://api.groq.com/openai/v1/chat/completions"),
                 LlmCandidate("llama-3.1-8b-instant", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("llama3-70b-8192", "https://api.groq.com/openai/v1/chat/completions"),
-                LlmCandidate("mixtral-8x7b-32768", "https://api.groq.com/openai/v1/chat/completions")
+                LlmCandidate("llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions"),
+                LlmCandidate("llama-3.2-1b-preview", "https://api.groq.com/openai/v1/chat/completions")
             )
         } else if (finalKey.startsWith("xai-")) {
             providerName = "xAI Grok"
@@ -192,7 +194,11 @@ class GeminiClient(
                     Log.d("LIMITLESS_TRACE", "[CloudLLM] Parsed Text: $extractedText")
 
                     if (extractedText.isNotBlank()) {
-                        Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from $providerName")
+                        if (providerName == "Groq") {
+                            Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from Groq model $modelName")
+                        } else {
+                            Log.d("LIMITLESS_TRACE", "[CloudLLM] Successfully generated response from $providerName")
+                        }
                         return@withContext Result.success(extractedText)
                     } else {
                         lastException = Exception("Parsed text is empty from success body")

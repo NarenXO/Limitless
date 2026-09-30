@@ -483,7 +483,7 @@ private fun handleHazelIntent(
                 onSpeak = { text -> speak(text) }
             )
             
-            val handled = dispatcher.dispatch(intent.rawQuery)
+            val handled = dispatcher.parseIntent(intent.rawQuery)
             if (!handled) {
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,
@@ -510,7 +510,7 @@ private fun handleHazelIntent(
                 onSpeak = { text -> speak(text) }
             )
             
-            val handled = dispatcher.dispatch(intent.rawQuery)
+            val handled = dispatcher.parseIntent(intent.rawQuery)
             if (!handled) {
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,
