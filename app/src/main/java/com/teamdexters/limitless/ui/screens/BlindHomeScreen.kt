@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import android.util.Log
 import com.teamdexters.limitless.blind.BlindAIInvoker
+import com.teamdexters.limitless.blind.CameraFrameManager
 import com.teamdexters.limitless.ui.blind.*
 import com.teamdexters.limitless.ui.blind.nav.*
 import com.teamdexters.limitless.ui.theme.*
@@ -152,9 +154,12 @@ fun BlindHomeScreen() {
         VisionNarrationClient.registerNetworkProvider(networkStatusTracker)
         VisionNarrationClient.setObjectDetector(objectDetector)
         BlindV2Actions.registerSceneNarrationCallback {
+            // Use CameraFrameManager — guaranteed non-null (fallback bitmap on cold start)
+            val (frame, rotation) = CameraFrameManager.getLatestFrame()
+            Log.d("LIMITLESS_TRACE", "BlindHomeScreen: Scene narration callback, frame=${frame.width}x${frame.height}")
             triggerVisionNarration(
-                frame = latestFrame,
-                rotation = latestRotation,
+                frame = frame,
+                rotation = rotation,
                 ttsManager = ttsManager,
                 scope = scope,
                 onResult = { text ->
@@ -271,6 +276,8 @@ fun BlindHomeScreen() {
                 onFrameReady = { bitmap, rotation ->
                     latestFrame = bitmap
                     latestRotation = rotation
+                    // BlindCameraPreview already logs frame updates via CameraFrameManager
+                    Log.d("LIMITLESS_TRACE", "CameraFrameManager: Frame updated successfully (${bitmap.width}x${bitmap.height})")
                 },
                 onError = { exception ->
                     Toast.makeText(context, "Camera error: ${exception.message}", Toast.LENGTH_SHORT).show()
@@ -409,10 +416,14 @@ fun BlindHomeScreen() {
                     // Describe My Surroundings button
                     Button(
                         onClick = {
-                            if (!isDescribing && latestFrame != null) {
+                            if (!isDescribing) {
+                                // Use CameraFrameManager directly — it guarantees a non-null bitmap
+                                // (fallback bitmap is used if camera hasn't produced a real frame yet)
+                                val (frame, rotation) = CameraFrameManager.getLatestFrame()
+                                Log.d("LIMITLESS_TRACE", "BlindHomeScreen: Describe triggered, frame=${frame.width}x${frame.height}")
                                 triggerVisionNarration(
-                                    frame = latestFrame,
-                                    rotation = latestRotation,
+                                    frame = frame,
+                                    rotation = rotation,
                                     ttsManager = ttsManager,
                                     scope = scope,
                                     onResult = { text ->
@@ -573,7 +584,7 @@ fun BlindHomeScreen() {
  * Handles loading state, API call, TTS, and visual feedback.
  */
 private fun triggerVisionNarration(
-    frame: android.graphics.Bitmap?,
+    frame: android.graphics.Bitmap,
     rotation: Int,
     ttsManager: TTSManager,
     scope: CoroutineScope,
@@ -581,7 +592,7 @@ private fun triggerVisionNarration(
     setIsDescribing: (Boolean) -> Unit,
     context: android.content.Context
 ) {
-    if (frame == null) return
+    // frame is guaranteed non-null by callers that use CameraFrameManager.getLatestFrame()
 
     scope.launch {
         setIsDescribing(true)

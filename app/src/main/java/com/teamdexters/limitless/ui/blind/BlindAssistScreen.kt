@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,6 +78,8 @@ fun BlindAssistScreen() {
     val cameraController = remember { BlindCameraController(context) }
     var isCameraPaused by remember { mutableStateOf(false) }
     var cameraStatus by remember { mutableStateOf("Camera Active") }
+    // Guard: prevent re-binding CameraX on every recomposition
+    var cameraStarted by remember { mutableStateOf(false) }
 
     // AI invocation state
     var aiResponse by remember { mutableStateOf("") }
@@ -117,6 +120,7 @@ fun BlindAssistScreen() {
             delay(200)
             isCameraPaused = cameraController.isPaused()
             cameraStatus = if (isCameraPaused) "Camera Paused" else "Camera Active"
+            // BlindCameraController logs frame updates via CameraFrameManager
         }
     }
 
@@ -194,34 +198,42 @@ fun BlindAssistScreen() {
                 },
                 modifier = Modifier.fillMaxSize(),
                 update = { previewView ->
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+                    // Guard: only bind camera once to prevent recomposition-driven unbind/rebind
+                    // which would disrupt frame analysis and leave CameraFrameManager without a real frame.
+                    if (!cameraStarted) {
+                        cameraStarted = true
+                        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
+                        cameraProviderFuture.addListener({
+                            val cameraProvider = cameraProviderFuture.get()
 
-                        // Preview use case
-                        val preview = Preview.Builder()
-                            .build()
-                            .also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            // Preview use case
+                            val preview = Preview.Builder()
+                                .build()
+                                .also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
+                                }
+
+                            // Image analysis use case with 1 FPS duty cycling
+                            // BlindCameraController.analyzeFrame() calls CameraFrameManager.updateLatestFrame()
+                            // ensuring CameraFrameManager always has a real frame after the first analysis tick.
+                            val imageAnalysis = cameraController.createImageAnalysis()
+
+                            // Bind to lifecycle
+                            try {
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview,
+                                    imageAnalysis
+                                )
+                                Log.d("LIMITLESS_TRACE", "BlindAssistScreen: CameraX bound — ImageAnalysis active, frames will flow to CameraFrameManager")
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-
-                        // Image analysis use case with 1 FPS duty cycling
-                        val imageAnalysis = cameraController.createImageAnalysis()
-
-                        // Bind to lifecycle
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview,
-                                imageAnalysis
-                            )
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    }, ContextCompat.getMainExecutor(context))
+                        }, ContextCompat.getMainExecutor(context))
+                    }
                 }
             )
 

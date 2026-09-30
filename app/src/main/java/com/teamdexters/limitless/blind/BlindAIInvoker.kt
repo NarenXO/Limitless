@@ -72,9 +72,10 @@ object BlindAIInvoker {
         // Get latest frame (Phase 3: will convert to Base64 for vision API)
         val (frame, rotation) = CameraFrameManager.getLatestFrame()
 
-        if (frame == null) {
-            Log.w(TAG, "BlindAIInvoker: No frame available, using text-only fallback")
-            return "I don't have a camera frame to analyze."
+        // Check if we're using the fallback bitmap (camera not ready yet)
+        val isFallbackFrame = (frame.width == 640 && frame.height == 480)
+        if (isFallbackFrame) {
+            Log.w(TAG, "BlindAIInvoker: Using fallback bitmap (camera not ready yet)")
         }
 
         // Try online Gemini API if available
@@ -83,6 +84,7 @@ object BlindAIInvoker {
                 try {
                     // Get Base64 image for Gemini Vision API (optimized with 50% JPEG quality)
                     val (base64Image, _) = CameraFrameManager.getLatestFrameAsBase64()
+                    Log.d(TAG, "BlindAIInvoker: Sending Base64 frame to Gemini (size=${base64Image.length})")
                     val result = geminiClient?.queryGemini(prompt, base64Image)
                     result?.getOrNull() ?: ""
                 } catch (e: Exception) {
@@ -139,6 +141,12 @@ object BlindAIInvoker {
             }
 
             BlindVoiceCommandHandler.BlindIntent.UNKNOWN -> {
+                val result = OfflineObjectDetector.detectObjects(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
+
+            else -> {
                 val result = OfflineObjectDetector.detectObjects(frame)
                 Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
                 result
