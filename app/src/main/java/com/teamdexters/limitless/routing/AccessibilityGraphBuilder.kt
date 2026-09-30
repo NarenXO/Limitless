@@ -64,7 +64,8 @@ class AccessibilityGraphBuilder(
                 hasRamp = connection.hasRamp,
                 hasStairs = connection.hasStairs,
                 doorWidthCm = connection.doorWidthCm,
-                isBidirectional = connection.isBidirectional
+                isBidirectional = connection.isBidirectional,
+                notes = connection.notes
             )
 
             adjList.getOrPut(connection.fromRoomId) { mutableListOf() }.add(edge)
@@ -78,7 +79,8 @@ class AccessibilityGraphBuilder(
                     hasRamp = connection.hasRamp,
                     hasStairs = connection.hasStairs,
                     doorWidthCm = connection.doorWidthCm,
-                    isBidirectional = true
+                    isBidirectional = true,
+                    notes = connection.notes
                 )
                 adjList.getOrPut(connection.toRoomId) { mutableListOf() }.add(reverseEdge)
             }

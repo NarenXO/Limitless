@@ -269,7 +269,7 @@ fun RouteCanvas(route: Route, graph: AccessibilityGraph, progress: NavigationPro
                         start = fromPos,
                         end = toPos,
                         strokeWidth = 3f,
-                        pathEffect = PathEffect.dashPathIntervals(floatArrayOf(10f, 10f))
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
                     )
                 }
             }
@@ -361,7 +361,7 @@ fun RouteCanvas(route: Route, graph: AccessibilityGraph, progress: NavigationPro
                         color = LimitlessPrimary,
                         radius = 40f,
                         center = destPos,
-                        style = Stroke(width = 8f, pathEffect = PathEffect.dashPathIntervals(floatArrayOf(15f, 10f)))
+                        style = Stroke(width = 8f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f), 0f))
                     )
                 }
             }

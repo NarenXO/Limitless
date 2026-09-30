@@ -12,5 +12,6 @@ data class GraphEdge(
     val hasRamp: Boolean,
     val hasStairs: Boolean,
     val doorWidthCm: Int,
-    val isBidirectional: Boolean
+    val isBidirectional: Boolean,
+    val notes: String = ""
 )
