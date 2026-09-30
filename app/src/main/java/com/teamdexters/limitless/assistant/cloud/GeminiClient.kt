@@ -101,7 +101,7 @@ class GeminiClient(
             }
 
             val responseCode = connection.responseCode
-            Log.d("LIMITLESS_TRACE", "[Gemini] HTTP status: $responseCode")
+            Log.d("LIMITLESS_TRACE", "[Gemini] HTTP response code: $responseCode")
             Log.d("LIMITLESS_TRACE", "[Gemini] Headers: ${connection.headerFields}")
 
             if (responseCode == HttpURLConnection.HTTP_OK) {

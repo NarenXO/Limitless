@@ -149,7 +149,7 @@ class HazelQueryHandler(
     private fun getOfflineResponse(userQuery: String): String {
         val lowerQuery = userQuery.lowercase(Locale.ROOT)
         return when {
-            lowerQuery.contains("hi") || lowerQuery.contains("hello") ->
+            Regex("\\b(hi|hello|hey|greetings)\\b").containsMatchIn(lowerQuery) ->
                 "Hello! I am Rhasspy, your accessibility assistant. How can I help you today?"
             lowerQuery.contains("time") || lowerQuery.contains("date") -> {
                 val formatter = java.text.SimpleDateFormat("h:mm a, EEEE, MMMM d", Locale.getDefault())
@@ -162,7 +162,7 @@ class HazelQueryHandler(
             lowerQuery.contains("navigate") || lowerQuery.contains("route") ->
                 "Routing you to your destination. Please scan a QR waypoint if prompted."
             else ->
-                "Rhasspy is active and ready to assist you in offline mode."
+                "I am currently offline. I can help you with camera vision, reading labels, navigation, or emergency SOS."
         }
     }
 

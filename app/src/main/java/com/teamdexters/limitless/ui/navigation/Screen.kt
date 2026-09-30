@@ -30,12 +30,6 @@ sealed class Screen(val route: String) {
     data object SpeechHome : Screen("speech-home")
 
     /**
-     * Speech composer screen.
-     * Route: "speech-composer"
-     */
-    data object SpeechComposer : Screen("speech-composer")
-
-    /**
      * Home screen for mobility and wheelchair users.
      * Route: "mobility-home"
      */
