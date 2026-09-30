@@ -86,11 +86,7 @@ import androidx.compose.ui.zIndex
 import com.teamdexters.limitless.ui.speech.data.LanguagePacks
 import com.teamdexters.limitless.ui.speech.data.PackPhrase
 import com.teamdexters.limitless.ui.speech.data.PhraseUsageDatabase
-import com.teamdexters.limitless.ui.theme.HighlightBox
-import com.teamdexters.limitless.ui.theme.LimitlessBackground
-import com.teamdexters.limitless.ui.theme.PersonaSpeech
-import com.teamdexters.limitless.ui.theme.SurfaceTint
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -301,7 +297,7 @@ fun SpeechHomeScreen(
                 text = currentPack.sectionHeaders.quickPhrases,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = PersonaSpeech,
+                color = PureBlack,
                 textAlign = TextAlign.Start,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -314,7 +310,7 @@ fun SpeechHomeScreen(
                     text = currentPack.sectionHeaders.predictedForYou,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = PersonaSpeech,
+                    color = NeutralGray,
                     textAlign = TextAlign.Start,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -391,7 +387,7 @@ fun SpeechHomeScreen(
                     text = currentPack.sectionHeaders.typeToSpeak,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PersonaSpeech,
+                    color = PureBlack,
                     modifier = Modifier.semantics {
                         contentDescription = "${currentPack.sectionHeaders.typeToSpeak} section header"
                     }
@@ -411,22 +407,22 @@ fun SpeechHomeScreen(
                             Text(
                                 text = currentPack.typeToSpeakHint,
                                 fontSize = 18.sp,
-                                color = TextPrimary.copy(alpha = 0.6f)
+                                color = NeutralGray
                             )
                         },
                         textStyle = TextStyle(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium,
-                            color = TextPrimary
+                            color = PureBlack
                         ),
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor   = HighlightBox,
-                            unfocusedContainerColor = HighlightBox,
-                            disabledContainerColor  = HighlightBox,
-                            focusedIndicatorColor   = PersonaSpeech,
+                            focusedContainerColor   = LightGray,
+                            unfocusedContainerColor = LightGray,
+                            disabledContainerColor  = LightGray,
+                            focusedIndicatorColor   = PureBlack,
                             unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor        = TextPrimary,
-                            unfocusedTextColor      = TextPrimary
+                            focusedTextColor        = PureBlack,
+                            unfocusedTextColor      = PureBlack
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
@@ -445,10 +441,10 @@ fun SpeechHomeScreen(
                         modifier = Modifier
                             .height(60.dp)
                             .scale(speakScale)
-                            .background(PersonaSpeech, RoundedCornerShape(16.dp))
+                            .background(PureBlack, RoundedCornerShape(16.dp))
                             .border(
                                 width = if (isSpeakButtonFocused) 2.5.dp else 1.dp,
-                                color = if (isSpeakButtonFocused) TextPrimary else PersonaSpeech.copy(alpha = 0.40f),
+                                color = if (isSpeakButtonFocused) PureBlack else PureBlack.copy(alpha = 0.40f),
                                 shape = RoundedCornerShape(16.dp)
                             )
                             .semantics(mergeDescendants = true) {
@@ -480,14 +476,14 @@ fun SpeechHomeScreen(
                             Icon(
                                 imageVector = Icons.Default.VolumeUp,
                                 contentDescription = null,
-                                tint = TextPrimary,
+                                tint = PureWhite,
                                 modifier = Modifier.size(24.dp)
                             )
                             Text(
                                 text = currentPack.sectionHeaders.speak,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = PureWhite
                             )
                         }
                     }
@@ -540,10 +536,10 @@ fun SpeechHomeScreen(
                                 .scale(emotionScale)
                                 .width(104.dp)
                                 .height(104.dp)
-                                .background(SurfaceTint, RoundedCornerShape(16.dp))
+                                .background(SoftWhite, RoundedCornerShape(16.dp))
                                 .border(
                                     width = if (isEmotionFocused) 2.5.dp else 1.dp,
-                                    color = if (isEmotionFocused) PersonaSpeech else PersonaSpeech.copy(alpha = 0.30f),
+                                    color = if (isEmotionFocused) PureBlack else SubtleDivider,
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .semantics(mergeDescendants = true) {
@@ -572,7 +568,7 @@ fun SpeechHomeScreen(
                                     // Use the icon from the English pack mapped by emotion key
                                     imageVector = emotionIconMap[emotionEntry.emotionKey] ?: Icons.Default.Help,
                                     contentDescription = null,
-                                    tint = TextPrimary,
+                                    tint = PureBlack,
                                     modifier = Modifier.size(32.dp)
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -580,7 +576,7 @@ fun SpeechHomeScreen(
                                     text = emotionEntry.label,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = TextPrimary,
+                                    color = SoftBlack,
                                     textAlign = TextAlign.Center
                                 )
                             }
@@ -659,7 +655,7 @@ private fun PackPhraseCardItem(
             Icon(
                 imageVector  = card.icon,
                 contentDescription = null,
-                tint         = com.teamdexters.limitless.ui.theme.PureWhite,
+                tint         = com.teamdexters.limitless.ui.theme.PureBlack,
                 modifier     = Modifier.size(36.dp)
             )
 
@@ -669,7 +665,7 @@ private fun PackPhraseCardItem(
                 text       = card.displayText,
                 fontSize   = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color      = com.teamdexters.limitless.ui.theme.PureWhite,
+                color      = com.teamdexters.limitless.ui.theme.PureBlack,
                 textAlign  = TextAlign.Center,
                 lineHeight = 18.sp
             )

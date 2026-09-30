@@ -209,7 +209,7 @@ fun HazelListeningOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HighlightBox, RoundedCornerShape(16.dp))
+                .background(com.teamdexters.limitless.ui.theme.SoftWhite, RoundedCornerShape(16.dp))
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -255,7 +255,7 @@ fun HazelListeningOverlay(
             Box(
                 modifier = Modifier
                     .size(80.dp)
-                    .background(com.teamdexters.limitless.ui.theme.LimitlessPrimary, androidx.compose.foundation.shape.CircleShape)
+                    .background(com.teamdexters.limitless.ui.theme.PureBlack, androidx.compose.foundation.shape.CircleShape)
                     .clickable {
                         Log.d(TAG, "User manually tapped mic icon in overlay")
                         recognizerRef?.cancel()
@@ -266,7 +266,7 @@ fun HazelListeningOverlay(
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = "Tap to speak again",
-                    tint = TextPrimary,
+                    tint = com.teamdexters.limitless.ui.theme.PureWhite,
                     modifier = Modifier.size(40.dp)
                 )
             }

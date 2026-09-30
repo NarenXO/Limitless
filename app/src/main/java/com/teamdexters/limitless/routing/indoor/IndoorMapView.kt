@@ -31,9 +31,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.teamdexters.limitless.ui.theme.PersonaMobility
-import com.teamdexters.limitless.ui.theme.SurfaceTint
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.PureBlack
+import com.teamdexters.limitless.ui.theme.PureWhite
+import com.teamdexters.limitless.ui.theme.SoftWhite
+import com.teamdexters.limitless.ui.theme.LightGray
+import com.teamdexters.limitless.ui.theme.SubtleDivider
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -86,7 +88,7 @@ fun IndoorMapView(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceTint)
+            .background(SoftWhite)
             .semantics {
                 contentDescription = "Indoor map showing your position relative to key locations"
             }
@@ -120,12 +122,12 @@ fun IndoorMapView(
                 val floorOrigin = Offset(0f, -floorOutlineRect.height)
 
                 drawRect(
-                    color = PersonaMobility.copy(alpha = 0.25f),
+                    color = LightGray,
                     topLeft = floorOrigin,
                     size = floorOutlineRect
                 )
                 drawRect(
-                    color = TextPrimary.copy(alpha = 0.40f),
+                    color = SubtleDivider,
                     topLeft = floorOrigin,
                     size = floorOutlineRect,
                     style = Stroke(width = 3f)
@@ -137,49 +139,52 @@ fun IndoorMapView(
                     val cy = toMapY(wp.yMeters)
                     val isTarget = targetWaypoint?.id == wp.id
 
-                    val markerColor = if (isTarget) PersonaMobility else TextPrimary.copy(alpha = 0.70f)
-                    val radius = if (isTarget) 18f else 12f
+                    val markerColor = if (isTarget) PureBlack else LightGray
+                    
+                    val rectSize = Size(60f, 24f)
+                    val rectTopLeft = Offset(cx - rectSize.width / 2f, cy - rectSize.height / 2f)
 
-                    drawCircle(
+                    drawRect(
                         color = markerColor,
-                        center = Offset(cx, cy),
-                        radius = radius
+                        topLeft = rectTopLeft,
+                        size = rectSize
                     )
-                    if (isTarget) {
-                        drawCircle(
-                            color = TextPrimary,
-                            center = Offset(cx, cy),
-                            radius = radius,
-                            style = Stroke(width = 3f)
+                    
+                    if (isTarget || true) {
+                        drawRect(
+                            color = PureBlack,
+                            topLeft = rectTopLeft,
+                            size = rectSize,
+                            style = Stroke(width = if (isTarget) 4f else 1.5f)
                         )
                     }
 
                     // Label text
+                    val textColor = if (isTarget) PureWhite else PureBlack
                     val textLayoutResult = textMeasurer.measure(
                         text = wp.name,
                         style = TextStyle(
                             fontSize = 10.sp,
-                            color = TextPrimary,
+                            color = textColor,
                             textAlign = TextAlign.Center
                         )
                     )
                     drawText(
                         textLayoutResult = textLayoutResult,
-                        topLeft = Offset(cx - textLayoutResult.size.width / 2f, cy + 12f)
+                        topLeft = Offset(cx - textLayoutResult.size.width / 2f, cy - textLayoutResult.size.height / 2f)
                     )
                 }
 
-                // 3. Draw User Position Dot — PersonaMobility fill + dark outline
+                // 3. Draw User Position Dot — PureBlack with PureWhite center dot
                 drawCircle(
-                    color = PersonaMobility,
+                    color = PureBlack,
                     center = Offset(userMapX, userMapY),
                     radius = 14f
                 )
                 drawCircle(
-                    color = TextPrimary,
+                    color = PureWhite,
                     center = Offset(userMapX, userMapY),
-                    radius = 14f,
-                    style = Stroke(width = 4f)
+                    radius = 6f
                 )
 
                 // 4. Draw Heading Arrow
@@ -189,7 +194,7 @@ fun IndoorMapView(
                 val endY = userMapY - (arrowLength * cos(rad)).toFloat()
 
                 drawLine(
-                    color = TextPrimary,
+                    color = PureBlack,
                     start = Offset(userMapX, userMapY),
                     end = Offset(endX, endY),
                     strokeWidth = 5f
@@ -211,7 +216,7 @@ fun IndoorMapView(
                     )
                     close()
                 }
-                drawPath(path = tipPath, color = TextPrimary)
+                drawPath(path = tipPath, color = PureBlack)
             }
         }
     }

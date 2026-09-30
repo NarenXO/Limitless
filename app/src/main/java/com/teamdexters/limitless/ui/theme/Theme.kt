@@ -10,12 +10,17 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LimitlessColorScheme = lightColorScheme(
-    primary = LimitlessPrimary,
-    background = PureWhite,
-    surface = SoftWhite,
+    primary = PureBlack,
     onPrimary = PureWhite,
+    secondary = SoftBlack,
+    onSecondary = PureWhite,
+    background = PureWhite,
     onBackground = PureBlack,
-    onSurface = PureBlack
+    surface = SoftWhite,
+    onSurface = PureBlack,
+    surfaceVariant = LightGray,
+    onSurfaceVariant = SoftBlack,
+    outline = SubtleDivider
 )
 
 @Composable

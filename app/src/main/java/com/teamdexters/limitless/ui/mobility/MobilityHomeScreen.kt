@@ -81,11 +81,7 @@ import com.teamdexters.limitless.routing.model.AccessibilityFilter
 import com.teamdexters.limitless.routing.model.Route
 import com.teamdexters.limitless.routing.model.RouteStep
 import com.teamdexters.limitless.routing.model.TurnType
-import com.teamdexters.limitless.ui.theme.HighlightBox
-import com.teamdexters.limitless.ui.theme.LimitlessBackground
-import com.teamdexters.limitless.ui.theme.PersonaMobility
-import com.teamdexters.limitless.ui.theme.SurfaceTint
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import com.teamdexters.limitless.ui.theme.*
 import java.util.Locale
 
 /**
@@ -270,7 +266,7 @@ fun MobilityHomeScreen(
             modifier = Modifier
                 .fillMaxWidth(0.35f)
                 .height(4.dp)
-                .background(PersonaMobility, RoundedCornerShape(2.dp))
+                .background(PureBlack, RoundedCornerShape(2.dp))
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -294,7 +290,7 @@ fun MobilityHomeScreen(
                     .clickable { originDropdownExpanded = true }
                     .padding(14.dp)
             ) {
-                Text(text = originName, fontSize = 15.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(text = originName, fontSize = 15.sp, color = PureBlack, fontWeight = FontWeight.Medium)
                 DropdownMenu(
                     expanded = originDropdownExpanded,
                     onDismissRequest = { originDropdownExpanded = false }
@@ -331,7 +327,7 @@ fun MobilityHomeScreen(
                     .clickable { destDropdownExpanded = true }
                     .padding(14.dp)
             ) {
-                Text(text = destName, fontSize = 15.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(text = destName, fontSize = 15.sp, color = PureBlack, fontWeight = FontWeight.Medium)
                 DropdownMenu(
                     expanded = destDropdownExpanded,
                     onDismissRequest = { destDropdownExpanded = false }
@@ -438,8 +434,8 @@ fun MobilityHomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceTint, RoundedCornerShape(16.dp))
-                    .border(1.dp, PersonaMobility, RoundedCornerShape(16.dp))
+                    .background(SoftWhite, RoundedCornerShape(16.dp))
+                    .border(1.dp, SubtleDivider, RoundedCornerShape(16.dp))
                     .padding(16.dp)
             ) {
                 Column {
@@ -463,7 +459,7 @@ fun MobilityHomeScreen(
                         }
 
                         // Fully Accessible Status Pill
-                        val pillBg = if (route.isFullyAccessible) PersonaMobility else HighlightBox
+                        val pillBg = if (route.isFullyAccessible) PureBlack else LightGray
                         val pillText = if (route.isFullyAccessible) "Fully Accessible" else "Obstacles Present"
                         Box(
                             modifier = Modifier
@@ -488,8 +484,8 @@ fun MobilityHomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(HighlightBox, RoundedCornerShape(16.dp))
-                        .border(1.5.dp, TextPrimary, RoundedCornerShape(16.dp))
+                        .background(LightGray, RoundedCornerShape(16.dp))
+                        .border(1.5.dp, SubtleDivider, RoundedCornerShape(16.dp))
                         .semantics { contentDescription = "Fallback warning banner: $warningMessage" }
                         .padding(16.dp)
                 ) {
@@ -497,7 +493,7 @@ fun MobilityHomeScreen(
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
-                            tint = TextPrimary,
+                            tint = SoftBlack,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -505,7 +501,7 @@ fun MobilityHomeScreen(
                             text = warningMessage,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
+                            color = PureBlack,
                             lineHeight = 20.sp
                         )
                     }
@@ -637,7 +633,7 @@ private fun RouteStepItem(step: RouteStep) {
                         text = notes,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = TextPrimary.copy(alpha = 0.8f)
+                        color = NeutralGray
                     )
                 }
             }
@@ -645,7 +641,7 @@ private fun RouteStepItem(step: RouteStep) {
             if (step.distanceMeters > 0) {
                 Box(
                     modifier = Modifier
-                        .background(PersonaMobility, RoundedCornerShape(8.dp))
+                        .background(PureBlack, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
