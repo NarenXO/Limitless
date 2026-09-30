@@ -81,9 +81,9 @@ object BlindAIInvoker {
         if (isOnline) {
             val response = withTimeoutOrNull(TIMEOUT_MS) {
                 try {
-                    // Phase 3: Add image data to Gemini request
-                    // For now, use text-only prompt as fallback
-                    val result = geminiClient?.queryGemini(prompt)
+                    // Get Base64 image for Gemini Vision API (optimized with 50% JPEG quality)
+                    val (base64Image, _) = CameraFrameManager.getLatestFrameAsBase64()
+                    val result = geminiClient?.queryGemini(prompt, base64Image)
                     result?.getOrNull() ?: ""
                 } catch (e: Exception) {
                     Log.e(TAG, "BlindAIInvoker: Gemini API error", e)

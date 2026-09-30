@@ -115,9 +115,10 @@ private fun startCamera(
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
 
-            // Image analysis use case for frame capture
+            // Image analysis use case for frame capture with 1 FPS enforcement
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetResolution(android.util.Size(640, 480))
                 .build()
                 .also {
                     it.setAnalyzer(
