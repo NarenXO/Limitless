@@ -44,7 +44,7 @@ fun ThreeDIsometricMap(
             if (!photoPath.isNullOrEmpty()) {
                 val file = File(photoPath)
                 if (file.exists()) {
-                    val bitmap = photoCaptureUtil.getDecryptedBitmap(file)
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                     if (bitmap != null) {
                         extractMildAmbientColor(bitmap)
                     } else Color(0xFFE0F2F4)
