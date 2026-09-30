@@ -7,6 +7,7 @@ package com.teamdexters.limitless.ui.blind
 object BlindV2Actions {
 
     private var sceneNarrationCallback: (() -> Unit)? = null
+    private var navigationCallback: ((String) -> Unit)? = null
 
     /**
      * Register the callback for scene narration requests.
@@ -14,6 +15,14 @@ object BlindV2Actions {
      */
     fun registerSceneNarrationCallback(callback: () -> Unit) {
         sceneNarrationCallback = callback
+    }
+
+    /**
+     * Register the callback for navigation requests.
+     * Called by BlindHomeScreen during initialization.
+     */
+    fun registerNavigationCallback(callback: (String) -> Unit) {
+        navigationCallback = callback
     }
 
     /**
@@ -25,5 +34,17 @@ object BlindV2Actions {
      */
     fun requestSceneNarration() {
         sceneNarrationCallback?.invoke()
+    }
+
+    /**
+     * Start navigation to the given destination.
+     * This is triggered when Hazel receives the intent
+     * MobilityAssist(subAction = NAVIGATE, destination = "...").
+     *
+     * TODO(Naren integration): route Hazel intent
+     *   MobilityAssist(subAction = NAVIGATE, destination = "...") here.
+     */
+    fun startNavigation(destination: String) {
+        navigationCallback?.invoke(destination)
     }
 }

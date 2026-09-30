@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.teamdexters.limitless.ui.blind.*
+import com.teamdexters.limitless.ui.blind.nav.*
 import com.teamdexters.limitless.ui.theme.*
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
@@ -48,9 +49,6 @@ fun BlindHomeScreen() {
 
     // Vision narration loading state
     var isDescribing by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
 
     // Camera permission handling
     val cameraPermission = remember {
@@ -100,6 +98,7 @@ fun BlindHomeScreen() {
         )
     }
     val networkStatusTracker = remember { NetworkStatusTracker(context) }
+    val pathFeatureDetector = remember { PathFeatureDetectorV2(context) }
 
     // Object detection state
     var latestFrame by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -109,6 +108,19 @@ fun BlindHomeScreen() {
     // Result banner state
     var resultText by remember { mutableStateOf("") }
     var showResultBanner by remember { mutableStateOf(false) }
+
+    // Path warning icon state
+    var pathWarningIcon by remember { mutableStateOf<PathFeatureType?>(null) }
+    var showPathWarning by remember { mutableStateOf(false) }
+    val pathWarningAlpha by animateFloatAsState(
+        targetValue = if (showPathWarning) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(200),
+        label = "path_warning_alpha"
+    )
+
+    // Navigation state
+    var showNavigationOverlay by remember { mutableStateOf(false) }
+    var currentRoute by remember { mutableStateOf<MockRoute?>(null) }
 
     // Initialize TTS and Object Detector
     LaunchedEffect(Unit) {
@@ -121,6 +133,12 @@ fun BlindHomeScreen() {
         val objectDetectorInitialized = objectDetector.initialize()
         if (!objectDetectorInitialized) {
             Toast.makeText(context, "Object detector initialization failed", Toast.LENGTH_SHORT).show()
+        }
+
+        // Initialize path feature detector (uses placeholder model or falls back gracefully)
+        val pathDetectorInitialized = pathFeatureDetector.initialize(null)
+        if (!pathDetectorInitialized) {
+            // Path detection will use vision only (no-op gracefully)
         }
     }
 
@@ -147,6 +165,13 @@ fun BlindHomeScreen() {
                 context = context
             )
         }
+        BlindV2Actions.registerNavigationCallback { destination ->
+            startNavigation(
+                destination = destination,
+                setRoute = { currentRoute = it },
+                setShowOverlay = { showNavigationOverlay = it }
+            )
+        }
         onDispose {
             ttsManager.release()
             objectDetector.close()
@@ -159,10 +184,10 @@ fun BlindHomeScreen() {
         scope.launch {
             while (true) {
                 delay(800) // 800ms throttling as required
-                
+
                 val frame = latestFrame
                 val rotation = latestRotation
-                
+
                 if (frame != null) {
                     // Update VisionNarrationClient with latest frame
                     VisionNarrationClient.updateLatestFrame(frame, rotation)
@@ -172,6 +197,58 @@ fun BlindHomeScreen() {
 
                     // Narrate only new objects with haptic feedback
                     objectNarrator.narrateObjects(objects, frame.width, frame.height)
+                }
+            }
+        }
+    }
+
+    // Path feature detection loop (1000ms throttled to save battery)
+    LaunchedEffect(Unit) {
+        scope.launch {
+            while (true) {
+                delay(1000) // 1000ms throttling for path features
+
+                val frame = latestFrame
+                val rotation = latestRotation
+
+                if (frame != null && pathFeatureDetector.isReady()) {
+                    // Detect path features
+                    val pathFeatures = pathFeatureDetector.detectPathFeatures(
+                        bitmap = frame,
+                        rotationDegrees = rotation,
+                        frameWidth = frame.width,
+                        frameHeight = frame.height,
+                        ttsManager = ttsManager,
+                        scope = scope
+                    )
+
+                    // Trigger haptic feedback for detected features
+                    for (feature in pathFeatures) {
+                        val hapticEvent = when (feature.type) {
+                            PathFeatureType.RAMP -> HapticVocabulary.HapticEvent.RAMP_DETECTED
+                            PathFeatureType.STAIRS -> HapticVocabulary.HapticEvent.STAIRS_DETECTED
+                            PathFeatureType.CURB -> HapticVocabulary.HapticEvent.OBSTACLE_NEAR
+                            PathFeatureType.ZEBRA_CROSSING -> HapticVocabulary.HapticEvent.OBJECT_CENTER
+                            PathFeatureType.TRAFFIC_LIGHT -> HapticVocabulary.HapticEvent.OBJECT_CENTER
+                        }
+                        HapticVocabulary.trigger(context, hapticEvent)
+
+                        // Show flashing icon (3 fade cycles over 1.2s)
+                        pathWarningIcon = feature.type
+                        showPathWarning = true
+
+                        scope.launch {
+                            repeat(3) {
+                                delay(200)
+                                showPathWarning = false
+                                delay(200)
+                                showPathWarning = true
+                            }
+                            delay(200)
+                            showPathWarning = false
+                            pathWarningIcon = null
+                        }
+                    }
                 }
             }
         }
@@ -216,6 +293,23 @@ fun BlindHomeScreen() {
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
+                        color = TextPrimary
+                    )
+                }
+            }
+
+            // Path warning icon (flashing, centered near top)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 80.dp)
+                    .alpha(pathWarningAlpha),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (pathWarningIcon != null) {
+                    PathFeatureIcon(
+                        featureType = pathWarningIcon!!,
+                        modifier = Modifier.size(96.dp),
                         color = TextPrimary
                     )
                 }
@@ -277,6 +371,36 @@ fun BlindHomeScreen() {
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Start Navigation button (Phase 5)
+                    Button(
+                        onClick = {
+                            startNavigation(
+                                destination = "Main Entrance",
+                                setRoute = { currentRoute = it },
+                                setShowOverlay = { showNavigationOverlay = it }
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .semantics {
+                                contentDescription = "Start Navigation. Double tap to begin turn-by-turn navigation."
+                            },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PersonaBlind,
+                            contentColor = TextPrimary
+                        ),
+                        border = BorderStroke(2.dp, TextPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Start Navigation",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                    }
+
                     // Describe My Surroundings button (Phase 3)
                     Button(
                         onClick = {
@@ -379,6 +503,20 @@ fun BlindHomeScreen() {
                     }
                 }
             }
+
+            // Navigation overlay (Phase 5)
+            if (showNavigationOverlay && currentRoute != null) {
+                NavigationOverlay(
+                    destination = currentRoute!!.destination,
+                    route = currentRoute!!,
+                    ttsManager = ttsManager,
+                    context = context,
+                    onExit = {
+                        showNavigationOverlay = false
+                        currentRoute = null
+                    }
+                )
+            }
         } else {
             // Permission denied message
             Box(
@@ -430,4 +568,18 @@ private fun triggerVisionNarration(
             setIsDescribing(false)
         }
     }
+}
+
+/**
+ * Start navigation to the given destination.
+ * Generates a route and shows the navigation overlay.
+ */
+private fun startNavigation(
+    destination: String,
+    setRoute: (MockRoute) -> Unit,
+    setShowOverlay: (Boolean) -> Unit
+) {
+    val route = MockRouter.getRoute(destination)
+    setRoute(route)
+    setShowOverlay(true)
 }
