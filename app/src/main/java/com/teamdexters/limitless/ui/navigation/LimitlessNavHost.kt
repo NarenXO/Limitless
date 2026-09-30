@@ -1,6 +1,8 @@
 package com.teamdexters.limitless.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -31,6 +33,24 @@ fun LimitlessNavHost(
                 popUpTo(Screen.PersonaSelect.route) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        com.teamdexters.limitless.util.PowerTriggerBus.triggerEvent.collect {
+            android.util.Log.d("LIMITLESS_TRACE", "LimitlessNavHost: PowerTriggerBus event received")
+
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != "scanner") {
+                navController.navigate("scanner") {
+                    launchSingleTop = true
+                }
+            }
+
+            // Vibrate 200ms
+            val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+            vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
         }
     }
 

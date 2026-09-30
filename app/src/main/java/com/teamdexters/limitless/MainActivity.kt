@@ -70,6 +70,8 @@ import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
+import com.teamdexters.limitless.util.PowerButtonTriggerReceiver
+import com.teamdexters.limitless.util.PowerTriggerBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -96,9 +98,17 @@ class MainActivity : ComponentActivity() {
             android.util.Log.d("LIMITLESS_TRACE", "RECORD_AUDIO permission result: micGranted: $isGranted")
             micGranted.value = isGranted
         }
+        
+    private val powerButtonReceiver = PowerButtonTriggerReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        val powerFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(powerButtonReceiver, powerFilter)
 
         // Initialize OSMDroid
         org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
@@ -127,6 +137,15 @@ class MainActivity : ComponentActivity() {
                     micGranted = micGranted.value
                 )
             }
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(powerButtonReceiver)
+        } catch (e: Exception) {
+            // Ignore if not registered
         }
     }
 }
