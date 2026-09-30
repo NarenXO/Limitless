@@ -160,6 +160,12 @@ fun LocationDetailScreen(
                     doorWidth = doorWidthStr
                 )
                 
+                val pathClarityStatus = when {
+                    overallScore <= 40 -> PathClarityStatus.BLOCKED_DANGER
+                    overallScore <= 70 -> PathClarityStatus.PARTIALLY_CLEAR
+                    else -> PathClarityStatus.CLEAR
+                }
+
                 val comprehensiveResult = ComprehensiveScoreResult(
                     totalScore = overallScore,
                     objectScore = objectScore.toInt(),
@@ -167,7 +173,8 @@ fun LocationDetailScreen(
                     brightnessScore = brightnessScore.toInt(),
                     checklistScore = checklistScore.toInt(),
                     badgeColorHex = scoreColor.value.toLong(),
-                    aiReasoningExplanation = reasoning
+                    aiReasoningExplanation = reasoning,
+                    pathClarity = pathClarityStatus
                 )
 
                 ScoreBreakdownCard(result = comprehensiveResult)

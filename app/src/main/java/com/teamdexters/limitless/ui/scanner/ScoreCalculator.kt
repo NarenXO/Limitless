@@ -1,5 +1,31 @@
 package com.teamdexters.limitless.ui.scanner
 
+enum class PathClarityStatus(
+    val title: String,
+    val subtext: String,
+    val badgeColorHex: Long,
+    val iconName: String
+) {
+    CLEAR(
+        title = "PATH CLEAR",
+        subtext = "Safe to proceed. No hazards or major obstacles detected ahead.",
+        badgeColorHex = 0xFFBAD6DA, // PersonaBlind Pastel Blue
+        iconName = "CheckCircle"
+    ),
+    PARTIALLY_CLEAR(
+        title = "PARTIALLY CLEAR",
+        subtext = "Proceed with caution. Narrow doorway or minor incline detected.",
+        badgeColorHex = 0xFFDDDD7B, // PersonaSpeech Yellow/Gold
+        iconName = "Warning"
+    ),
+    BLOCKED_DANGER(
+        title = "PATH BLOCKED / DANGER",
+        subtext = "Hazard detected ahead (e.g. stairs without ramp or poor lighting). Seek alternate route.",
+        badgeColorHex = 0xFFF791A9, // Primary Accent Red/Pink
+        iconName = "Block"
+    )
+}
+
 data class ComprehensiveScoreResult(
     val totalScore: Int, // 0-100
     val objectScore: Int, // 0-100 (30% weight)
@@ -7,7 +33,8 @@ data class ComprehensiveScoreResult(
     val brightnessScore: Int, // 0-100 (15% weight)
     val checklistScore: Int, // 0-100 (35% weight)
     val badgeColorHex: Long, // Color token based on range
-    val aiReasoningExplanation: String
+    val aiReasoningExplanation: String,
+    val pathClarity: PathClarityStatus
 )
 
 object ScoreCalculator {
@@ -83,6 +110,12 @@ object ScoreCalculator {
 
         val reasoning = generateReasoningText(totalScore, rampCount, stairsCount, handrailCount, brightScore, hasBraille, doorWidth, maxConfidence)
 
+        val pathClarityStatus = when {
+            totalScore <= 40 -> PathClarityStatus.BLOCKED_DANGER
+            totalScore <= 70 -> PathClarityStatus.PARTIALLY_CLEAR
+            else -> PathClarityStatus.CLEAR
+        }
+
         return ComprehensiveScoreResult(
             totalScore = totalScore,
             objectScore = objScore,
@@ -90,7 +123,8 @@ object ScoreCalculator {
             brightnessScore = brightScore,
             checklistScore = checklistScore,
             badgeColorHex = colorHex,
-            aiReasoningExplanation = reasoning
+            aiReasoningExplanation = reasoning,
+            pathClarity = pathClarityStatus
         )
     }
 

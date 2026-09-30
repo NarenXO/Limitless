@@ -9,6 +9,9 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -63,6 +66,44 @@ fun ScoreBreakdownCard(
             ScoreBarRow(icon = Icons.Default.Checklist, title = "Manual Checklist (35%)", score = result.checklistScore)
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Path Clarity Status
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(result.pathClarity.badgeColorHex)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val iconVector = when (result.pathClarity.iconName) {
+                        "CheckCircle" -> Icons.Default.CheckCircle
+                        "Warning" -> Icons.Default.Warning
+                        else -> Icons.Default.Block
+                    }
+                    Icon(
+                        imageVector = iconVector,
+                        contentDescription = null,
+                        tint = Color(0xFF1F1F1F),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = result.pathClarity.title,
+                            color = Color(0xFF1F1F1F),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = result.pathClarity.subtext,
+                            color = Color(0xFF1F1F1F).copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier
