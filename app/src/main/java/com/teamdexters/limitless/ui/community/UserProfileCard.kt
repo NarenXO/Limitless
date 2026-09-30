@@ -50,7 +50,11 @@ fun UserProfileCard(
                             Text("Synced with Cloud", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2E7D32))
                         }
                         SyncStatus.SYNCING -> {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFF791A9))
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(Color(0xFFF791A9), shape = CircleShape)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Syncing...", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
                         }
