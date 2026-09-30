@@ -7,10 +7,11 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,11 +24,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.deaf.EmergencyContactStore
 import com.teamdexters.limitless.ui.theme.manropeFontFamily
+import java.util.Locale
 
 /**
  * Settings screen for configuring emergency contact and testing SOS SMS fallback.
@@ -52,6 +58,23 @@ fun DeafSettingsScreen() {
     var contactName by remember { mutableStateOf(EmergencyContactStore.loadContactName(context)) }
     var contactPhone by remember { mutableStateOf(EmergencyContactStore.loadContactPhone(context)) }
     var showConsentDialog by remember { mutableStateOf(false) }
+    var speechSpeed by remember { mutableStateOf(EmergencyContactStore.loadSpeechSpeed(context)) }
+    var speechPitch by remember { mutableStateOf(EmergencyContactStore.loadSpeechPitch(context)) }
+    
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    
+    DisposableEffect(Unit) {
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US
+            }
+        }
+        
+        onDispose {
+            tts?.stop()
+            tts?.shutdown()
+        }
+    }
     
     val triggerSos = {
         try {
@@ -204,6 +227,101 @@ fun DeafSettingsScreen() {
                 fontFamily = manropeFontFamily
             )
         }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Divider(
+            color = Color(0xFFBAD6DA),
+            thickness = 1.dp
+        )
+        
+        Spacer(modifier = Modifier.height(20.dp))
+        
+        Text(
+            text = "Voice Accessibility Output",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text(
+            text = "Speech Speed: ${"%.1f".format(speechSpeed)}x",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Slider(
+            value = speechSpeed,
+            onValueChange = { speechSpeed = it },
+            valueRange = 0.5f..2.0f,
+            steps = 14,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFF791A9),
+                activeTrackColor = Color(0xFFF791A9),
+                inactiveTrackColor = Color(0xFFBAD6DA)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text(
+            text = "Voice Pitch: ${"%.1f".format(speechPitch)}",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Slider(
+            value = speechPitch,
+            onValueChange = { speechPitch = it },
+            valueRange = 0.5f..1.5f,
+            steps = 9,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFF791A9),
+                activeTrackColor = Color(0xFFF791A9),
+                inactiveTrackColor = Color(0xFFBAD6DA)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(
+            onClick = {
+                EmergencyContactStore.saveSpeechSpeed(context, speechSpeed)
+                EmergencyContactStore.saveSpeechPitch(context, speechPitch)
+                tts?.setSpeechRate(speechSpeed)
+                tts?.setPitch(speechPitch)
+                tts?.speak("This is a test of your speech speed settings", TextToSpeech.QUEUE_FLUSH, null, "tts_test")
+                Log.d("LIMITLESS_TRACE", "DeafSettingsScreen: TTS test speed=$speechSpeed pitch=$speechPitch")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF791A9)
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = "Test Voice Settings",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F1F1F),
+                fontFamily = manropeFontFamily
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
     }
     
     if (showConsentDialog) {
