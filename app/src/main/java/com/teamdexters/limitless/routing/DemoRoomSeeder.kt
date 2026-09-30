@@ -39,7 +39,7 @@ class DemoRoomSeeder(
         val existingRooms = roomDao.getAllRooms()
         if (existingRooms.isNotEmpty()) {
             Log.d(TAG, "DemoRoomSeeder: Rooms already exist (${existingRooms.size}), skipping")
-            prefs.edit().putBoolean(KEY_SEEDED, true).apply()
+            prefs.edit().putBoolean(KEY_SEEDED, true).commit()
             return
         }
 
@@ -163,9 +163,9 @@ class DemoRoomSeeder(
             RoomConnectionEntity(
                 fromRoomId = "LIMITLESS_ROOM_KCG_HALLWAY",
                 toRoomId = "LIMITLESS_ROOM_KCG_AUDITORIUM",
-                connectionType = "hallway",
-                hasRamp = true,
-                hasStairs = false,
+                connectionType = "stairs",
+                hasRamp = false,
+                hasStairs = true,
                 doorWidthCm = 120,
                 distanceMeters = 15f,
                 isBidirectional = true,
@@ -199,7 +199,7 @@ class DemoRoomSeeder(
         demoRooms.forEach { roomDao.insertRoom(it) }
         demoConnections.forEach { connectionDao.insertConnection(it) }
 
-        prefs.edit().putBoolean(KEY_SEEDED, true).apply()
+        prefs.edit().putBoolean(KEY_SEEDED, true).commit()
         Log.d(TAG, "DemoRoomSeeder: Successfully seeded ${demoRooms.size} rooms and ${demoConnections.size} connections")
     }
 }

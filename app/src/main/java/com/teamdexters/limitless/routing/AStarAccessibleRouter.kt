@@ -93,6 +93,9 @@ class AStarAccessibleRouter(
                 if (edge.doorWidthCm < 80) {
                     cost += 200.0 // Penalty for narrow doorways
                 }
+                if (edge.doorWidthCm >= 90) {
+                    cost = maxOf(0.5, cost - 20.0) // Bonus for wide doorways (>=90cm)
+                }
                 if (edge.connectionType.equals("ramp", ignoreCase = true)) {
                     cost = maxOf(0.5, cost - 30.0)
                 }

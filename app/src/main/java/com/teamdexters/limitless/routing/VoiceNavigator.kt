@@ -25,6 +25,7 @@ class VoiceNavigator(context: Context) {
     private val appContext = context.applicationContext
     private var textToSpeech: TextToSpeech? = null
     private var isTtsReady = false
+    private val pendingUtterances = mutableListOf<String>()
 
     private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibratorManager = appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -44,6 +45,15 @@ class VoiceNavigator(context: Context) {
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech?.language = Locale.US
                 isTtsReady = true
+                pendingUtterances.forEach { utterance ->
+                    textToSpeech?.speak(
+                        utterance, 
+                        TextToSpeech.QUEUE_ADD, 
+                        null, 
+                        "nav_queued_${System.currentTimeMillis()}"
+                    )
+                }
+                pendingUtterances.clear()
             } else {
                 Log.e("LIMITLESS_TRACE", "VoiceNavigator: TTS Initialization failed")
             }
@@ -146,8 +156,15 @@ class VoiceNavigator(context: Context) {
     }
 
     private fun speak(text: String) {
-        if (isTtsReady) {
-            textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nav_step")
+        if (isTtsReady && textToSpeech != null) {
+            textToSpeech?.speak(
+                text, 
+                TextToSpeech.QUEUE_FLUSH, 
+                null, 
+                "nav_${System.currentTimeMillis()}"
+            )
+        } else {
+            pendingUtterances.add(text)
         }
     }
 

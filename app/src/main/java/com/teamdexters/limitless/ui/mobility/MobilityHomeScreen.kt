@@ -1,6 +1,9 @@
 package com.teamdexters.limitless.ui.mobility
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,36 +35,20 @@ fun MobilityHomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // DAOs and Database
-    val db = remember { LimitlessDatabase.getDatabase(context) }
-    val roomDao = remember { db.mappedRoomDao() }
-    val connectionDao = remember { db.roomConnectionDao() }
-    val graphBuilder = remember { AccessibilityGraphBuilder(roomDao, connectionDao) }
-    val voiceNavigator = remember { VoiceNavigator(context) }
+    val viewModel: MobilityViewModel = viewModel()
+    val graph by viewModel.graph.collectAsState()
+    val activeRoute by viewModel.activeRoute.collectAsState()
+    val isSeeding by viewModel.isSeeding.collectAsState()
 
-    var graph by remember { mutableStateOf<AccessibilityGraph?>(null) }
-    var activeRoute by remember { mutableStateOf<Route?>(null) }
-    var selectedOrigin by remember { mutableStateOf("LIMITLESS_ROOM_KCG_ENTRANCE") }
-    var selectedDestination by remember { mutableStateOf("LIMITLESS_ROOM_KCG_LIBRARY") }
-    var preferRamp by remember { mutableStateOf(true) }
-    var isSeeding by remember { mutableStateOf(true) }
+    var selectedOrigin by rememberSaveable { mutableStateOf("LIMITLESS_ROOM_KCG_ENTRANCE") }
+    var selectedDestination by rememberSaveable { mutableStateOf("LIMITLESS_ROOM_KCG_LIBRARY") }
+    var preferRamp by rememberSaveable { mutableStateOf(true) }
 
-    // Seed Demo Rooms and build initial graph on first load
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val seeder = DemoRoomSeeder(context, roomDao, connectionDao)
-            seeder.seedIfEmpty()
-            val builtGraph = graphBuilder.buildGraph()
-            withContext(Dispatchers.Main) {
-                graph = builtGraph
-                isSeeding = false
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            voiceNavigator.shutdown()
+    BackHandler {
+        if (activeRoute != null) {
+            viewModel.stopNavigation()
+        } else {
+            onBack()
         }
     }
 
@@ -70,11 +57,8 @@ fun MobilityHomeScreen(
         RouteMapScreen(
             route = activeRoute!!,
             graph = graph!!,
-            voiceNavigator = voiceNavigator,
-            onNavigateBack = {
-                voiceNavigator.stopNavigation()
-                activeRoute = null
-            }
+            voiceNavigator = viewModel.voiceNavigator,
+            onNavigateBack = { viewModel.stopNavigation() }
         )
     } else {
         // SETUP / DESTINATION PICKER SCREEN
@@ -243,21 +227,9 @@ fun MobilityHomeScreen(
                                 Toast.makeText(context, "Graph not ready yet. Please wait.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            scope.launch(Dispatchers.Default) {
-                                val router = AStarAccessibleRouter(currentGraph)
-                                val route = router.findRoute(
-                                    fromRoomId = selectedOrigin,
-                                    toRoomId = selectedDestination,
-                                    preferRamp = preferRamp
-                                )
-                                withContext(Dispatchers.Main) {
-                                    if (route != null) {
-                                        activeRoute = route
-                                        voiceNavigator.startNavigation(route)
-                                    } else {
-                                        Toast.makeText(context, "No accessible route found!", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
+                            viewModel.calculateRoute(selectedOrigin, selectedDestination, preferRamp)
+                            if (viewModel.activeRoute.value == null) {
+                                Toast.makeText(context, "No accessible route found!", Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier
@@ -279,19 +251,8 @@ fun MobilityHomeScreen(
                     // Re-seed / refresh graph button
                     OutlinedButton(
                         onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                val seeder = DemoRoomSeeder(context, roomDao, connectionDao)
-                                seeder.seedIfEmpty()
-                                val updatedGraph = graphBuilder.buildGraph()
-                                withContext(Dispatchers.Main) {
-                                    graph = updatedGraph
-                                    Toast.makeText(
-                                        context,
-                                        "Graph refreshed: ${updatedGraph.totalNodes} rooms",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
+                            viewModel.refreshGraph()
+                            Toast.makeText(context, "Graph refreshed", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
