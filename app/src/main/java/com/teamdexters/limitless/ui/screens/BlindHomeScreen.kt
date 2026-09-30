@@ -396,35 +396,7 @@ fun BlindHomeScreen() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Start Navigation (accessibility shortcut — nav still needs explicit destination)
-                    Button(
-                        onClick = {
-                            startNavigation(
-                                destination = "Main Entrance",
-                                setRoute = { currentRoute = it },
-                                setShowOverlay = { showNavOverlay = it }
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .semantics {
-                                contentDescription = "Start Navigation. Double tap to begin turn-by-turn navigation."
-                            },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PersonaBlind,
-                            contentColor = TextPrimary
-                        ),
-                        border = BorderStroke(2.dp, TextPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Start Navigation",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
-                    }
+
 
                     // Large Mic FAB — accessibility backup for core voice features
                     MicFab(

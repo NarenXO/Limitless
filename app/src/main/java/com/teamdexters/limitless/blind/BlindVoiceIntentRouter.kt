@@ -33,38 +33,6 @@ object BlindVoiceIntentRouter {
 
     // ------------ Keyword tables ----------------------------------------------
 
-    private val readTextKeywords = listOf(
-        "read text", "read this", "read the", "read label", "read board",
-        "read sign", "what does it say", "what's written", "what is written",
-        "read opposite", "read in front", "read what", "scan text",
-        "tell me what it says", "what does this say", "what does that say"
-    )
-
-    private val colorKeywords = listOf(
-        "what color", "what colour", "detect color", "detect colour",
-        "color of", "colour of", "is this red", "is this blue", "is this green",
-        "is this yellow", "is this orange", "is this purple", "is this pink",
-        "is this black", "is this white", "identify color", "identify colour",
-        "tell me the color", "tell me the colour"
-    )
-
-    private val objectKeywords = listOf(
-        "detect objects", "what objects", "find objects", "what's ahead",
-        "what is ahead", "anything in front", "what is in front",
-        "is there a chair", "is there a person", "is there a door",
-        "is there a bottle", "is there a table", "any objects",
-        "what can you see", "what do you see", "what's there",
-        "objects around", "things around", "spot objects"
-    )
-
-    private val describeKeywords = listOf(
-        "describe surroundings", "describe my surroundings", "describe the scene",
-        "what's around me", "what is around me", "what's around",
-        "what's nearby", "tell me the scene", "scene description",
-        "where am i", "where are we", "describe where", "surroundings",
-        "tell me about surroundings"
-    )
-
     private val stopKeywords = listOf(
         "stop listening", "pause listening", "stop assistant",
         "be quiet", "shut up", "stop talking", "silence"
@@ -95,8 +63,6 @@ object BlindVoiceIntentRouter {
     /**
      * Route a spoken utterance to the correct VoiceIntent.
      *
-     * Priority: READ_TEXT > COLOR > OBJECTS > DESCRIBE > NAV > STOP > REPEAT > HELP > UNKNOWN
-     *
      * @param spokenText Raw text from SpeechRecognizer
      * @return The matched VoiceIntent
      */
@@ -104,17 +70,20 @@ object BlindVoiceIntentRouter {
         val q = spokenText.lowercase().trim()
 
         val intent = when {
-            // Highest priority: explicit text reading
-            readTextKeywords.any { q.contains(it) }    -> VoiceIntent.READ_TEXT
+            // DESCRIBE_SURROUNDINGS (Matches ANY variation of describing, front, ahead, before me)
+            q.contains("describe") || q.contains("surround") || q.contains("front") ||
+            q.contains("ahead") || q.contains("before") || q.contains("around") ||
+            q.contains("see") || q.contains("scene") || q.contains("where am i") -> VoiceIntent.DESCRIBE_SURROUNDINGS
 
-            // Color detection
-            colorKeywords.any { q.contains(it) }       -> VoiceIntent.COLOR_DETECTION
+            // READ_TEXT (Matches ANY variation of reading text/labels)
+            q.contains("read") || q.contains("text") || q.contains("label") ||
+            q.contains("sign") || q.contains("written") || q.contains("what does it say") -> VoiceIntent.READ_TEXT
 
-            // Object detection (before describe to catch "what's ahead")
-            objectKeywords.any { q.contains(it) }      -> VoiceIntent.OBJECT_DETECTION
+            // COLOR_DETECTION (Matches color)
+            q.contains("color") || q.contains("colour") -> VoiceIntent.COLOR_DETECTION
 
-            // Scene description
-            describeKeywords.any { q.contains(it) }    -> VoiceIntent.DESCRIBE_SURROUNDINGS
+            // OBJECT_DETECTION (Matches objects/items)
+            q.contains("object") || q.contains("item") || q.contains("blocking") -> VoiceIntent.OBJECT_DETECTION
 
             // Navigation
             navStopKeywords.any { q.contains(it) }     -> VoiceIntent.STOP_NAVIGATION
