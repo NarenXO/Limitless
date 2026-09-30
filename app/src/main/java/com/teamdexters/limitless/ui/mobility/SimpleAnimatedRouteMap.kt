@@ -108,7 +108,7 @@ fun SimpleAnimatedRouteMap(
             )
 
             // Draw the animated path
-            androidx.compose.ui.graphics.drawscope.clipRect(
+            clipRect(
                 left = 0f, 
                 top = 0f, 
                 right = canvasWidth * animatedProgress, 
