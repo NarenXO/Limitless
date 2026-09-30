@@ -15,7 +15,7 @@ class QRWaypointScanner(
 
     private val scanner = BarcodeScanning.getClient(
         BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_ALL_FORMATS)
             .build()
     )
 
@@ -23,24 +23,30 @@ class QRWaypointScanner(
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
-            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-            scanner.process(image)
-                .addOnSuccessListener { barcodes ->
-                    for (barcode in barcodes) {
-                        val rawValue = barcode.rawValue
-                        if (rawValue != null && rawValue.startsWith("LIMITLESS_ROOM_")) {
-                            Log.d("LIMITLESS_TRACE", "QRWaypointScanner: Detected roomId=$rawValue")
-                            onQRCodeDetected(rawValue)
-                            break
+            try {
+                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                scanner.process(image)
+                    .addOnSuccessListener { barcodes ->
+                        for (barcode in barcodes) {
+                            val rawValue = barcode.rawValue
+                            if (!rawValue.isNullOrBlank()) {
+                                val formatId = if (!rawValue.startsWith("LIMITLESS_ROOM_")) "LIMITLESS_ROOM_$rawValue" else rawValue
+                                Log.d("LIMITLESS_TRACE", "QRWaypointScanner: Detected roomId=$formatId")
+                                onQRCodeDetected(formatId)
+                                break
+                            }
                         }
                     }
-                }
-                .addOnFailureListener {
-                    Log.e("LIMITLESS_TRACE", "QRWaypointScanner: ML Kit barcode scanning failed", it)
-                }
-                .addOnCompleteListener {
-                    imageProxy.close()
-                }
+                    .addOnFailureListener {
+                        Log.e("LIMITLESS_TRACE", "QRWaypointScanner: ML Kit barcode scanning failed", it)
+                    }
+                    .addOnCompleteListener {
+                        imageProxy.close()
+                    }
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "QRWaypointScanner: Exception processing image", e)
+                imageProxy.close()
+            }
         } else {
             imageProxy.close()
         }
