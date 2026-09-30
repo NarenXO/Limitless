@@ -158,7 +158,8 @@ fun PhotoRouteScreen(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 ThreeDIsometricMap(
                                     routeResult = spatial,
-                                    activeStepIndex = currentStepIndex
+                                    activeStepIndex = if (isNavigating) currentStepIndex else 0,
+                                    modifier = Modifier.fillMaxWidth().height(280.dp)
                                 )
                             }
                         }
