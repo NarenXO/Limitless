@@ -86,6 +86,12 @@ class MainActivity : ComponentActivity() {
 
     @javax.inject.Inject
     lateinit var hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider
+    
+    @javax.inject.Inject
+    lateinit var proactiveTriggerManager: com.teamdexters.limitless.hazel.ProactiveTriggerManager
+    
+    @javax.inject.Inject
+    lateinit var actionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 
     /**
      * Tracks whether the user has granted RECORD_AUDIO at runtime.
@@ -125,7 +131,9 @@ class MainActivity : ComponentActivity() {
                     database = database,
                     micGranted = micGranted.value,
                     cameraFrameManager = cameraFrameManager,
-                    hazelContextProvider = hazelContextProvider
+                    hazelContextProvider = hazelContextProvider,
+                    proactiveTriggerManager = proactiveTriggerManager,
+                    actionDispatcher = actionDispatcher
                 )
             }
         }
@@ -146,7 +154,9 @@ fun HazelAssistantWrapper(
     database: LimitlessDatabase,
     micGranted: Boolean,
     cameraFrameManager: com.teamdexters.limitless.hazel.CameraFrameManager,
-    hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider
+    hazelContextProvider: com.teamdexters.limitless.hazel.HazelContextProvider,
+    proactiveTriggerManager: com.teamdexters.limitless.hazel.ProactiveTriggerManager,
+    actionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -191,14 +201,15 @@ fun HazelAssistantWrapper(
     }
 
     // Hazel query handler with network status tracker, conversation memory, and vision capabilities
-    val queryHandler = remember(networkStatusTracker, database, hazelContextProvider) {
+    val queryHandler = remember(networkStatusTracker, database, hazelContextProvider, actionDispatcher) {
         val memoryStore = com.teamdexters.limitless.hazel.HazelMemoryStore(database.hazelConversationDao())
         HazelQueryHandler(
             context = context,
             networkStatusTracker = networkStatusTracker,
             hazelMemoryStore = memoryStore,
             cameraFrameManager = cameraFrameManager,
-            hazelContextProvider = hazelContextProvider
+            hazelContextProvider = hazelContextProvider,
+            actionDispatcher = actionDispatcher
         )
     }
 
@@ -222,6 +233,49 @@ fun HazelAssistantWrapper(
     var isHazelListening by remember { mutableStateOf(false) }
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
+    var showHistorySheet by remember { mutableStateOf(false) }
+    
+    // Proactive battery state tracking
+    var batteryLevel by remember { androidx.compose.runtime.mutableIntStateOf(100) }
+    var isCharging by remember { mutableStateOf(true) }
+    
+    DisposableEffect(context) {
+        val filter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                intent?.let {
+                    val level = it.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+                    val scale = it.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+                    val status = it.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+                    if (level != -1 && scale != -1) {
+                        batteryLevel = (level * 100 / scale.toFloat()).toInt()
+                    }
+                    isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || 
+                                 status == android.os.BatteryManager.BATTERY_STATUS_FULL
+                }
+            }
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    
+    LaunchedEffect(batteryLevel, isCharging) {
+        val alert = proactiveTriggerManager.checkBatteryTrigger(batteryLevel, isCharging)
+        if (alert != null) {
+            responseBannerText = alert
+            isBannerVisible = true
+            ttsRef?.speak(alert, TextToSpeech.QUEUE_FLUSH, null, "proactive_battery")
+        }
+    }
+
+    LaunchedEffect(currentPersona) {
+        val alert = proactiveTriggerManager.checkPersonaChangeTrigger(currentPersona)
+        if (alert != null) {
+            responseBannerText = alert
+            isBannerVisible = true
+            ttsRef?.speak(alert, TextToSpeech.QUEUE_FLUSH, null, "proactive_persona")
+        }
+    }
 
     // openWakeWord background engine
     val openWakeWordManager = remember(context) {
@@ -369,8 +423,16 @@ fun HazelAssistantWrapper(
                             },
                             onHandled = {}
                         )
-                    }
+                    },
+                    onShowHistory = { showHistorySheet = true }
                 )
+                
+                if (showHistorySheet) {
+                    com.teamdexters.limitless.ui.hazel.HazelHistoryBottomSheet(
+                        onDismiss = { showHistorySheet = false },
+                        memoryStore = com.teamdexters.limitless.hazel.HazelMemoryStore(database.hazelConversationDao())
+                    )
+                }
             }
         }
     }

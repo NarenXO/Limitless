@@ -62,7 +62,8 @@ fun HazelListeningOverlay(
     isVisible: Boolean,
     onDismiss: () -> Unit,
     intentRouter: IntentRouter,
-    onIntentResult: (HazelIntent) -> Unit
+    onIntentResult: (HazelIntent) -> Unit,
+    onShowHistory: () -> Unit = {}
 ) {
     if (!isVisible) return
 
@@ -218,12 +219,20 @@ fun HazelListeningOverlay(
                     fontWeight = FontWeight.Bold
                 )
                 
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Hazel Assistant",
-                        tint = TextPrimary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TextButton(onClick = { 
+                        onDismiss()
+                        onShowHistory() 
+                    }) {
+                        Text("History", color = com.teamdexters.limitless.ui.theme.LimitlessPrimary, fontWeight = FontWeight.Bold)
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Hazel Assistant",
+                            tint = TextPrimary
+                        )
+                    }
                 }
             }
             
