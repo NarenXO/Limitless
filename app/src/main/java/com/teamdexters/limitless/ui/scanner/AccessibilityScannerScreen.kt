@@ -46,6 +46,7 @@ fun AccessibilityScannerScreen(
     val liveDetections by viewModel.liveDetections.collectAsState()
     val currentDoorWidth by viewModel.currentDoorWidth.collectAsState()
     val comprehensiveScore by viewModel.comprehensiveScore.collectAsState()
+    var isARViewEnabled by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -136,7 +137,7 @@ fun AccessibilityScannerScreen(
                             modifier = Modifier.fillMaxSize().semantics { contentDescription = "Live object tracking overlay" }
                         )
 
-                        if (currentDoorWidth != null) {
+                        if (currentDoorWidth != null && !isARViewEnabled) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
@@ -154,6 +155,17 @@ fun AccessibilityScannerScreen(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
+                        }
+
+                        if (isARViewEnabled) {
+                            ThreeDPathOverlay(
+                                pathClarity = comprehensiveScore?.pathClarity,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            ThreeDMiniMapWidget(
+                                pathClarity = comprehensiveScore?.pathClarity,
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                            )
                         }
                     } else {
                         Card(
@@ -199,18 +211,32 @@ fun AccessibilityScannerScreen(
                     }
                 }
 
-                // Capture & Scan Button
+                // AR Toggle & Capture Button Row
                 if (isCameraGranted) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { viewModel.captureAndScan() },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9)),
-                        shape = CircleShape
-                    ) {
-                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Capture & Scan", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { isARViewEnabled = !isARViewEnabled },
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isARViewEnabled) Color(0xFFF791A9) else Color(0xFFE0F2F4),
+                                contentColor = if (isARViewEnabled) Color.White else TextPrimary
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(if (isARViewEnabled) "🌐 AR ON" else "🌐 3D AR View", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = { viewModel.captureAndScan() },
+                            modifier = Modifier.weight(2f).height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F1F)),
+                            shape = CircleShape
+                        ) {
+                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Capture & Scan", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
                     }
                 }
 
