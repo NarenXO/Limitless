@@ -220,44 +220,9 @@ fun BlindHomeScreen(
     var latestFrame by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var latestRotation by remember { mutableStateOf(0) }
 
-    Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .zIndex(100f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
-                            onBack()
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Go back to persona selection",
-                            tint = TextPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Blind & Low-Vision",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                }
-            }
-        },
-        containerColor = LimitlessBackground
+    com.teamdexters.limitless.ui.components.LimitlessScreenFrame(
+        title = "Blind & Low-Vision",
+        onBack = onBack
     ) { innerPadding ->
         Box(
             modifier = Modifier

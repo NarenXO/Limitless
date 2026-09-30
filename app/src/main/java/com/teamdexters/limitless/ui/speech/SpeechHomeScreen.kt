@@ -261,90 +261,40 @@ fun SpeechHomeScreen(
     // =========================================================================
     // Main Layout
     // =========================================================================
-    Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .zIndex(100f) // Guarantees touches are never intercepted by overlays
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // -- Top app bar row (back arrow + title) ------------------
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
-                                onBack()
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Go back to persona selection",
-                                tint = TextPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Speech & Communication",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
-
-                    // -- Language toggle chips ---------------------------------
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LanguagePacks.availableLanguages.forEach { (code, name) ->
-                            val isSelected = selectedLanguage == code
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedLanguage = code },
-                                label = {
-                                    Text(
-                                        text = name,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PersonaSpeech,
-                                    containerColor = SurfaceTint,
-                                    selectedLabelColor = TextPrimary,
-                                    labelColor = TextPrimary
-                                ),
-                                modifier = Modifier.semantics {
-                                    contentDescription = if (isSelected) "$name, selected" else "$name, not selected"
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        containerColor = LimitlessBackground
+    com.teamdexters.limitless.ui.components.LimitlessScreenFrame(
+        title = "Speech & Communication",
+        onBack = onBack
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp)
                 .semantics {
                     contentDescription = "Speech Home Screen. Quick Phrases and Communication Tools."
                 }
         ) {
+            // -- Language toggle chips ---------------------------------
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LanguagePacks.availableLanguages.forEach { (code, name) ->
+                    val isSelected = selectedLanguage == code
+                    com.teamdexters.limitless.ui.components.LimitlessChip(
+                        text = name,
+                        isSelected = isSelected,
+                        onClick = { selectedLanguage = code },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (isSelected) "$name, selected" else "$name, not selected"
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 1. Header & Prediction Subheader ---------------------------------
             Text(
@@ -642,59 +592,20 @@ fun SpeechHomeScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             // 5. SECTION C: Emergency Button ------------------------------------
-            val emergencyScale by animateFloatAsState(
-                targetValue   = if (isEmergencyFocused) 1.04f else 1.0f,
-                animationSpec = tween(120),
-                label         = "emergency_scale"
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .scale(emergencyScale)
-                    .background(PersonaSpeech, RoundedCornerShape(16.dp))
-                    .border(
-                        width = if (isEmergencyFocused) 3.dp else 1.dp,
-                        color = if (isEmergencyFocused) TextPrimary else PersonaSpeech.copy(alpha = 0.40f),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    .semantics(mergeDescendants = true) {
-                        role = Role.Button
-                        contentDescription = "Emergency button. Tap to call for help."
-                        onClick(label = "Speak emergency message") {
-                            triggerEmergency()
-                            true
-                        }
-                    }
-                    .clickable {
-                        triggerEmergency()
-                    }
-                    .focusable()
-                    .onFocusChanged { isEmergencyFocused = it.isFocused }
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
+            com.teamdexters.limitless.ui.components.LimitlessButton(
+                text = currentPack.sectionHeaders.emergency,
+                onClick = { triggerEmergency() },
+                style = com.teamdexters.limitless.ui.components.ButtonStyle.EMERGENCY,
+                modifier = Modifier.fillMaxWidth().onFocusChanged { isEmergencyFocused = it.isFocused },
+                icon = {
                     Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = null,
-                        tint = TextPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = currentPack.sectionHeaders.emergency,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        letterSpacing = 1.sp
+                        tint = com.teamdexters.limitless.ui.theme.PureWhite,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -722,15 +633,10 @@ private fun PackPhraseCardItem(
         label         = "card_scale"
     )
 
-    val borderWidth = if (isFocused) 2.5.dp else 1.dp
-    val borderColor = if (isFocused) PersonaSpeech else PersonaSpeech.copy(alpha = 0.30f)
-
-    Box(
+    com.teamdexters.limitless.ui.components.LimitlessCard(
         modifier = Modifier
             .scale(scale)
             .fillMaxWidth()
-            .background(SurfaceTint, RoundedCornerShape(16.dp))
-            .border(borderWidth, borderColor, RoundedCornerShape(16.dp))
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = card.spokenPhrase
@@ -739,24 +645,21 @@ private fun PackPhraseCardItem(
                     true
                 }
             }
-            .clickable(onClickLabel = "Speak ${card.spokenPhrase}") {
-                onSelect()
-            }
             .focusable()
             .onFocusChanged { focusState ->
                 onFocusChange(focusState.isFocused)
-            }
-            .padding(vertical = 20.dp, horizontal = 12.dp),
-        contentAlignment = Alignment.Center
+            },
+        onClick = onSelect
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(vertical = 20.dp, horizontal = 12.dp).fillMaxWidth()
         ) {
             Icon(
                 imageVector  = card.icon,
                 contentDescription = null,
-                tint         = TextPrimary,
+                tint         = com.teamdexters.limitless.ui.theme.PureWhite,
                 modifier     = Modifier.size(36.dp)
             )
 
@@ -766,7 +669,7 @@ private fun PackPhraseCardItem(
                 text       = card.displayText,
                 fontSize   = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color      = TextPrimary,
+                color      = com.teamdexters.limitless.ui.theme.PureWhite,
                 textAlign  = TextAlign.Center,
                 lineHeight = 18.sp
             )

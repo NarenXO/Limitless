@@ -1,5 +1,9 @@
 package com.teamdexters.limitless.ui.navigation
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -47,22 +51,38 @@ fun LimitlessNavHost(
         }
         
         // Blind Home Screen
-        composable(Screen.BlindHome.route) {
-            BlindHomeScreen()
+        composable(
+            route = Screen.BlindHome.route,
+            enterTransition = { fadeIn() + slideInHorizontally { it / 6 } },
+            exitTransition  = { fadeOut() + slideOutHorizontally { -it / 6 } }
+        ) {
+            BlindHomeScreen(onBack = navigateBackToPersonaSelect)
         }
         
         // Deaf Home Screen
-        composable(Screen.DeafHome.route) {
-            DeafHomeScreen()
+        composable(
+            route = Screen.DeafHome.route,
+            enterTransition = { fadeIn() + slideInHorizontally { it / 6 } },
+            exitTransition  = { fadeOut() + slideOutHorizontally { -it / 6 } }
+        ) {
+            DeafHomeScreen(onBack = navigateBackToPersonaSelect)
         }
         
         // Speech Home Screen
-        composable(Screen.SpeechHome.route) {
+        composable(
+            route = Screen.SpeechHome.route,
+            enterTransition = { fadeIn() + slideInHorizontally { it / 6 } },
+            exitTransition  = { fadeOut() + slideOutHorizontally { -it / 6 } }
+        ) {
             SpeechHomeScreen(onBack = navigateBackToPersonaSelect)
         }
         
         // Mobility Home Screen
-        composable(Screen.MobilityHome.route) {
+        composable(
+            route = Screen.MobilityHome.route,
+            enterTransition = { fadeIn() + slideInHorizontally { it / 6 } },
+            exitTransition  = { fadeOut() + slideOutHorizontally { -it / 6 } }
+        ) {
             com.teamdexters.limitless.ui.mobility.MobilityHomeScreen(onBack = navigateBackToPersonaSelect)
         }
 

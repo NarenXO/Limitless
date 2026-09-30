@@ -63,14 +63,19 @@ import androidx.navigation.NavController
 import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.data.local.entity.PersonaPreferenceEntity
 import com.teamdexters.limitless.ui.navigation.Screen
+import com.teamdexters.limitless.ui.theme.DarkCharcoal
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.LimitlessPrimary
 import com.teamdexters.limitless.ui.theme.LimitlessTypography
+import com.teamdexters.limitless.ui.theme.NeutralGray
 import com.teamdexters.limitless.ui.theme.PersonaBlind
 import com.teamdexters.limitless.ui.theme.PersonaDeaf
 import com.teamdexters.limitless.ui.theme.PersonaMobility
 import com.teamdexters.limitless.ui.theme.PersonaSpeech
+import com.teamdexters.limitless.ui.theme.PureBlack
+import com.teamdexters.limitless.ui.theme.PureWhite
+import com.teamdexters.limitless.ui.theme.SubtleDivider
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -393,8 +398,8 @@ fun PersonaSelectScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LimitlessBackground)
-            .padding(24.dp),
+            .background(PureBlack)
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(32.dp))
@@ -453,7 +458,8 @@ private fun NameCaptureStage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HighlightBox, RoundedCornerShape(20.dp))
+                .background(DarkCharcoal, RoundedCornerShape(4.dp))
+                .border(1.dp, PureWhite, RoundedCornerShape(4.dp))
                 .padding(32.dp)
                 .semantics { contentDescription = "Name capture. What is your name?" },
             contentAlignment = Alignment.Center
@@ -464,17 +470,18 @@ private fun NameCaptureStage(
             ) {
                 Text(
                     text = "What is your name?",
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     fontSize = 28.sp,
-                    color = TextPrimary,
+                    color = PureWhite,
                     textAlign = TextAlign.Center,
+                    letterSpacing = (-0.5).sp,
                     modifier = Modifier.semantics { heading() }
                 )
 
                 Text(
                     text = "Speak your name when the mic activates.",
                     fontSize = 14.sp,
-                    color = TextPrimary.copy(alpha = 0.7f),
+                    color = NeutralGray,
                     textAlign = TextAlign.Center
                 )
             }
@@ -511,41 +518,44 @@ private fun PersonaSelectionStage(
         // Greeting heading
         Text(
             text = if (capturedName == "there") "Choose your assist mode"
-                   else "Hello, $capturedName!",
-            fontWeight = FontWeight.Bold,
+                   else "Hello, $capturedName",
+            fontWeight = FontWeight.Black,
             fontSize = 26.sp,
-            color = TextPrimary,
+            color = PureWhite,
             textAlign = TextAlign.Center,
+            letterSpacing = (-0.5).sp,
             modifier = Modifier.semantics { heading() }
         )
 
         Text(
-            text = "Select your assist mode or speak your choice",
-            fontSize = 14.sp,
-            color = TextPrimary.copy(alpha = 0.7f),
+            text = "TAP A MODE OR SPEAK YOUR CHOICE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 2.sp,
+            color = NeutralGray,
             textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Persona Cards Grid
+        // Persona Cards Grid — 2x2 brutalist layout
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 PersonaCard(
-                    title = "Blind & Low-Vision",
+                    title = "BLIND\n& LOW-VISION",
                     color = PersonaBlind,
                     icon = Icons.Default.Visibility,
                     onClick = { onPersonaSelected("BLIND") },
                     modifier = Modifier.weight(1f)
                 )
                 PersonaCard(
-                    title = "Deaf & Hard-of-Hearing",
+                    title = "DEAF\n& HARD-OF-HEARING",
                     color = PersonaDeaf,
                     icon = Icons.Default.Hearing,
                     onClick = { onPersonaSelected("DEAF") },
@@ -554,17 +564,17 @@ private fun PersonaSelectionStage(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 PersonaCard(
-                    title = "Speech-Impaired",
+                    title = "SPEECH\nIMPAIRED",
                     color = PersonaSpeech,
                     icon = Icons.Default.QuestionAnswer,
                     onClick = { onPersonaSelected("SPEECH") },
                     modifier = Modifier.weight(1f)
                 )
                 PersonaCard(
-                    title = "Mobility & Wheelchair",
+                    title = "MOBILITY\n& WHEELCHAIR",
                     color = PersonaMobility,
                     icon = Icons.Default.Accessible,
                     onClick = { onPersonaSelected("MOBILITY") },
@@ -599,7 +609,8 @@ private fun MicStatusIndicator(isListening: Boolean, hint: String, onMicTap: () 
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .background(LimitlessPrimary, CircleShape)
+                .background(PureWhite, CircleShape)
+                .border(1.dp, SubtleDivider, CircleShape)
                 .clickable { onMicTap() }
                 .padding(12.dp),
             contentAlignment = Alignment.Center
@@ -607,14 +618,16 @@ private fun MicStatusIndicator(isListening: Boolean, hint: String, onMicTap: () 
             Icon(
                 imageVector = Icons.Default.Mic,
                 contentDescription = null,
-                tint = TextPrimary,
+                tint = PureBlack,
                 modifier = Modifier.size(32.dp)
             )
         }
         Text(
             text = hint,
-            fontSize = 13.sp,
-            color = TextPrimary.copy(alpha = 0.75f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 1.sp,
+            color = NeutralGray,
             textAlign = TextAlign.Center
         )
     }
@@ -634,12 +647,12 @@ fun PersonaCard(
 ) {
     Box(
         modifier = modifier
-            .height(120.dp)
-            .background(color, RoundedCornerShape(12.dp))
+            .height(132.dp)
+            .background(DarkCharcoal, RoundedCornerShape(4.dp))
             .border(
                 width = 1.dp,
-                color = TextPrimary.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(12.dp)
+                color = PureWhite,
+                shape = RoundedCornerShape(4.dp)
             )
             .clickable(onClick = onClick)
             .padding(16.dp)
@@ -650,21 +663,23 @@ fun PersonaCard(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = TextPrimary,
-                modifier = Modifier.size(40.dp)
+                tint = PureWhite,
+                modifier = Modifier.size(36.dp)
             )
             Text(
                 text = title,
                 style = LimitlessTypography.titleSmall,
-                color = TextPrimary,
+                color = PureWhite,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center
+                fontSize = 12.sp,
+                letterSpacing = 1.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 16.sp
             )
         }
     }

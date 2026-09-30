@@ -241,44 +241,9 @@ fun MobilityHomeScreen(
     }
 
     // -- Main Screen Column ----------------------------------------------------
-    Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .zIndex(100f) // Guarantees touches are never intercepted by overlays
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
-                            onBack()
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Go back to persona selection",
-                            tint = TextPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Mobility & Navigation",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                }
-            }
-        },
-        containerColor = LimitlessBackground
+    com.teamdexters.limitless.ui.components.LimitlessScreenFrame(
+        title = "Mobility & Navigation",
+        onBack = onBack
     ) { innerPadding ->
     Column(
         modifier = Modifier
@@ -401,38 +366,34 @@ fun MobilityHomeScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            FilterChipItem(
-                label = "Require Ramp",
-                icon = Icons.Default.Accessible,
+            com.teamdexters.limitless.ui.components.LimitlessChip(
+                text = "Require Ramp",
                 isSelected = requireRamp,
-                onToggle = {
+                onClick = {
                     requireRamp = !requireRamp
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
-            FilterChipItem(
-                label = "Require Lift",
-                icon = Icons.Default.Elevator,
+            com.teamdexters.limitless.ui.components.LimitlessChip(
+                text = "Require Lift",
                 isSelected = requireLift,
-                onToggle = {
+                onClick = {
                     requireLift = !requireLift
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
-            FilterChipItem(
-                label = "Wide Door (≥90cm)",
-                icon = Icons.Default.MeetingRoom,
+            com.teamdexters.limitless.ui.components.LimitlessChip(
+                text = "Wide Door (≥90cm)",
                 isSelected = requireWideDoorway,
-                onToggle = {
+                onClick = {
                     requireWideDoorway = !requireWideDoorway
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
-            FilterChipItem(
-                label = "Accessible Restroom",
-                icon = Icons.Default.Wc,
+            com.teamdexters.limitless.ui.components.LimitlessChip(
+                text = "Accessible Restroom",
                 isSelected = requireAccessibleWashroom,
-                onToggle = {
+                onClick = {
                     requireAccessibleWashroom = !requireAccessibleWashroom
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
@@ -442,67 +403,32 @@ fun MobilityHomeScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         // 4. "Find Accessible Route" CTA Button -------------------------------
-        var isComputeFocused by remember { mutableStateOf(false) }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(PersonaMobility, RoundedCornerShape(16.dp))
-                .border(
-                    width = if (isComputeFocused) 2.5.dp else 1.dp,
-                    color = if (isComputeFocused) TextPrimary else PersonaMobility.copy(alpha = 0.40f),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .semantics(mergeDescendants = true) {
-                    role = Role.Button
-                    contentDescription = "Find accessible route button"
-                    onClick(label = "Find accessible route") {
-                        if (!isComputing) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            calculateRoute()
-                        }
-                        true
-                    }
-                }
-                .clickable(enabled = !isComputing) {
+        com.teamdexters.limitless.ui.components.LimitlessButton(
+            text = if (isComputing) "Computing Route..." else "Find Accessible Route",
+            onClick = {
+                if (!isComputing) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     calculateRoute()
                 }
-                .focusable()
-                .onFocusChanged { isComputeFocused = it.isFocused },
-            contentAlignment = Alignment.Center
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            },
+            modifier = Modifier.fillMaxWidth(),
+            icon = {
                 if (isComputing) {
                     androidx.compose.material3.CircularProgressIndicator(
-                        color = TextPrimary,
-                        modifier = Modifier.size(24.dp),
+                        color = com.teamdexters.limitless.ui.theme.PureWhite,
+                        modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Computing Route...",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Route,
                         contentDescription = null,
-                        tint = TextPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Find Accessible Route",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        tint = com.teamdexters.limitless.ui.theme.PureWhite,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
-        }
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -618,7 +544,7 @@ fun MobilityHomeScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
-    } // end Scaffold
+    } // end LimitlessScreenFrame
 }
 
 @Composable
