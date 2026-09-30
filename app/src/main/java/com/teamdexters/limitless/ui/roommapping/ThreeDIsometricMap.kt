@@ -34,7 +34,7 @@ val EsriSatelliteTileSource = object : OnlineTileSourceBase(
     arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
 ) {
     override fun getTileURLString(pMapTileIndex: Long): String {
-        return "$baseUrl${MapTileIndex.getZoom(pMapTileIndex)}/${MapTileIndex.getRow(pMapTileIndex)}/${MapTileIndex.getColumn(pMapTileIndex)}"
+        return "$baseUrl${MapTileIndex.getZoom(pMapTileIndex)}/${MapTileIndex.getY(pMapTileIndex)}/${MapTileIndex.getX(pMapTileIndex)}"
     }
 }
 
