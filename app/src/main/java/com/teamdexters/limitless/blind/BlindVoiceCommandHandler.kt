@@ -19,6 +19,9 @@ object BlindVoiceCommandHandler {
         READ_TEXT,
         DETECT_OBSTACLES,
         WHAT_COLOR,
+        START_NAVIGATION,
+        TELL_ROUTE,
+        STOP_NAVIGATION,
         UNKNOWN
     }
 
@@ -31,6 +34,23 @@ object BlindVoiceCommandHandler {
         val normalizedQuery = query.lowercase().trim()
 
         val intent = when {
+            // Start navigation
+            normalizedQuery.contains("start navigation") ||
+            normalizedQuery.contains("navigate") ||
+            normalizedQuery.contains("guide me") ||
+            normalizedQuery.contains("take me to") -> BlindIntent.START_NAVIGATION
+
+            // Tell route
+            normalizedQuery.contains("tell me the route") ||
+            normalizedQuery.contains("current route") ||
+            normalizedQuery.contains("next step") ||
+            normalizedQuery.contains("where to next") -> BlindIntent.TELL_ROUTE
+
+            // Stop navigation
+            normalizedQuery.contains("stop navigation") ||
+            normalizedQuery.contains("cancel route") ||
+            normalizedQuery.contains("end route") -> BlindIntent.STOP_NAVIGATION
+
             // Describe surroundings
             normalizedQuery.contains("describe") ||
             normalizedQuery.contains("surroundings") ||
@@ -75,6 +95,11 @@ object BlindVoiceCommandHandler {
      */
     fun getPromptForIntent(intent: BlindIntent): String {
         return when (intent) {
+            BlindIntent.START_NAVIGATION,
+            BlindIntent.TELL_ROUTE,
+            BlindIntent.STOP_NAVIGATION ->
+                ""
+
             BlindIntent.DESCRIBE_SURROUNDINGS ->
                 "Describe the scene in this image in 1-2 concise sentences. Focus on main objects, layout, and spatial relationships."
 

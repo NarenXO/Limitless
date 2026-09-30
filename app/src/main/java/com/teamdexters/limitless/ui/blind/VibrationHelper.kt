@@ -45,50 +45,50 @@ class VibrationHelper(private val context: Context) {
     }
 
     /**
-     * LEFT: 2 short pulses (100ms pulse, 80ms pause, 100ms pulse)
+     * LEFT: 2 short pulses (100ms pulse, 200ms pause, 100ms pulse)
      */
     private fun createLeftPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createWaveform(longArrayOf(0, 100, 80, 100), -1)
+            VibrationEffect.createWaveform(longArrayOf(0, 100, 200, 100), -1)
         } else {
             @Suppress("DEPRECATION")
-            VibrationEffect.createWaveform(longArrayOf(0, 100, 80, 100), -1)
+            VibrationEffect.createWaveform(longArrayOf(0, 100, 200, 100), -1)
         }
     }
 
     /**
-     * RIGHT: 3 short pulses (100ms pulse, 80ms pause, 100ms pulse, 80ms pause, 100ms pulse)
+     * RIGHT: 3 short pulses (100ms pulse, 150ms pause, 100ms pulse, 150ms pause, 100ms pulse)
      */
     private fun createRightPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createWaveform(longArrayOf(0, 100, 80, 100, 80, 100), -1)
+            VibrationEffect.createWaveform(longArrayOf(0, 100, 150, 100, 150, 100), -1)
         } else {
             @Suppress("DEPRECATION")
-            VibrationEffect.createWaveform(longArrayOf(0, 100, 80, 100, 80, 100), -1)
+            VibrationEffect.createWaveform(longArrayOf(0, 100, 150, 100, 150, 100), -1)
         }
     }
 
     /**
-     * STRAIGHT: 1 short pulse (150ms pulse)
+     * STRAIGHT: 1 long pulse (300ms pulse)
      */
     private fun createStraightPattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
         } else {
             @Suppress("DEPRECATION")
-            VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
         }
     }
 
     /**
-     * ARRIVE: 1 long pulse (600ms pulse)
+     * ARRIVE: 1 long + 2 short (500ms pulse, 100ms pause, 100ms pulse, 100ms pause, 100ms pulse)
      */
     private fun createArrivePattern(): VibrationEffect {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createOneShot(600, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createWaveform(longArrayOf(0, 500, 100, 100, 100, 100), -1)
         } else {
             @Suppress("DEPRECATION")
-            VibrationEffect.createOneShot(600, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createWaveform(longArrayOf(0, 500, 100, 100, 100, 100), -1)
         }
     }
 

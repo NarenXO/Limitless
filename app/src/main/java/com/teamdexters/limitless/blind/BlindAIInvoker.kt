@@ -26,6 +26,13 @@ object BlindAIInvoker {
         networkStatusTracker = NetworkStatusTracker(context)
         networkStatusTracker?.register()
         geminiClient = GeminiClient()
+
+        // Initialize offline detectors
+        OfflineObjectDetector.initialize(context)
+
+        // Initialize navigation voice handler
+        BlindNavigationVoice.initialize(context)
+
         Log.d(TAG, "BlindAIInvoker: Initialized")
     }
 
@@ -45,12 +52,29 @@ object BlindAIInvoker {
 
         Log.d(TAG, "BlindAIInvoker: Processed query='$query' intent=$intent online=$isOnline")
 
+        // Handle navigation intents separately
+        when (intent) {
+            BlindVoiceCommandHandler.BlindIntent.START_NAVIGATION -> {
+                val destination = BlindNavigationVoice.extractDestination(query) ?: "unknown location"
+                return BlindNavigationVoice.startNavigation(destination)
+            }
+            BlindVoiceCommandHandler.BlindIntent.TELL_ROUTE -> {
+                return BlindNavigationVoice.tellRoute()
+            }
+            BlindVoiceCommandHandler.BlindIntent.STOP_NAVIGATION -> {
+                return BlindNavigationVoice.stopNavigation()
+            }
+            else -> {
+                // Continue with vision AI for other intents
+            }
+        }
+
         // Get latest frame (Phase 3: will convert to Base64 for vision API)
         val (frame, rotation) = CameraFrameManager.getLatestFrame()
 
         if (frame == null) {
             Log.w(TAG, "BlindAIInvoker: No frame available, using text-only fallback")
-            return getOfflineFallbackResponse(intent)
+            return "I don't have a camera frame to analyze."
         }
 
         // Try online Gemini API if available
@@ -77,34 +101,48 @@ object BlindAIInvoker {
 
         // Offline fallback
         Log.d(TAG, "BlindAIInvoker: Using offline fallback")
-        return getOfflineFallbackResponse(intent)
+        return getOfflineFallbackResponse(intent, frame)
     }
 
     /**
      * Get offline fallback response for the given intent.
-     * Stubs for Phase 3 implementation.
+     * Uses offline detectors: TFLite object detection, ML Kit OCR, Palette color detection.
      * @param intent The detected intent
+     * @param frame The camera frame to analyze
      * @return Fallback response string
      */
-    private fun getOfflineFallbackResponse(intent: BlindVoiceCommandHandler.BlindIntent): String {
+    private suspend fun getOfflineFallbackResponse(intent: BlindVoiceCommandHandler.BlindIntent, frame: android.graphics.Bitmap): String {
         return when (intent) {
-            BlindVoiceCommandHandler.BlindIntent.DESCRIBE_SURROUNDINGS ->
-                "I'm offline. Please connect to the internet for scene description."
+            BlindVoiceCommandHandler.BlindIntent.DESCRIBE_SURROUNDINGS,
+            BlindVoiceCommandHandler.BlindIntent.WHATS_IN_FRONT -> {
+                val result = OfflineObjectDetector.detectObjects(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
 
-            BlindVoiceCommandHandler.BlindIntent.WHATS_IN_FRONT ->
-                "I'm offline. Please connect to the internet to describe what's in front."
+            BlindVoiceCommandHandler.BlindIntent.READ_TEXT -> {
+                val result = OfflineTextReader.readText(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
 
-            BlindVoiceCommandHandler.BlindIntent.READ_TEXT ->
-                "I'm offline. Please connect to the internet to read text."
+            BlindVoiceCommandHandler.BlindIntent.DETECT_OBSTACLES -> {
+                val result = OfflineObjectDetector.detectObstacles(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
 
-            BlindVoiceCommandHandler.BlindIntent.DETECT_OBSTACLES ->
-                "I'm offline. Please connect to the internet to detect obstacles."
+            BlindVoiceCommandHandler.BlindIntent.WHAT_COLOR -> {
+                val result = OfflineColorDetector.detectColor(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
 
-            BlindVoiceCommandHandler.BlindIntent.WHAT_COLOR ->
-                "I'm offline. Please connect to the internet to identify colors."
-
-            BlindVoiceCommandHandler.BlindIntent.UNKNOWN ->
-                "I'm offline. Please connect to the internet for assistance."
+            BlindVoiceCommandHandler.BlindIntent.UNKNOWN -> {
+                val result = OfflineObjectDetector.detectObjects(frame)
+                Log.d(TAG, "OfflineAI: Executed fallback for intent=$intent result='$result'")
+                result
+            }
         }
     }
 
@@ -115,6 +153,10 @@ object BlindAIInvoker {
         networkStatusTracker?.unregister()
         networkStatusTracker = null
         geminiClient = null
+        OfflineObjectDetector.release()
+        OfflineTextReader.release()
+        OfflineColorDetector.release()
+        BlindNavigationVoice.release()
         Log.d(TAG, "BlindAIInvoker: Released")
     }
 }
