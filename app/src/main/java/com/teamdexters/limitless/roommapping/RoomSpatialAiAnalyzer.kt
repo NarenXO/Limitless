@@ -60,10 +60,10 @@ class RoomSpatialAiAnalyzer(private val context: Context) {
 
         // Try Gemini Vision online analysis first
         val onlineResult = try {
-            val geminiClient = GeminiClient(context)
-            if (geminiClient.isConfigured() && photoBitmaps.isNotEmpty()) {
+            val geminiClient = GeminiClient()
+            if (photoBitmaps.isNotEmpty()) {
                 val prompt = """
-                    Analyze these ${photoBitmaps.size} multi-angle room photos (North, East, South, West views) as a unified 3D space for accessibility navigation.
+                    Analyze these multi-angle room photos (North, East, South, West views) as a unified 3D space for accessibility navigation.
                     Identify:
                     1. Main entrance/exits and corridors
                     2. Ramps, stairs, or step counts
@@ -74,7 +74,11 @@ class RoomSpatialAiAnalyzer(private val context: Context) {
                     Respond in concise plain text summarizing accessibility and steps.
                 """.trimIndent()
                 
-                val response = geminiClient.generateContentWithImages(prompt, photoBitmaps)
+                val outputStream = java.io.ByteArrayOutputStream()
+                photoBitmaps.first().compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+                
+                val response = geminiClient.queryGemini(prompt, base64Image)
                 if (response.isSuccess) response.getOrNull() else null
             } else null
         } catch (e: Exception) {
