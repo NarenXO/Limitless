@@ -30,10 +30,31 @@ fun CommunityMapView(
 ) {
     val context = LocalContext.current
     var selectedReport by remember { mutableStateOf<UserReportEntity?>(null) }
+    var mapError by remember { mutableStateOf(false) }
     
-    // Setup OSMDroid Config
-    LaunchedEffect(Unit) {
-        Configuration.getInstance().userAgentValue = context.packageName
+    // Setup OSMDroid Config synchronously
+    remember {
+        try {
+            Configuration.getInstance().userAgentValue = context.packageName
+        } catch (e: Throwable) {
+            android.util.Log.e("LIMITLESS_CRASH", "Failed to init OSMDroid config", e)
+        }
+        true
+    }
+
+    if (mapError) {
+        Card(
+            modifier = modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBDF))
+        ) {
+            Text(
+                text = "Map view currently unavailable offline. Showing report list.",
+                modifier = Modifier.padding(16.dp),
+                color = TextPrimary
+            )
+        }
+        return
     }
 
     Box(modifier = modifier) {
@@ -42,49 +63,61 @@ fun CommunityMapView(
                 .fillMaxSize()
                 .semantics { contentDescription = "Community Map View showing nearby accessibility reports" },
             factory = { ctx ->
-                MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
-                    zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
-                    controller.setZoom(14.0)
-                    // Chennai Central default
-                    val defaultLocation = GeoPoint(13.0827, 80.2707)
-                    controller.setCenter(defaultLocation)
+                try {
+                    MapView(ctx).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(true)
+                        zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                        controller.setZoom(14.0)
+                        // Chennai Central default
+                        val defaultLocation = GeoPoint(13.0827, 80.2707)
+                        controller.setCenter(defaultLocation)
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("LIMITLESS_CRASH", "Failed to init MapView", e)
+                    mapError = true
+                    android.view.View(ctx)
                 }
             },
-            update = { mapView ->
-                mapView.overlays.clear()
-                
-                reports.forEach { report ->
-                    val marker = Marker(mapView)
-                    // Default to Chennai if 0.0
-                    val lat = if (report.latitude == 0.0) 13.0827 + (Math.random() - 0.5) * 0.05 else report.latitude
-                    val lon = if (report.longitude == 0.0) 80.2707 + (Math.random() - 0.5) * 0.05 else report.longitude
+            update = { view ->
+                if (view !is MapView) return@AndroidView
+                try {
+                    view.overlays.clear()
                     
-                    marker.position = GeoPoint(lat, lon)
-                    marker.title = report.locationName
-                    
-                    val ratingInt = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
-                    val markerColor = if (ratingInt >= 4) {
-                        android.graphics.Color.parseColor("#BAD6DA")
-                    } else {
-                        android.graphics.Color.parseColor("#F791A9")
+                    reports.forEach { report ->
+                        val marker = Marker(view)
+                        // Default to Chennai if 0.0
+                        val lat = if (report.latitude == 0.0) 13.0827 + (Math.random() - 0.5) * 0.05 else report.latitude
+                        val lon = if (report.longitude == 0.0) 80.2707 + (Math.random() - 0.5) * 0.05 else report.longitude
+                        
+                        marker.position = GeoPoint(lat, lon)
+                        marker.title = report.locationName
+                        
+                        val ratingInt = report.description.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 5
+                        val markerColor = if (ratingInt >= 4) {
+                            android.graphics.Color.parseColor("#BAD6DA")
+                        } else {
+                            android.graphics.Color.parseColor("#F791A9")
+                        }
+                        
+                        val drawable = androidx.core.content.ContextCompat.getDrawable(view.context, android.R.drawable.ic_menu_mylocation)?.mutate()
+                        drawable?.setTint(markerColor)
+                        if (drawable != null) {
+                            marker.icon = drawable
+                        }
+                        
+                        marker.setOnMarkerClickListener { _, _ ->
+                            selectedReport = report
+                            true
+                        }
+                        
+                        view.overlays.add(marker)
                     }
-                    
-                    val drawable = androidx.core.content.ContextCompat.getDrawable(mapView.context, android.R.drawable.ic_menu_mylocation)?.mutate()
-                    drawable?.setTint(markerColor)
-                    if (drawable != null) {
-                        marker.icon = drawable
-                    }
-                    
-                    marker.setOnMarkerClickListener { _, _ ->
-                        selectedReport = report
-                        true
-                    }
-                    
-                    mapView.overlays.add(marker)
+                    view.invalidate()
+                } catch (e: Throwable) {
+                    android.util.Log.e("LIMITLESS_CRASH", "Failed to update MapView", e)
+                    mapError = true
                 }
-                mapView.invalidate()
             }
         )
         

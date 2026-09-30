@@ -72,46 +72,50 @@ class CommunityReportViewModel @Inject constructor(
         }
     }
 
-    private suspend fun calculateAnalytics() {
-        combine(
-            userReportDao.getAllReports(),
-            accessibilityScoreDao.getAllScores()
-        ) { reports, scores ->
-            val total = reports.size
-            val avgScore = if (scores.isNotEmpty()) scores.map { it.overallScore }.average().toInt() else 0
-            val verified = reports.count { it.trustScore > 80 }
-            
-            var ramp = 0
-            var lift = 0
-            var washroom = 0
-            var general = 0
-            
-            reports.forEach { r ->
-                when {
-                    r.hasRamp -> ramp++
-                    r.hasElevator -> lift++
-                    r.hasAccessibleRestroom -> washroom++
-                    else -> general++
-                }
-            }
-            
-            val totalCategories = (ramp + lift + washroom + general).coerceAtLeast(1).toFloat()
-            val topLocations = reports.filter { it.trustScore > 80 }
-                .sortedByDescending { it.trustScore }
-                .take(3)
+    private suspend fun calculateAnalytics() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            combine(
+                userReportDao.getAllReports(),
+                accessibilityScoreDao.getAllScores()
+            ) { reports, scores ->
+                val total = reports.size
+                val avgScore = if (scores.isNotEmpty()) scores.map { it.overallScore }.average().toInt() else 0
+                val verified = reports.count { it.trustScore > 80 }
                 
-            CommunityAnalyticsData(
-                totalReports = total,
-                averageScore = avgScore,
-                verifiedCount = verified,
-                rampPercentage = ramp / totalCategories,
-                elevatorPercentage = lift / totalCategories,
-                restroomPercentage = washroom / totalCategories,
-                generalPercentage = general / totalCategories,
-                topLocations = topLocations
-            )
-        }.collect { data ->
-            _analyticsData.value = data
+                var ramp = 0
+                var lift = 0
+                var washroom = 0
+                var general = 0
+                
+                reports.forEach { r ->
+                    when {
+                        r.hasRamp -> ramp++
+                        r.hasElevator -> lift++
+                        r.hasAccessibleRestroom -> washroom++
+                        else -> general++
+                    }
+                }
+                
+                val totalCategories = (ramp + lift + washroom + general).coerceAtLeast(1).toFloat()
+                val topLocations = reports.filter { it.trustScore > 80 }
+                    .sortedByDescending { it.trustScore }
+                    .take(3)
+                    
+                CommunityAnalyticsData(
+                    totalReports = total,
+                    averageScore = avgScore,
+                    verifiedCount = verified,
+                    rampPercentage = ramp / totalCategories,
+                    elevatorPercentage = lift / totalCategories,
+                    restroomPercentage = washroom / totalCategories,
+                    generalPercentage = general / totalCategories,
+                    topLocations = topLocations
+                )
+            }.collect { data ->
+                _analyticsData.value = data
+            }
+        }.onFailure {
+            android.util.Log.e("LIMITLESS_CRASH", "Analytics flow failed", it)
         }
     }
 
@@ -200,15 +204,20 @@ class CommunityReportViewModel @Inject constructor(
 
     fun fetchCurrentLocation(context: Context) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-        try {
+        runCatching {
             fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { loc: android.location.Location? ->
                     if (loc != null) {
                         _location.value = loc
+                    } else {
+                        _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
                     }
                 }
-        } catch (e: SecurityException) {
-            // Handle missing permissions
+                .addOnFailureListener {
+                    _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
+                }
+        }.onFailure {
+            _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
         }
     }
 

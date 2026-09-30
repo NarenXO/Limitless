@@ -16,6 +16,12 @@ class LimitlessApp : Application() {
     lateinit var userReportDao: UserReportDao
 
     override fun onCreate() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("LIMITLESS_CRASH", "FATAL CRASH in thread ${thread.name}: ${throwable.localizedMessage}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         super.onCreate()
         android.util.Log.d("LIMITLESS_TRACE", "=================== APP COLD START ===================")
         android.util.Log.d("LIMITLESS_TRACE", "Hilt initialization complete. Triggering database auto-seeding.")
