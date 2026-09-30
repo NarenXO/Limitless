@@ -6,7 +6,13 @@ import android.util.Log
 
 /**
  * Offline color detector.
- * Samples center region and maps to named colors using HSV analysis.
+ * Samples a 21x21 center pixel region, averages RGB, converts to HSV,
+ * and maps to named colors using the priority-ordered HSV ruleset.
+ *
+ * Priority order:
+ *  1. Non-vibrant: black / white / gray (checked first regardless of hue)
+ *  2. Vibrant brown (hue 10-40, mid Value, mid-high Saturation)
+ *  3. Hue-angle color mapping
  */
 object OfflineColorDetector {
 
@@ -14,8 +20,9 @@ object OfflineColorDetector {
 
     /**
      * Detect the dominant color in the center region of the bitmap.
+     * Samples a 21x21 pixel center region to reduce single-pixel noise.
      * @param bitmap The image to analyze
-     * @return Named color description
+     * @return Human-readable color description
      */
     suspend fun detectColor(bitmap: Bitmap): String {
         return try {
@@ -45,9 +52,8 @@ object OfflineColorDetector {
                 val avgRed = totalRed / pixelCount
                 val avgGreen = totalGreen / pixelCount
                 val avgBlue = totalBlue / pixelCount
-                val rgb = Color.rgb(avgRed, avgGreen, avgBlue)
-                val colorName = mapRgbToColorName(rgb)
-                Log.d(TAG, "OfflineColorDetector: Detected color=$colorName RGB=$rgb")
+                val colorName = mapRgbToColorName(avgRed, avgGreen, avgBlue)
+                Log.d(TAG, "OfflineColorDetector: Detected color=$colorName RGB=($avgRed,$avgGreen,$avgBlue)")
                 "The dominant color in front of you is $colorName."
             } else {
                 Log.d(TAG, "OfflineColorDetector: No dominant color found")
@@ -60,49 +66,40 @@ object OfflineColorDetector {
     }
 
     /**
-     * Map RGB values to named colors using HSV analysis.
-     * @param rgb The RGB color value
-     * @return Named color string
+     * Map average RGB values to a named color using HSV analysis.
+     *
+     * Priority:
+     *  1. Non-vibrant check (Value < 0.20 → Black, Value > 0.80 && Sat < 0.15 → White, Sat < 0.15 → Gray)
+     *  2. Special Brown check (Hue 10-40, Value 0.20-0.60, Sat 0.30-0.85)
+     *  3. Hue-angle mapping for vibrant colors
      */
-    private fun mapRgbToColorName(rgb: Int): String {
-        val red = Color.red(rgb)
-        val green = Color.green(rgb)
-        val blue = Color.blue(rgb)
-
-        // Convert RGB to HSV
+    private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String {
         val hsv = FloatArray(3)
         Color.RGBToHSV(red, green, blue, hsv)
         val hue = hsv[0]
         val saturation = hsv[1]
         val value = hsv[2]
 
-        // Check for grayscale colors first
-        if (saturation < 0.15f) {
-            return when {
-                value < 0.15f -> "black"
-                value > 0.85f -> "white"
-                else -> "gray"
-            }
+        // --- Priority 1: Non-vibrant colors (check FIRST regardless of hue) ---
+        if (value < 0.20f) return "Black"
+        if (value > 0.80f && saturation < 0.15f) return "White"
+        if (saturation < 0.15f) return "Gray"
+
+        // --- Priority 2: Brown check (vibrant but dark-ish orange-ish hue) ---
+        if (hue in 10f..40f && value in 0.20f..0.60f && saturation in 0.30f..0.85f) {
+            return "Brown"
         }
 
-        // Map hue to color name
-        val colorName = when {
-            hue < 15f || hue >= 345f -> "red"
-            hue < 45f -> "orange"
-            hue < 75f -> "yellow"
-            hue < 150f -> "green"
-            hue < 195f -> "cyan"
-            hue < 255f -> "blue"
-            hue < 285f -> "purple"
-            hue < 330f -> "pink"
-            else -> "red"
+        // --- Priority 3: Vibrant hue-angle mapping ---
+        return when {
+            hue <= 15f || hue >= 345f -> "Red"
+            hue <= 45f               -> "Orange"
+            hue <= 70f               -> "Yellow"
+            hue <= 165f              -> "Green"
+            hue <= 255f              -> "Blue"
+            hue <= 290f              -> "Purple"
+            hue <= 344f              -> "Pink"
+            else                     -> "Red"
         }
-
-        // Special cases for brown and other colors
-        if (colorName == "orange" && saturation < 0.4f && value < 0.6f) {
-            return "brown"
-        }
-
-        return colorName
     }
 }

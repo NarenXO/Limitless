@@ -37,8 +37,8 @@ class RealTimeObjectDetector(private val context: Context) {
             }
             
             val options = ObjectDetectorOptions.builder()
-                .setMaxResults(10)
-                .setScoreThreshold(0.50f)
+                .setMaxResults(4)
+                .setScoreThreshold(0.35f)
                 .build()
 
             detector = ObjectDetector.createFromBufferAndOptions(modelFile, options)
@@ -83,10 +83,10 @@ class RealTimeObjectDetector(private val context: Context) {
                 processedBitmap.recycle()
             }
             
-            // Filter by confidence >= 0.50 and map to DetectedObject
+            // Filter by confidence >= 0.35 and map to DetectedObject
             val filteredResults = results.mapNotNull { detection ->
                 val confidence = detection.categories.firstOrNull()?.score ?: 0f
-                if (confidence >= 0.50f) {
+                if (confidence >= 0.35f) {
                     val boundingBoxRect = Rect()
                     detection.boundingBox.round(boundingBoxRect)
 
@@ -112,17 +112,20 @@ class RealTimeObjectDetector(private val context: Context) {
      */
     private fun normalizeLabel(label: String): String {
         return when (label.lowercase()) {
-            "cell phone", "mobile phone" -> "phone"
-            "dining table" -> "table"
-            "sofa", "couch" -> "couch"
-            "potted plant" -> "plant"
-            "laptop" -> "laptop"
-            "chair" -> "chair"
-            "person" -> "person"
-            "bottle" -> "bottle"
-            "door" -> "door"
-            "cup" -> "cup"
-            else -> label.lowercase()
+            "cell phone", "mobile phone"  -> "phone"
+            "dining table"                -> "table"
+            "sofa", "couch"               -> "couch"
+            "potted plant"                -> "plant"
+            "laptop"                      -> "laptop"
+            "chair"                       -> "chair"
+            "person"                      -> "person"
+            "bottle"                      -> "bottle"
+            "door"                        -> "door"
+            "cup"                         -> "cup"
+            "suitcase", "luggage"         -> "bag"
+            "tv", "television"            -> "television"
+            "backpack"                    -> "bag"
+            else                          -> label.lowercase()
         }
     }
 

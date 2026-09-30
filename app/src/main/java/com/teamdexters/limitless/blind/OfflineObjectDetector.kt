@@ -12,30 +12,38 @@ import java.io.IOException
 
 /**
  * Offline object detector using TensorFlow Lite EfficientDet Lite0.
- * Detects objects and maps them to spatial buckets (left/ahead/right).
+ *
+ * Accuracy improvements:
+ *  - Confidence threshold lowered to 0.35 so everyday indoor objects are reliably detected.
+ *  - Top 4 most confident results returned (cap by MAX_RESULTS).
+ *  - Spatial bucketing: normalized bbox centre X → left / ahead / right.
+ *  - Depth hint: if bbox area > 35% of frame → append ", close".
+ *  - Label normalization maps raw model labels to everyday words.
+ *  - Short-term memory (5 s) prevents repeated identical announcements.
+ *  - Output format: "There is a chair on your left, a person ahead close, and a door on your right."
  */
 object OfflineObjectDetector {
 
     private const val TAG = "LIMITLESS_TRACE"
     private const val MODEL_PATH = "blind/efficientdet_lite0.tflite"
-    private const val MAX_RESULTS = 5
-    private const val CONFIDENCE_THRESHOLD = 0.50f
+    private const val MAX_RESULTS = 4
+    private const val CONFIDENCE_THRESHOLD = 0.35f
+
+    // Short-term memory: label+position → last-spoken timestamp
+    private val spokenObjects = mutableMapOf<String, Long>()
+    private const val MEMORY_MS = 5000L
 
     private var detector: ObjectDetector? = null
     private var isInitialized = false
 
     /**
      * Initialize the object detector with the TFLite model.
-     * @param context Android context
      * @return true if initialization succeeded, false otherwise
      */
     fun initialize(context: Context): Boolean {
         return try {
             val modelFile = FileUtil.loadMappedFile(context, MODEL_PATH)
-
-            // Check if the file is a valid TFLite model (not a placeholder)
             val isValidModel = modelFile.capacity() > 1000
-
             if (!isValidModel) {
                 Log.w(TAG, "OfflineObjectDetector: Placeholder model detected, using fallback")
                 return false
@@ -60,11 +68,21 @@ object OfflineObjectDetector {
     }
 
     /**
-     * Detect objects in the given bitmap and generate a spatial sentence.
+     * Detect objects and generate a natural-language spatial sentence.
+     *
+     * Applies:
+     *  - 35% confidence filter
+     *  - Top-4 cap (most confident)
+     *  - Spatial bucketing (left / ahead / right)
+     *  - Depth hint (", close" when bbox > 35% of frame)
+     *  - 5-second short-term memory to avoid repeating identical objects
+     *
      * @param bitmap The image to analyze
-     * @return Spatial description of detected objects
+     * @param frameWidth Width of the frame (for normalisation)
+     * @param frameHeight Height of the frame (for depth hint)
+     * @return Spatial scene sentence, e.g. "There is a chair on your left, a person ahead close."
      */
-    fun detectObjects(bitmap: Bitmap): String {
+    fun detectObjects(bitmap: Bitmap, frameWidth: Int = bitmap.width, frameHeight: Int = bitmap.height): String {
         if (!isInitialized || detector == null) {
             Log.w(TAG, "OfflineObjectDetector: Detector not initialized")
             return "I don't see any distinct objects in front of you."
@@ -72,58 +90,62 @@ object OfflineObjectDetector {
 
         return try {
             val tensorImage = TensorImage.fromBitmap(bitmap)
-            val detections = detector?.detect(tensorImage) ?: emptyList()
-
+            val detections: List<Detection> = detector?.detect(tensorImage) ?: emptyList()
             Log.d(TAG, "OfflineObjectDetector: Detected ${detections.size} objects")
 
             if (detections.isEmpty()) {
                 return "I don't see any distinct objects in front of you."
             }
 
-            // Map detections to spatial buckets
-            val spatialBuckets = detections.groupBy { detection ->
-                val boundingBox = detection.boundingBox
-                val centerX = boundingBox.centerX().toFloat() / bitmap.width
+            // Sort by confidence descending, take top MAX_RESULTS
+            val topDetections = detections
+                .filter { (it.categories.firstOrNull()?.score ?: 0f) >= CONFIDENCE_THRESHOLD }
+                .sortedByDescending { it.categories.firstOrNull()?.score ?: 0f }
+                .take(MAX_RESULTS)
 
-                when {
-                    centerX < 0.35f -> "left"
-                    centerX <= 0.65f -> "ahead"
-                    else -> "right"
-                }
-            }
+            // Clean up stale short-term memory
+            val now = System.currentTimeMillis()
+            spokenObjects.entries.removeIf { (_, ts) -> now - ts > MEMORY_MS }
 
-            // Build spatial sentence
+            val frameArea = (frameWidth * frameHeight).toFloat()
             val sentenceParts = mutableListOf<String>()
 
-            spatialBuckets["left"]?.let { objects ->
-                if (objects.isNotEmpty()) {
-                    val objectNames = objects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
-                    val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
-                    sentenceParts.add("$objectText on your left")
-                }
-            }
+            for (detection in topDetections) {
+                val bbox = detection.boundingBox
+                val label = normalizeLabel(detection.categories.firstOrNull()?.label ?: "object")
+                val centerX = bbox.centerX() / frameWidth.toFloat()
 
-            spatialBuckets["ahead"]?.let { objects ->
-                if (objects.isNotEmpty()) {
-                    val objectNames = objects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
-                    val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
-                    sentenceParts.add("$objectText ahead")
+                val position = when {
+                    centerX < 0.35f  -> "on your left"
+                    centerX <= 0.65f -> "ahead"
+                    else             -> "on your right"
                 }
-            }
 
-            spatialBuckets["right"]?.let { objects ->
-                if (objects.isNotEmpty()) {
-                    val objectNames = objects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
-                    val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
-                    sentenceParts.add("$objectText on your right")
-                }
+                // 5-second dedup key
+                val memKey = "${label}_${position}"
+                if (spokenObjects.containsKey(memKey)) continue // still within memory window
+
+                val bboxArea = bbox.width() * bbox.height()
+                val depthHint = if (bboxArea > frameArea * 0.35f) " close" else ""
+
+                sentenceParts.add("a $label $position$depthHint")
+                spokenObjects[memKey] = now
             }
 
             if (sentenceParts.isEmpty()) {
                 return "I don't see any distinct objects in front of you."
             }
 
-            "There is ${sentenceParts.joinToString(", ")}."
+            // Build natural-language sentence
+            return when (sentenceParts.size) {
+                1 -> "There is ${sentenceParts[0]}."
+                2 -> "There is ${sentenceParts[0]}, and ${sentenceParts[1]}."
+                else -> {
+                    val last = sentenceParts.last()
+                    val rest = sentenceParts.dropLast(1).joinToString(", ")
+                    "There is $rest, and $last."
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "OfflineObjectDetector: Detection error", e)
             "I don't see any distinct objects in front of you."
@@ -131,9 +153,8 @@ object OfflineObjectDetector {
     }
 
     /**
-     * Detect obstacles (hazardous objects) in the given bitmap.
-     * @param bitmap The image to analyze
-     * @return Description of detected obstacles
+     * Detect obstacles (high-risk objects) and return a spoken warning.
+     * Uses the same 35% threshold; filters by common obstacle label keywords.
      */
     fun detectObstacles(bitmap: Bitmap): String {
         if (!isInitialized || detector == null) {
@@ -143,27 +164,68 @@ object OfflineObjectDetector {
 
         return try {
             val tensorImage = TensorImage.fromBitmap(bitmap)
-            val detections = detector?.detect(tensorImage) ?: emptyList()
-
+            val detections: List<Detection> = detector?.detect(tensorImage) ?: emptyList()
             Log.d(TAG, "OfflineObjectDetector: Detected ${detections.size} potential obstacles")
 
-            // Filter for common obstacle categories
-            val obstacleKeywords = listOf("chair", "table", "desk", "obstacle", "barrier", "wall", "door", "stair", "step")
+            val obstacleKeywords = listOf(
+                "chair", "table", "desk", "obstacle", "barrier", "wall",
+                "door", "stair", "step", "person", "bottle", "bag", "suitcase"
+            )
+
             val obstacles = detections.filter { detection ->
                 val label = detection.categories.firstOrNull()?.label?.lowercase() ?: ""
-                obstacleKeywords.any { label.contains(it) }
+                val score = detection.categories.firstOrNull()?.score ?: 0f
+                score >= CONFIDENCE_THRESHOLD && obstacleKeywords.any { label.contains(it) }
             }
 
             if (obstacles.isEmpty()) {
                 return "I don't see any obstacles in front of you."
             }
 
-            val obstacleNames = obstacles.take(3).map { it.categories.firstOrNull()?.label ?: "obstacle" }
-            "There is ${obstacleNames.joinToString(", ")} in front of you."
+            val names = obstacles
+                .sortedByDescending { it.categories.firstOrNull()?.score ?: 0f }
+                .take(3)
+                .map { normalizeLabel(it.categories.firstOrNull()?.label ?: "obstacle") }
+
+            when (names.size) {
+                1 -> "Obstacle ahead: ${names[0]}. Please proceed with caution."
+                else -> "Obstacles ahead: ${names.joinToString(", ")}. Please proceed with caution."
+            }
         } catch (e: Exception) {
             Log.e(TAG, "OfflineObjectDetector: Obstacle detection error", e)
             "I don't see any obstacles in front of you."
         }
+    }
+
+    /**
+     * Normalize raw model labels to simple everyday words.
+     */
+    private fun normalizeLabel(label: String): String {
+        return when (label.lowercase()) {
+            "cell phone", "mobile phone" -> "phone"
+            "dining table"               -> "table"
+            "sofa", "couch"              -> "couch"
+            "potted plant"               -> "plant"
+            "laptop"                     -> "laptop"
+            "chair"                      -> "chair"
+            "person"                     -> "person"
+            "bottle"                     -> "bottle"
+            "door"                       -> "door"
+            "cup"                        -> "cup"
+            "suitcase", "luggage"        -> "bag"
+            "tv", "television"           -> "television"
+            "backpack"                   -> "bag"
+            else                         -> label.lowercase()
+        }
+    }
+
+    /**
+     * Clear short-term spoken-objects memory.
+     * Call when the scene changes significantly.
+     */
+    fun clearMemory() {
+        spokenObjects.clear()
+        Log.d(TAG, "OfflineObjectDetector: Short-term memory cleared")
     }
 
     /**
@@ -172,6 +234,7 @@ object OfflineObjectDetector {
     fun release() {
         detector = null
         isInitialized = false
+        spokenObjects.clear()
         Log.d(TAG, "OfflineObjectDetector: Released")
     }
 }

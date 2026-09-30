@@ -16,7 +16,7 @@ class LandmarkRecognizer(
 ) {
 
     private companion object {
-        const val SIMILARITY_THRESHOLD = 55f // Minimum similarity score (55%)
+        const val SIMILARITY_THRESHOLD = 50f // Minimum similarity score (50%) — forgiving match under normal room lighting
     }
 
     /**

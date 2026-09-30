@@ -31,6 +31,7 @@ import androidx.lifecycle.LifecycleOwner
 import android.util.Log
 import com.teamdexters.limitless.blind.BlindAIInvoker
 import com.teamdexters.limitless.blind.CameraFrameManager
+import com.teamdexters.limitless.blind.OfflineTextReader
 import com.teamdexters.limitless.ui.blind.*
 import com.teamdexters.limitless.ui.blind.nav.*
 import com.teamdexters.limitless.ui.theme.*
@@ -64,6 +65,9 @@ fun BlindHomeScreen() {
         )
     }
 
+    // TTS manager
+    val ttsManager = remember { TTSManager(context) }
+
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -93,7 +97,6 @@ fun BlindHomeScreen() {
     )
 
     // Managers
-    val ttsManager = remember { TTSManager(context) }
     val objectDetector = remember { RealTimeObjectDetector(context) }
     val objectNarrator = remember {
         ObjectNarrator(
@@ -480,13 +483,15 @@ fun BlindHomeScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Read Text button
+                        // Read Text Aloud button — uses OfflineTextReader with grayscale+contrast preprocessing
                         Button(
                             onClick = {
                                 scope.launch {
                                     isProcessing = true
                                     try {
-                                        val response = BlindAIInvoker.invokeVisionAI(context, "read text")
+                                        val (frame, rotation) = CameraFrameManager.getLatestFrame()
+                                        Log.d("LIMITLESS_TRACE", "BlindHomeScreen: Read Text triggered, frame=${frame.width}x${frame.height}, rotation=$rotation")
+                                        val response = OfflineTextReader.readText(frame, rotation)
                                         resultText = response
                                         showResultBanner = true
                                         ttsManager.speak(response)
@@ -494,7 +499,8 @@ fun BlindHomeScreen() {
                                         delay(8000)
                                         showResultBanner = false
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Text reading failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Log.e("LIMITLESS_TRACE", "BlindHomeScreen: Text reading failed", e)
+                                        ttsManager.speak("No readable text detected. Move closer and hold steady.")
                                     } finally {
                                         isProcessing = false
                                     }
@@ -504,7 +510,7 @@ fun BlindHomeScreen() {
                                 .weight(1f)
                                 .height(72.dp)
                                 .semantics {
-                                    contentDescription = "Read Text. Double tap to read text from camera view."
+                                    contentDescription = "Read Text Aloud. Double tap to read text from camera view."
                                 },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PersonaBlind,

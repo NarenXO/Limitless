@@ -36,6 +36,9 @@ import androidx.lifecycle.LifecycleOwner
 import com.teamdexters.limitless.blind.BlindAIInvoker
 import com.teamdexters.limitless.blind.BlindCameraController
 import com.teamdexters.limitless.blind.BlindNavigationVoice
+import com.teamdexters.limitless.blind.CameraFrameManager
+import com.teamdexters.limitless.blind.OfflineObjectDetector
+import com.teamdexters.limitless.blind.OfflineTextReader
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.delay
@@ -63,6 +66,16 @@ fun BlindAssistScreen() {
         )
     }
 
+    // TTS manager
+    val ttsManager = remember { TTSManager(context) }
+
+    // Camera controller
+    val cameraController = remember { BlindCameraController(context) }
+    var isCameraPaused by remember { mutableStateOf(false) }
+    var cameraStatus by remember { mutableStateOf("Camera Active") }
+    // Guard: prevent re-binding CameraX on every recomposition
+    var cameraStarted by remember { mutableStateOf(false) }
+
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -85,16 +98,6 @@ fun BlindAssistScreen() {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
-
-    // TTS manager — declared early so permission launcher lambda can capture it
-    val ttsManager = remember { TTSManager(context) }
-
-    // Camera controller
-    val cameraController = remember { BlindCameraController(context) }
-    var isCameraPaused by remember { mutableStateOf(false) }
-    var cameraStatus by remember { mutableStateOf("Camera Active") }
-    // Guard: prevent re-binding CameraX on every recomposition
-    var cameraStarted by remember { mutableStateOf(false) }
 
     // AI invocation state
     var aiResponse by remember { mutableStateOf("") }
@@ -378,9 +381,31 @@ fun BlindAssistScreen() {
                             )
                         }
 
-                        // Read Text button
+                        // Read Text Aloud button — OfflineTextReader with grayscale+contrast preprocessing
                         Button(
-                            onClick = { handleAIInvocation("read text") },
+                            onClick = { 
+                                if (!isProcessingAI) {
+                                    scope.launch {
+                                        isProcessingAI = true
+                                        try {
+                                            val (frame, rotation) = CameraFrameManager.getLatestFrame()
+                                            Log.d("LIMITLESS_TRACE", "BlindAssistScreen: Read Text triggered, frame=${frame.width}x${frame.height}, rotation=$rotation")
+                                            val response = OfflineTextReader.readText(frame, rotation)
+                                            aiResponse = response
+                                            showResponseBanner = true
+                                            ttsManager.speak(response)
+                                            triggerHaptic()
+                                            delay(8000)
+                                            showResponseBanner = false
+                                        } catch (e: Exception) {
+                                            Log.e("LIMITLESS_TRACE", "BlindAssistScreen: Read Text failed", e)
+                                            ttsManager.speak("No readable text detected. Move closer and hold steady.")
+                                        } finally {
+                                            isProcessingAI = false
+                                        }
+                                    }
+                                }
+                            },
                             modifier = Modifier
                                 .height(72.dp)
                                 .weight(1f)
@@ -402,9 +427,31 @@ fun BlindAssistScreen() {
                             )
                         }
 
-                        // Obstacles button
+                        // Obstacles button — OfflineObjectDetector.detectObstacles() directly
                         Button(
-                            onClick = { handleAIInvocation("detect obstacles") },
+                            onClick = {
+                                if (!isProcessingAI) {
+                                    scope.launch {
+                                        isProcessingAI = true
+                                        try {
+                                            val (frame, rotation) = CameraFrameManager.getLatestFrame()
+                                            Log.d("LIMITLESS_TRACE", "BlindAssistScreen: Obstacles triggered, frame=${frame.width}x${frame.height}")
+                                            val response = OfflineObjectDetector.detectObstacles(frame)
+                                            aiResponse = response
+                                            showResponseBanner = true
+                                            ttsManager.speak(response)
+                                            triggerHaptic()
+                                            delay(8000)
+                                            showResponseBanner = false
+                                        } catch (e: Exception) {
+                                            Log.e("LIMITLESS_TRACE", "BlindAssistScreen: Obstacle detection failed", e)
+                                            ttsManager.speak("Unable to check for obstacles right now.")
+                                        } finally {
+                                            isProcessingAI = false
+                                        }
+                                    }
+                                }
+                            },
                             modifier = Modifier
                                 .height(72.dp)
                                 .weight(1f)
