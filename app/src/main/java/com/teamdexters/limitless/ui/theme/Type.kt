@@ -19,7 +19,7 @@ val provider = GoogleFont.Provider(
 
 val manropeFont = GoogleFont("Manrope")
 
-private val manropeFontFamily = FontFamily(
+val manropeFontFamily = FontFamily(
     Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Normal),
     Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Medium),
     Font(googleFont = manropeFont, fontProvider = provider, weight = FontWeight.Bold)
