@@ -25,7 +25,14 @@ class MobilityViewModel @Inject constructor(
     private val roomDao = db.mappedRoomDao()
     private val connectionDao = db.roomConnectionDao()
     private val graphBuilder = AccessibilityGraphBuilder(roomDao, connectionDao)
-    val voiceNavigator = VoiceNavigator(application)
+    private var _voiceNavigator: VoiceNavigator? = null
+    val voiceNavigator: VoiceNavigator
+        get() {
+            if (_voiceNavigator == null) {
+                _voiceNavigator = VoiceNavigator(getApplication())
+            }
+            return _voiceNavigator!!
+        }
 
     private val _graph = MutableStateFlow<AccessibilityGraph?>(null)
     val graph: StateFlow<AccessibilityGraph?> = _graph.asStateFlow()
@@ -114,6 +121,6 @@ class MobilityViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        voiceNavigator.shutdown()
+        _voiceNavigator?.shutdown()
     }
 }
