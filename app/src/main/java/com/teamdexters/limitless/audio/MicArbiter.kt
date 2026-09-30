@@ -1,16 +1,29 @@
 package com.teamdexters.limitless.audio
 
+import android.content.Context
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class MicArbiter @Inject constructor() {
+class MicArbiter @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     private val currentOwner = AtomicReference<String?>(null)
 
     fun requestMic(owner: String): Boolean {
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        val isTalkBackActive = am?.isTouchExplorationEnabled == true
+
+        if (isTalkBackActive && (owner == "WAKEWORD" || owner == "YAMNET")) {
+            Log.d("LIMITLESS_TRACE", "MicArbiter: $owner denied because TalkBack is active")
+            return false
+        }
+
         var granted = false
         val current = currentOwner.get()
 
