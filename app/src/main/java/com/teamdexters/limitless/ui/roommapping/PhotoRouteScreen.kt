@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.roommapping.RoomPhotoCapture
 import com.teamdexters.limitless.roommapping.RoomSpatialAiAnalyzer
 import com.teamdexters.limitless.roommapping.SpatialRouteResult
+import com.teamdexters.limitless.roommapping.LiveNavigationEngine
 import com.teamdexters.limitless.ui.components.SafeCircularProgressIndicator
 import kotlinx.coroutines.launch
 import java.io.File
