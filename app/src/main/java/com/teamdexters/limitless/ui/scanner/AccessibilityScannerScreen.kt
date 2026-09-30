@@ -293,24 +293,24 @@ fun AccessibilityScannerScreen(
                                 color = Color(0xFF1F1F1F),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                fontSize = androidx.compose.ui.unit.sp(20)
+                                fontSize = 20.sp
                             )
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             // Detailed Categorized Rows
-                            Text("📦 Detected Objects", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = androidx.compose.ui.unit.sp(16))
-                            Text(objectsText, color = Color(0xFF1F1F1F), fontSize = androidx.compose.ui.unit.sp(16))
+                            Text("📦 Detected Objects", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text(objectsText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
-                            Text("👤 Person & Emotion", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = androidx.compose.ui.unit.sp(16))
-                            Text(emotionText, color = Color(0xFF1F1F1F), fontSize = androidx.compose.ui.unit.sp(16))
+                            Text("👤 Person & Emotion", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text(emotionText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
-                            Text("💡 Lighting Condition", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = androidx.compose.ui.unit.sp(16))
-                            Text(lightingText, color = Color(0xFF1F1F1F), fontSize = androidx.compose.ui.unit.sp(16))
+                            Text("💡 Lighting Condition", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text(lightingText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(24.dp))
                             
