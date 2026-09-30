@@ -1,6 +1,7 @@
 package com.teamdexters.limitless.feature.deaf.sound
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.Interpreter
@@ -24,26 +25,38 @@ class SoundClassifier(private val context: Context?) {
     companion object {
         private const val MODEL_PATH = "yamnet.tflite"
         private const val LABELS_PATH = "yamnet_label_list.txt"
-        private const val CONFIDENCE_THRESHOLD = 0.3f
+        private const val CONFIDENCE_THRESHOLD = 0.50f
         private const val SAMPLE_RATE = 16000
         private const val SAMPLE_COUNT = 15600 // 0.975s @ 16kHz for quantized model
         
         // Mapping from YAMNet labels to our SoundType
         private val LABEL_MAPPING = mapOf(
             "Siren" to VibrationVocabulary.SoundType.SIREN,
+            "Police car" to VibrationVocabulary.SoundType.SIREN,
+            "Ambulance" to VibrationVocabulary.SoundType.SIREN,
+            "Civil defense siren" to VibrationVocabulary.SoundType.SIREN,
+            "Air raid siren" to VibrationVocabulary.SoundType.SIREN,
             "Alarm" to VibrationVocabulary.SoundType.FIRE_ALARM,
             "Fire alarm" to VibrationVocabulary.SoundType.FIRE_ALARM,
             "Smoke alarm" to VibrationVocabulary.SoundType.FIRE_ALARM,
+            "Smoke detector" to VibrationVocabulary.SoundType.FIRE_ALARM,
             "Doorbell" to VibrationVocabulary.SoundType.DOORBELL,
+            "Ding-dong" to VibrationVocabulary.SoundType.DOORBELL,
+            "Chime" to VibrationVocabulary.SoundType.DOORBELL,
             "Door knock" to VibrationVocabulary.SoundType.DOORBELL,
+            "Knock" to VibrationVocabulary.SoundType.DOORBELL,
+            "Knocking" to VibrationVocabulary.SoundType.DOORBELL,
+            "Tap" to VibrationVocabulary.SoundType.DOORBELL,
             "Dog bark" to VibrationVocabulary.SoundType.DOG_BARKING,
             "Dog" to VibrationVocabulary.SoundType.DOG_BARKING,
+            "Barking" to VibrationVocabulary.SoundType.DOG_BARKING,
             "Baby cry" to VibrationVocabulary.SoundType.BABY_CRYING,
             "Crying, sobbing" to VibrationVocabulary.SoundType.BABY_CRYING,
             "Infant cry" to VibrationVocabulary.SoundType.BABY_CRYING,
             "Car horn" to VibrationVocabulary.SoundType.CAR_HORN,
             "Vehicle horn" to VibrationVocabulary.SoundType.CAR_HORN,
-            "Horn" to VibrationVocabulary.SoundType.CAR_HORN
+            "Horn" to VibrationVocabulary.SoundType.CAR_HORN,
+            "Honk" to VibrationVocabulary.SoundType.CAR_HORN
         )
     }
     
@@ -140,6 +153,7 @@ class SoundClassifier(private val context: Context?) {
                     if (label != null) {
                         for ((key, soundType) in LABEL_MAPPING) {
                             if (label.contains(key, ignoreCase = true)) {
+                                Log.d("LIMITLESS_TRACE", "SoundClassifier: Detected $label with confidence $score")
                                 return soundType
                             }
                         }

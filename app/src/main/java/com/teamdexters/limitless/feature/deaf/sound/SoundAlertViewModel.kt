@@ -1,6 +1,7 @@
 package com.teamdexters.limitless.feature.deaf.sound
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -27,6 +28,8 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
         null
     }
     
+    private val audioStreamer = AudioStreamer()
+    
     private val _activeAlert = MutableStateFlow<SoundAlert?>(null)
     val activeAlert: StateFlow<SoundAlert?> = _activeAlert.asStateFlow()
     
@@ -38,6 +41,7 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
     
     private var alertDismissJob: Job? = null
     private var modelLoadJob: Job? = null
+    private var audioStreamingJob: Job? = null
     
     init {
         loadModel()
@@ -156,15 +160,37 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
      * Start listening for environmental sounds.
      */
     private fun startListening() {
-        // This would integrate with AudioStreamer to continuously process audio
-        // For now, this is a placeholder for the actual implementation
+        if (!audioStreamer.initialize()) {
+            Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Failed to initialize AudioStreamer")
+            _isListening.value = false
+            return
+        }
+        
+        audioStreamingJob = viewModelScope.launch {
+            try {
+                audioStreamer.startStreaming().collect { audioData ->
+                    // Convert ByteArray to FloatArray for YAMNet
+                    val floatArray = convertToFloatArray(audioData)
+                    processAudio(floatArray)
+                }
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "SoundAlertViewModel: Audio streaming error", e)
+                _isListening.value = false
+            }
+        }
+        
+        Log.d("LIMITLESS_TRACE", "SoundAlertViewModel: Started live environmental listening")
     }
     
     /**
      * Stop listening for environmental sounds.
      */
     private fun stopListening() {
-        // Stop audio processing
+        audioStreamingJob?.cancel()
+        audioStreamingJob = null
+        audioStreamer.stopStreaming()
+        audioStreamer.release()
+        Log.d("LIMITLESS_TRACE", "SoundAlertViewModel: Stopped live environmental listening")
     }
     
     /**
@@ -177,8 +203,21 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
         
         val soundType = soundClassifier?.classifyAudio(audioData)
         if (soundType != null) {
-            triggerAlert(soundType)
+            Log.d("LIMITLESS_TRACE", "SoundAlertViewModel: Detected sound type: $soundType")
+            triggerAlert(soundType, manualTrigger = false)
         }
+    }
+    
+    /**
+     * Convert ByteArray (16-bit PCM) to FloatArray normalized to [-1.0, 1.0].
+     */
+    private fun convertToFloatArray(byteArray: ByteArray): FloatArray {
+        val floatArray = FloatArray(byteArray.size / 2)
+        for (i in floatArray.indices) {
+            val sample = ((byteArray[i * 2 + 1].toInt() shl 8) or (byteArray[i * 2].toInt() and 0xFF)).toShort()
+            floatArray[i] = sample / 32768.0f
+        }
+        return floatArray
     }
     
     /**
@@ -195,8 +234,10 @@ class SoundAlertViewModel(private val context: Context?) : ViewModel() {
         super.onCleared()
         alertDismissJob?.cancel()
         modelLoadJob?.cancel()
+        audioStreamingJob?.cancel()
         vibrationVocabulary?.cancel()
         soundClassifier?.release()
+        audioStreamer.release()
     }
 }
 
