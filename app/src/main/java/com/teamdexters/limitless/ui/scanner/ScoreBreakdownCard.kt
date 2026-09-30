@@ -26,6 +26,7 @@ import com.teamdexters.limitless.ui.theme.TextPrimary
 @Composable
 fun ScoreBreakdownCard(
     result: ComprehensiveScoreResult,
+    onNavigateRoute: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -83,6 +84,22 @@ fun ScoreBreakdownCard(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Button(
+                onClick = onNavigateRoute,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "🧭 Optimise & Navigate Accessible Route Here",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
             }
         }
     }

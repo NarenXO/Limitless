@@ -121,6 +121,19 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private var latestBitmap: Bitmap? = null
+    private var latestRotation = 0
+
+    fun updateLatestFrame(bitmap: Bitmap, rotationDegrees: Int) {
+        latestBitmap = bitmap
+        latestRotation = rotationDegrees
+    }
+
+    fun captureAndScan() {
+        val bitmap = latestBitmap ?: return
+        startScan(bitmap, latestRotation)
+    }
+
     fun processLiveFrame(bitmap: Bitmap) {
         val detections = analyzer.detectObjectsLive(bitmap)
         _liveDetections.value = detections

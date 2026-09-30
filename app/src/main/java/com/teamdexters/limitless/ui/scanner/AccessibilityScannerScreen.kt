@@ -107,11 +107,8 @@ fun AccessibilityScannerScreen(
                                                     lastLiveTime = currentTime
                                                     viewModel.processLiveFrame(bitmap)
                                                 }
-                                                if (!isScanning && (currentTime - lastScanTime >= 1500)) {
-                                                    lastScanTime = currentTime
-                                                    com.teamdexters.limitless.assistant.vision.CameraFrameManager.updateFrame(bitmap)
-                                                    viewModel.startScan(bitmap, imageProxy.imageInfo.rotationDegrees)
-                                                }
+                                                viewModel.updateLatestFrame(bitmap, imageProxy.imageInfo.rotationDegrees)
+                                                com.teamdexters.limitless.assistant.vision.CameraFrameManager.updateFrame(bitmap)
                                             }
                                         } finally {
                                             imageProxy.close()
@@ -202,6 +199,21 @@ fun AccessibilityScannerScreen(
                     }
                 }
 
+                // Capture & Scan Button
+                if (isCameraGranted) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.captureAndScan() },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9)),
+                        shape = CircleShape
+                    ) {
+                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Capture & Scan", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    }
+                }
+
                 // Live Detection Chips
                 if (scanObjects.isNotEmpty() || signageText.isNotEmpty() || lightingScore > 0) {
                     androidx.compose.foundation.lazy.LazyRow(
@@ -239,7 +251,13 @@ fun AccessibilityScannerScreen(
 
                 comprehensiveScore?.let { scoreResult ->
                     Spacer(modifier = Modifier.height(16.dp))
-                    ScoreBreakdownCard(result = scoreResult, modifier = Modifier.padding(top = 16.dp))
+                    ScoreBreakdownCard(
+                        result = scoreResult,
+                        onNavigateRoute = {
+                            navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.MobilityHome.route)
+                        },
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
                 }
             }
 
