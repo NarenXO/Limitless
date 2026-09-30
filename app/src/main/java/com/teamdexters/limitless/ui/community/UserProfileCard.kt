@@ -50,10 +50,10 @@ fun UserProfileCard(
                             Text("Synced with Cloud", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2E7D32))
                         }
                         SyncStatus.SYNCING -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .background(Color(0xFFF791A9), shape = CircleShape)
+                            com.teamdexters.limitless.ui.components.SafeCircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color(0xFFF791A9),
+                                strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Syncing...", style = MaterialTheme.typography.labelMedium, color = TextPrimary)

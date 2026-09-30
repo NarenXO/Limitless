@@ -36,7 +36,7 @@ fun LocationDetailScreen(
 
     if (scoreEntity == null) {
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F1EE)), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color(0xFFF791A9))
+            com.teamdexters.limitless.ui.components.SafeCircularProgressIndicator(color = Color(0xFFF791A9))
         }
         return
     }

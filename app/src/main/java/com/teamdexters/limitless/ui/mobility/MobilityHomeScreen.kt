@@ -474,7 +474,7 @@ fun MobilityHomeScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isComputing) {
-                    androidx.compose.material3.CircularProgressIndicator(
+                    com.teamdexters.limitless.ui.components.SafeCircularProgressIndicator(
                         color = TextPrimary,
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp
