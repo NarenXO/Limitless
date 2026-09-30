@@ -164,6 +164,9 @@ dependencies {
     // Google Play Services Location
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
+    // Palette for Offline Color Detection
+    implementation("androidx.palette:palette:1.0.0")
+    
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")
