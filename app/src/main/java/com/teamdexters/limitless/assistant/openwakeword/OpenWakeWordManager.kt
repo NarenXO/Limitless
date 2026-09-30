@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
  */
 class OpenWakeWordManager(
     private val context: Context,
+    private val micArbiter: com.teamdexters.limitless.audio.MicArbiter,
     private val onWakeWordDetected: () -> Unit
 ) {
     private var recordingJob: Job? = null
@@ -76,6 +77,11 @@ class OpenWakeWordManager(
         if (!isPaused) return
         if (!hasModel) {
             Log.e("LIMITLESS_TRACE", "[WakeWord] Cannot start engine: NO REAL WAKE WORD MODEL EXISTS. OpenWakeWord completely disabled.")
+            return
+        }
+        
+        if (!micArbiter.requestMic("WAKEWORD")) {
+            Log.d("LIMITLESS_TRACE", "[WakeWord] Mic request denied by MicArbiter")
             return
         }
         isPaused = false
@@ -189,6 +195,7 @@ class OpenWakeWordManager(
         recordingJob?.cancel()
         recordingJob = null
         releaseAudioRecord()
+        micArbiter.releaseMic("WAKEWORD")
     }
 
     fun resume() {

@@ -62,6 +62,7 @@ fun HazelListeningOverlay(
     isVisible: Boolean,
     onDismiss: () -> Unit,
     intentRouter: IntentRouter,
+    micArbiter: com.teamdexters.limitless.audio.MicArbiter,
     onIntentResult: (HazelIntent) -> Unit
 ) {
     if (!isVisible) return
@@ -101,7 +102,13 @@ fun HazelListeningOverlay(
             Log.d(TAG, "Overlay opened. Checking RECORD_AUDIO permission: $granted")
             
             if (granted) {
-                Log.d("LIMITLESS_TRACE", "[Hazel] Overlay opened. Starting mic...")
+                Log.d("LIMITLESS_TRACE", "[Hazel] Overlay opened. Requesting mic from arbiter...")
+                if (!micArbiter.requestMic("RHASSPY_STT")) {
+                    Log.e("LIMITLESS_TRACE", "[Hazel] MicArbiter denied mic access for RHASSPY_STT")
+                    statusText = "Status: Error (Microphone in use) - Tap mic to retry"
+                    return@DisposableEffect onDispose {}
+                }
+                
                 // Must be main thread for SpeechRecognizer
                 val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
                 recognizerRef = recognizer
@@ -187,6 +194,7 @@ fun HazelListeningOverlay(
             recognizerRef?.stopListening()
             recognizerRef?.destroy()
             recognizerRef = null
+            micArbiter.releaseMic("RHASSPY_STT")
         }
     }
 

@@ -97,6 +97,9 @@ class MainActivity : ComponentActivity() {
             micGranted.value = isGranted
         }
 
+    @Inject
+    lateinit var micArbiter: com.teamdexters.limitless.audio.MicArbiter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -117,7 +120,8 @@ class MainActivity : ComponentActivity() {
             LimitlessTheme {
                 HazelAssistantWrapper(
                     database = database,
-                    micGranted = micGranted.value
+                    micGranted = micGranted.value,
+                    micArbiter = micArbiter
                 )
             }
         }
@@ -136,7 +140,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HazelAssistantWrapper(
     database: LimitlessDatabase,
-    micGranted: Boolean
+    micGranted: Boolean,
+    micArbiter: com.teamdexters.limitless.audio.MicArbiter
 ) {
     val navController = rememberNavController()
     val intentRouter = remember { DefaultIntentRouter() }
@@ -203,6 +208,7 @@ fun HazelAssistantWrapper(
     val openWakeWordManager = remember(context) {
         OpenWakeWordManager(
             context = context,
+            micArbiter = micArbiter,
             onWakeWordDetected = {
                 coroutineScope.launch(Dispatchers.Main) {
                     delay(300L) // Wait 300ms for audio HAL release
@@ -330,6 +336,7 @@ fun HazelAssistantWrapper(
                         isHazelListening = false
                     },
                     intentRouter = intentRouter,
+                    micArbiter = micArbiter,
                     onIntentResult = { intent ->
                         handleHazelIntent(
                             intent = intent,
