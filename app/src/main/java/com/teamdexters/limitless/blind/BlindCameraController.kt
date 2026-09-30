@@ -12,6 +12,7 @@ import android.hardware.SensorManager
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.ContextCompat as CameraXCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 
@@ -60,7 +61,7 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
             .build()
             .also { imageAnalysis ->
                 imageAnalysis.setAnalyzer(
-                    androidx.camera.core.ContextCompat.getMainExecutor(context),
+                    CameraXCompat.getMainExecutor(context),
                     this::analyzeFrame
                 )
             }
@@ -96,6 +97,7 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
                 // Update the singleton with the latest frame
                 CameraFrameManager.updateLatestFrame(bitmap, imageProxy.imageInfo.rotationDegrees)
 
+                Log.d(TAG, "CameraFrameManager: Frame updated successfully (${bitmap.width}x${bitmap.height})")
                 Log.d(TAG, "BlindCamera: Frame sampled at 1 FPS. Paused=$isCameraPaused, Size=${bitmap.width}x${bitmap.height}")
             }
         } catch (e: Exception) {

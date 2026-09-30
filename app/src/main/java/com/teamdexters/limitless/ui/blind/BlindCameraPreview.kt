@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
+import android.util.Log
 import android.graphics.Rect
 import android.graphics.YuvImage
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.teamdexters.limitless.blind.CameraFrameManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -155,6 +157,10 @@ private class BlindFrameAnalyzer(
     private val onFrameReady: (android.graphics.Bitmap, Int) -> Unit
 ) : ImageAnalysis.Analyzer {
 
+    companion object {
+        private const val TAG = "LIMITLESS_TRACE"
+    }
+
     private var lastFrameTime = 0L
     private val frameInterval = 800L // Process at most 1.25 frames per second (800ms throttling)
 
@@ -172,10 +178,15 @@ private class BlindFrameAnalyzer(
         try {
             val bitmap = imageProxyToBitmap(image, image.imageInfo.rotationDegrees)
             if (bitmap != null) {
+                // Store frame in CameraFrameManager for AI invoker
+                CameraFrameManager.updateLatestFrame(bitmap, image.imageInfo.rotationDegrees)
+                Log.d(TAG, "CameraFrameManager: Frame updated successfully (${bitmap.width}x${bitmap.height})")
+
+                // Also notify callback
                 onFrameReady(bitmap, image.imageInfo.rotationDegrees)
             }
         } catch (e: Exception) {
-            // Ignore conversion errors
+            Log.e(TAG, "BlindFrameAnalyzer: Error processing frame", e)
         } finally {
             image.close()
         }

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
+import android.util.Log
 import android.graphics.Rect
 import android.graphics.YuvImage
 import androidx.camera.core.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.teamdexters.limitless.blind.CameraFrameManager
 import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -214,6 +216,10 @@ private class FrameAnalyzer(
     private val onCaptureReady: ((Bitmap, Int) -> Unit)?
 ) : ImageAnalysis.Analyzer {
 
+    companion object {
+        private const val TAG = "LIMITLESS_TRACE"
+    }
+
     private var lastFrameTime = 0L
     private val frameInterval = 500L // Process at most 2 frames per second
 
@@ -231,12 +237,16 @@ private class FrameAnalyzer(
         try {
             val bitmap = imageProxyToBitmap(image, image.imageInfo.rotationDegrees)
             if (bitmap != null) {
+                // Store frame in CameraFrameManager for AI invoker
+                CameraFrameManager.updateLatestFrame(bitmap, image.imageInfo.rotationDegrees)
+                Log.d(TAG, "CameraFrameManager: Frame updated successfully (${bitmap.width}x${bitmap.height})")
+
+                // Also notify callbacks
                 onFrameReady(bitmap)
-                // Also notify capture ready callback if provided
                 onCaptureReady?.invoke(bitmap, image.imageInfo.rotationDegrees)
             }
         } catch (e: Exception) {
-            // Ignore conversion errors
+            Log.e(TAG, "FrameAnalyzer: Error processing frame", e)
         } finally {
             image.close()
         }

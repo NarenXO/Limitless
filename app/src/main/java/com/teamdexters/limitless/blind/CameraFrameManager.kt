@@ -33,6 +33,9 @@ object CameraFrameManager {
      * @return Pair of (bitmap, rotation) or null if no frame is available
      */
     fun getLatestFrame(): Pair<Bitmap?, Int> {
+        if (latestFrame == null) {
+            Log.w(TAG, "CameraFrameManager: Frame requested but bitmap was null")
+        }
         return Pair(latestFrame, lastRotation)
     }
 
