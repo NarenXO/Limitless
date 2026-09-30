@@ -25,7 +25,14 @@ class OfflineYoloDetector(private val context: Context) {
         try {
             val modelBuffer = loadModelFile("yolov8n_float32.tflite")
             val options = Interpreter.Options().apply {
-                setNumThreads(4)
+                val gpuDelegate = try {
+                    org.tensorflow.lite.gpu.GpuDelegate()
+                } catch (e: Exception) {
+                    Log.w("LIMITLESS_TRACE", "GPU Delegate unavailable, falling back to CPU: ${e.localizedMessage}")
+                    null
+                }
+                gpuDelegate?.let { addDelegate(it) }
+                numThreads = 4
             }
             interpreter = Interpreter(modelBuffer, options)
             Log.d("LIMITLESS_TRACE", "OfflineYoloDetector: Successfully initialized YOLOv8 TFLite model")

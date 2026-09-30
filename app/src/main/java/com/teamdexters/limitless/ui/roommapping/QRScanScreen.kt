@@ -16,6 +16,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -79,10 +81,10 @@ fun QRScanScreen(
                 @Suppress("DEPRECATION")
                 context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
             }
-            vibrator.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
             
             val uniqueId = roomId.removePrefix("LIMITLESS_ROOM_")
-            tts?.speak("Room detected: $uniqueId. Ready to capture photos.", TextToSpeech.QUEUE_FLUSH, null, null)
+            tts?.speak("QR waypoint detected.", TextToSpeech.QUEUE_FLUSH, null, null)
             
             Log.d("LIMITLESS_TRACE", "QRWaypointScanner: Detected roomId=$roomId")
             
@@ -143,6 +145,33 @@ fun QRScanScreen(
                     .size(250.dp)
                     .border(width = 4.dp, color = Color(0xFFF791A9), shape = RoundedCornerShape(16.dp))
             )
+            
+            // Wheelchair Guidance Banner
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                        contentDescription = "Wheelchair Info",
+                        tint = Color(0xFF1F1F1F)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tip: For wheelchair accessibility, place QR stickers at 100-120cm height (arm-reach), not eye-level (150cm).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF1F1F1F)
+                    )
+                }
+            }
 
             // Fallback button below preview
             Button(
@@ -153,7 +182,7 @@ fun QRScanScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F1F))
             ) {
                 Text(
-                    text = "No QR detected? Tap to enter room name manually.",
+                    text = "Manual Room Entry",
                     color = Color(0xFFF7F1EE),
                     style = MaterialTheme.typography.labelLarge
                 )

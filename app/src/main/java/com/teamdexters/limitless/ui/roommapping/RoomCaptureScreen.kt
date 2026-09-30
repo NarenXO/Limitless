@@ -1,10 +1,15 @@
 package com.teamdexters.limitless.ui.roommapping
 
 import android.Manifest
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -15,6 +20,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -33,6 +39,8 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.teamdexters.limitless.roommapping.RoomPhotoCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
+import kotlin.math.abs
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -52,14 +60,145 @@ fun RoomCaptureScreen(
     var capturedPaths by remember { mutableStateOf(mutableMapOf<Int, String>()) }
     var currentCornerIndex by remember { mutableStateOf(0) }
 
+    var isBlindFriendlyMode by remember { mutableStateOf(false) }
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    
+    var currentAzimuth by remember { mutableStateOf(0f) }
+    var targetAzimuth by remember { mutableStateOf(-1f) }
+
+    DisposableEffect(Unit) {
+        val textToSpeech = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US
+            }
+        }
+        tts = textToSpeech
+        onDispose {
+            textToSpeech.shutdown()
+        }
+    }
+
+    DisposableEffect(isBlindFriendlyMode) {
+        var sensorManager: SensorManager? = null
+        var listener: SensorEventListener? = null
+
+        if (isBlindFriendlyMode) {
+            sensorManager = context.getSystemService(android.content.Context.SENSOR_SERVICE) as SensorManager
+            val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            
+            listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+                        val rotationMatrix = FloatArray(9)
+                        SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                        val orientationValues = FloatArray(3)
+                        SensorManager.getOrientation(rotationMatrix, orientationValues)
+                        
+                        // Convert azimuth to degrees
+                        var azimuth = Math.toDegrees(orientationValues[0].toDouble()).toFloat()
+                        if (azimuth < 0) azimuth += 360f
+                        currentAzimuth = azimuth
+
+                        if (targetAzimuth != -1f) {
+                            var diff = abs(currentAzimuth - targetAzimuth)
+                            if (diff > 180f) diff = 360f - diff
+                            
+                            if (diff < 15f) {
+                                // Close to target
+                                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                    vibratorManager.defaultVibrator
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+                                }
+                                vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                            }
+                        }
+                    }
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            }
+            
+            rotationSensor?.let {
+                sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI)
+            }
+            
+            // Initial instructions
+            tts?.speak("Blind-Friendly Mode enabled. Face North to begin. Tap anywhere to capture North corner.", TextToSpeech.QUEUE_FLUSH, null, null)
+            targetAzimuth = 0f
+        }
+        
+        onDispose {
+            listener?.let { sensorManager?.unregisterListener(it) }
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
         }
     }
 
+    fun handleCapture() {
+        if (currentCornerIndex >= 4) return
+
+        val executor = ContextCompat.getMainExecutor(context)
+        imageCapture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                coroutineScope.launch(Dispatchers.IO) {
+                    val path = photoCaptureUtil.savePhoto(roomId, currentCornerIndex, image, image.imageInfo.rotationDegrees)
+                    if (path != null) {
+                        Log.d("LIMITLESS_TRACE", "RoomPhotoCapture: Saved photo currentCornerIndex for roomId=roomId")
+                        val newMap = capturedPaths.toMutableMap()
+                        newMap[currentCornerIndex] = path
+                        capturedPaths = newMap
+                        
+                        val prevCorner = corners[currentCornerIndex]
+                        
+                        // Advance
+                        var nextIndex = currentCornerIndex + 1
+                        while (nextIndex < 4 && newMap.containsKey(nextIndex)) {
+                            nextIndex++
+                        }
+                        currentCornerIndex = nextIndex
+
+                        if (isBlindFriendlyMode) {
+                            if (currentCornerIndex < 4) {
+                                val nextCorner = corners[currentCornerIndex]
+                                targetAzimuth = (targetAzimuth + 90f) % 360f
+                                tts?.speak("prevCorner captured. Turn 90 degrees right for nextCorner. Tap anywhere to capture.", TextToSpeech.QUEUE_FLUSH, null, null)
+                            } else {
+                                tts?.speak("All corners captured. Tap Analyze Room.", TextToSpeech.QUEUE_FLUSH, null, null)
+                            }
+                        }
+                    }
+                }
+                
+                // Vibrate
+                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                    vibratorManager.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+                }
+                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+            }
+            
+            override fun onError(exception: ImageCaptureException) {
+                Log.e("LIMITLESS_TRACE", "Capture failed", exception)
+            }
+        })
+    }
+
     if (cameraPermissionState.status.isGranted) {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F1EE))) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF7F1EE))
+                .clickable(enabled = isBlindFriendlyMode) { handleCapture() }
+        ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -102,12 +241,34 @@ fun RoomCaptureScreen(
                         .background(Color(0xCCF7F1EE))
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "Room: $roomId",
-                        color = Color(0xFF1F1F1F),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Room: roomId",
+                            color = Color(0xFF1F1F1F),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Blind-Friendly Guidance",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF1F1F1F)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(
+                                checked = isBlindFriendlyMode,
+                                onCheckedChange = { isBlindFriendlyMode = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFF791A9),
+                                    checkedTrackColor = Color(0xFFFFE797)
+                                )
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -127,7 +288,7 @@ fun RoomCaptureScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = if (isCaptured) "$corner (Done)" else corner,
+                                    text = if (isCaptured) "corner (Done)" else corner,
                                     color = Color(0xFF1F1F1F),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
@@ -144,45 +305,9 @@ fun RoomCaptureScreen(
                         .padding(bottom = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (currentCornerIndex < 4) {
+                    if (!isBlindFriendlyMode && currentCornerIndex < 4) {
                         Button(
-                            onClick = {
-                                val executor = ContextCompat.getMainExecutor(context)
-                                imageCapture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(image: ImageProxy) {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            val path = photoCaptureUtil.savePhoto(roomId, currentCornerIndex, image, image.imageInfo.rotationDegrees)
-                                            if (path != null) {
-                                                Log.d("LIMITLESS_TRACE", "RoomPhotoCapture: Saved photo $currentCornerIndex for roomId=$roomId")
-                                                val newMap = capturedPaths.toMutableMap()
-                                                newMap[currentCornerIndex] = path
-                                                capturedPaths = newMap
-                                                
-                                                // Advance
-                                                var nextIndex = currentCornerIndex + 1
-                                                while (nextIndex < 4 && newMap.containsKey(nextIndex)) {
-                                                    nextIndex++
-                                                }
-                                                currentCornerIndex = nextIndex
-                                            }
-                                        }
-                                        
-                                        // Vibrate
-                                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                            val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                                            vibratorManager.defaultVibrator
-                                        } else {
-                                            @Suppress("DEPRECATION")
-                                            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
-                                        }
-                                        vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
-                                    }
-                                    
-                                    override fun onError(exception: ImageCaptureException) {
-                                        Log.e("LIMITLESS_TRACE", "Capture failed", exception)
-                                    }
-                                })
-                            },
+                            onClick = { handleCapture() },
                             modifier = Modifier
                                 .size(72.dp),
                             shape = androidx.compose.foundation.shape.CircleShape,
@@ -190,6 +315,18 @@ fun RoomCaptureScreen(
                         ) {
                             Text("Capture", color = Color.White)
                         }
+                    }
+
+                    if (isBlindFriendlyMode && currentCornerIndex < 4) {
+                        Text(
+                            text = "Tap ANYWHERE on screen to capture",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            modifier = Modifier
+                                .background(Color(0xAA000000), RoundedCornerShape(8.dp))
+                                .padding(16.dp)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
