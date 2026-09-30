@@ -107,15 +107,18 @@ class ScannerViewModel @Inject constructor(
         _hasWashroom.value = hasIt
     }
 
+    private val _categorizedResult = MutableStateFlow<CategorizedScanResult?>(null)
+    val categorizedResult: StateFlow<CategorizedScanResult?> = _categorizedResult
+
     fun startScan(bitmap: Bitmap, rotationDegrees: Int) {
         viewModelScope.launch {
             _isScanning.value = true
             
-            val (objects, text, lighting) = analyzer.analyzeFrame(bitmap, rotationDegrees)
+            val catResult = analyzer.analyzeCategorizedFrame(bitmap, rotationDegrees)
+            _categorizedResult.value = catResult
             
-            _scanObjects.value = objects
-            _signageText.value = text
-            _lightingScore.value = lighting
+            _scanObjects.value = catResult.detectedObjects.map { ScanObjectResult(it, 1.0f) }
+            _lightingScore.value = catResult.overallScore
             
             _isScanning.value = false
         }

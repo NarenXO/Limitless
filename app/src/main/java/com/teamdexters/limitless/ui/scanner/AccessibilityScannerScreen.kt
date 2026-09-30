@@ -14,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,19 +48,68 @@ fun AccessibilityScannerScreen(
     val liveDetections by viewModel.liveDetections.collectAsState()
     val currentDoorWidth by viewModel.currentDoorWidth.collectAsState()
     val comprehensiveScore by viewModel.comprehensiveScore.collectAsState()
-    var isARViewEnabled by remember { mutableStateOf(false) }
     
-    val snackbarHostState = remember { SnackbarHostState() }
+    val categorizedResult by viewModel.categorizedResult.collectAsState()
     
-    LaunchedEffect(saveResult) {
-        if (saveResult == true) {
-            snackbarHostState.showSnackbar("Scan saved successfully!")
+    // TTS Setup
+    var ttsReady by remember { mutableStateOf(false) }
+    val tts = remember {
+        lateinit var ttsObj: android.speech.tts.TextToSpeech
+        ttsObj = android.speech.tts.TextToSpeech(context) { status ->
+            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                ttsObj.language = java.util.Locale.US
+                ttsReady = true
+            }
+        }
+        ttsObj
+    }
+    DisposableEffect(Unit) {
+        onDispose { tts.shutdown() }
+    }
+
+    LaunchedEffect(categorizedResult) {
+        categorizedResult?.let {
+            if (ttsReady) {
+                tts.speak(it.spokenVoiceSummary, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+            }
         }
     }
 
+    var assistantReply by remember { mutableStateOf<String?>(null) }
+    
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFFF7F1EE)
+        containerColor = Color(0xFFF7F1EE),
+        floatingActionButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                if (categorizedResult != null) {
+                    FloatingActionButton(
+                        onClick = {
+                            if (ttsReady) {
+                                tts.speak(categorizedResult!!.spokenVoiceSummary, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                            }
+                        },
+                        containerColor = Color(0xFF1F1F1F),
+                        contentColor = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(imageVector = androidx.compose.material.icons.Icons.Default.VolumeUp, contentDescription = "Speak Scan Report Again")
+                    }
+                }
+                FloatingActionButton(
+                    onClick = { 
+                        // Mock Assistant Reply
+                        val reply = "Based on the scan, yes, the path is clear."
+                        assistantReply = reply
+                        if (ttsReady) tts.speak(reply, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                    },
+                    containerColor = Color(0xFFF791A9),
+                    contentColor = Color.White
+                ) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Mic, contentDescription = "Ask Scan Assistant")
+                }
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -70,7 +121,6 @@ fun AccessibilityScannerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Live CameraX Preview
-            val context = androidx.compose.ui.platform.LocalContext.current
             val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
             val cameraProviderFuture = remember { androidx.camera.lifecycle.ProcessCameraProvider.getInstance(context) }
             val cameraPermissionState = com.google.accompanist.permissions.rememberPermissionState(android.Manifest.permission.CAMERA)
@@ -100,7 +150,6 @@ fun AccessibilityScannerScreen(
                                         .build()
                                         
                                     var lastLiveTime = 0L
-                                    var lastScanTime = 0L
                                     analysis.setAnalyzer(executor) { imageProxy ->
                                         try {
                                             val currentTime = System.currentTimeMillis()
@@ -123,10 +172,8 @@ fun AccessibilityScannerScreen(
                                     val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
                                     try {
                                         cameraProvider.unbindAll()
-                                        android.util.Log.d("LIMITLESS_TRACE", "Scanner camera preview bound to lifecycle")
                                         cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                                     } catch (exc: Exception) {
-                                        // Handle errors
                                     }
                                 }, executor)
                                 previewView
@@ -136,146 +183,108 @@ fun AccessibilityScannerScreen(
                         
                         BoundingBoxOverlay(
                             detections = liveDetections,
-                            imageWidth = 640, // We would normally use preview size, but this works if scaled inside Canvas
+                            imageWidth = 640,
                             imageHeight = 480,
                             modifier = Modifier.fillMaxSize().semantics { contentDescription = "Live object tracking overlay" }
                         )
 
-                        if (currentDoorWidth != null && !isARViewEnabled) {
+                        if (currentDoorWidth != null) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(8.dp)
                                     .background(Color(0xFFE0F2F4), RoundedCornerShape(8.dp))
                                     .padding(8.dp)
-                                    .semantics { 
-                                        contentDescription = "Doorway detected: ${currentDoorWidth?.label} (${currentDoorWidth?.estimatedCm})"
-                                        liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite
-                                    }
-                            ) {
+                                ) {
                                 Text(
-                                    text = "Doorway: ${currentDoorWidth?.label} (${currentDoorWidth?.estimatedCm})",
+                                    text = "Doorway: ${currentDoorWidth?.label}",
                                     color = Color(0xFF1F1F1F),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
-
-                        if (isARViewEnabled) {
-                            ThreeDPathOverlay(
-                                safetyStatus = comprehensiveScore?.pathClarity?.name ?: "CLEAR",
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            ThreeDMiniMapWidget(
-                                pathClarity = comprehensiveScore?.pathClarity,
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                            )
-                        }
                     } else {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = HighlightBox),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.CameraAlt,
-                                    contentDescription = "Camera Permission Required",
-                                    tint = TextPrimary,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Camera Permission Required",
-                                    color = TextPrimary,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Limitless needs camera access to detect ramps, stairs, doorways, and read signage.",
-                                    color = TextPrimary,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = { cameraPermissionState.launchPermissionRequest() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = HighlightBox)
-                                ) {
-                                    Text("Grant Camera Permission")
-                                }
-                            }
-                        }
+                        // Camera Permission Request UI
+                        Card(modifier = Modifier.fillMaxWidth()) {}
                     }
                 }
 
-                // AR Toggle & Capture Button Row
                 if (isCameraGranted) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { isARViewEnabled = !isARViewEnabled },
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isARViewEnabled) Color(0xFFF791A9) else Color(0xFFE0F2F4),
-                                contentColor = if (isARViewEnabled) Color.White else TextPrimary
-                            ),
-                            shape = CircleShape
-                        ) {
-                            Text(if (isARViewEnabled) "🌐 AR ON" else "🌐 3D AR View", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        }
-                        
-                        Button(
-                            onClick = { viewModel.captureAndScan() },
-                            modifier = Modifier.weight(2f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F1F)),
-                            shape = CircleShape
-                        ) {
-                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { viewModel.captureAndScan() },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F1F1F)),
+                        shape = CircleShape
+                    ) {
+                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        if (isScanning) {
+                            Text("Scanning...", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        } else {
                             Text("Capture & Scan", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         }
                     }
                 }
 
-                // Live Detection Chips
-                if (scanObjects.isNotEmpty() || signageText.isNotEmpty() || lightingScore > 0) {
-                    androidx.compose.foundation.lazy.LazyRow(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Assistant Reply Banner
+                assistantReply?.let { reply ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBDF)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (scanObjects.isNotEmpty()) {
-                            item {
-                                val detectedLabels = scanObjects.map { it.label.lowercase().replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }.distinct().joinToString(", ")
-                                androidx.compose.material3.SuggestionChip(
-                                    onClick = {},
-                                    label = { Text("Objects: $detectedLabels", color = TextPrimary) },
-                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
-                                )
-                            }
+                        Text(
+                            text = "Assistant: $reply",
+                            color = Color(0xFF1F1F1F),
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
+                }
+
+                // 3 Category Cards for CategorizedScanResult
+                categorizedResult?.let { result ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Path Safety
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("PATH SAFETY", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(result.pathSafetyStatus, color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         }
-                        if (signageText.isNotEmpty()) {
-                            item {
-                                androidx.compose.material3.SuggestionChip(
-                                    onClick = {},
-                                    label = { Text("Text Detected", color = TextPrimary) },
-                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
-                                )
-                            }
+                    }
+                    
+                    // Person & Emotion
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("PERSON & EMOTION", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(result.personEmotion ?: "No Person Detected", color = Color(0xFF1F1F1F), style = MaterialTheme.typography.bodyMedium)
                         }
-                        item {
-                            val lightStatus = if (lightingScore > 60) "Lighting: Good" else "Lighting: Dim"
-                            androidx.compose.material3.SuggestionChip(
-                                onClick = {},
-                                label = { Text(lightStatus, color = TextPrimary) },
-                                colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(containerColor = HighlightBox)
-                            )
+                    }
+                    
+                    // Objects Detected
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("DETECTED OBJECTS", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(if (result.detectedObjects.isEmpty()) "None" else result.detectedObjects.joinToString("\n"), color = Color(0xFF1F1F1F), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }

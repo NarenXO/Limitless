@@ -25,6 +25,15 @@ data class DetectedObject(
     val category: AccessibilityObjectType
 )
 
+data class CategorizedScanResult(
+    val detectedObjects: List<String>,
+    val personEmotion: String?,
+    val pathSafetyStatus: String,
+    val lightingScoreText: String,
+    val overallScore: Int,
+    val spokenVoiceSummary: String
+)
+
 class ScannerAnalyzer(private val context: Context) {
     
     private var objectDetector: ObjectDetector? = null
@@ -125,6 +134,64 @@ class ScannerAnalyzer(private val context: Context) {
         val lighting = lightingDeferred.await()
         
         Triple(objects, text, lighting)
+    }
+
+    suspend fun analyzeCategorizedFrame(bitmap: Bitmap, rotationDegrees: Int): CategorizedScanResult = withContext(Dispatchers.IO) {
+        val (objects, _, lighting) = analyzeFrame(bitmap, rotationDegrees)
+        
+        val geminiClient = com.teamdexters.limitless.assistant.cloud.GeminiClient()
+        val prompt = """
+            Analyze this space for accessibility.
+            1. Detect main objects.
+            2. Detect any persons and their emotion/state.
+            3. Evaluate path safety (Clear, Partially Clear, Danger).
+            Return a JSON object exactly like this:
+            {
+              "objects": ["Chair", "Desk"],
+              "emotion": "No Person Detected",
+              "safety": "PATH CLEAR",
+              "summary": "The path is clear. A chair and desk are visible."
+            }
+        """.trimIndent()
+        
+        val outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+        val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+        
+        var emotion = "No Person Detected"
+        var safety = "PATH CLEAR"
+        var summary = "The space is clear."
+        
+        try {
+            val response = geminiClient.queryGemini(prompt, base64Image)
+            if (response.isSuccess) {
+                val txt = response.getOrNull() ?: ""
+                if (txt.contains("No Person", ignoreCase = true)) {
+                    emotion = "No Person Detected"
+                } else if (txt.contains("emotion", ignoreCase = true)) {
+                    emotion = "Person Detected"
+                }
+                
+                safety = when {
+                    txt.contains("DANGER", ignoreCase = true) -> "PATH BLOCKED / DANGER"
+                    txt.contains("PARTIALLY", ignoreCase = true) -> "PARTIALLY CLEAR"
+                    else -> "PATH CLEAR"
+                }
+                
+                summary = "Scan complete. $safety. $emotion. Lighting score is $lighting."
+            }
+        } catch(e: Exception) {
+            android.util.Log.e("ScannerAnalyzer", "Gemini categorization failed: ${e.message}")
+        }
+        
+        CategorizedScanResult(
+            detectedObjects = objects.map { "${it.label.capitalize()} (${(it.confidence * 100).toInt()}%)" }.take(5),
+            personEmotion = emotion,
+            pathSafetyStatus = safety,
+            lightingScoreText = if (lighting > 60) "Good Lighting ($lighting/100)" else "Dim Lighting ($lighting/100)",
+            overallScore = lighting,
+            spokenVoiceSummary = summary
+        )
     }
 
     suspend fun detectObjects(bitmap: Bitmap, rotationDegrees: Int): List<ScanObjectResult> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
