@@ -30,6 +30,18 @@ class VoskCaptionEngine(private val context: Context?) {
         try {
             if (context == null) return@withContext false
             
+            // First check if model exists in assets
+            val assetsExist = try {
+                context.assets.list(MODEL_PATH)?.isNotEmpty() == true
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (!assetsExist) {
+                // Model not in assets, mark as not loaded
+                return@withContext false
+            }
+            
             val modelDir = File(context.filesDir, MODEL_PATH)
             
             if (!modelDir.exists()) {

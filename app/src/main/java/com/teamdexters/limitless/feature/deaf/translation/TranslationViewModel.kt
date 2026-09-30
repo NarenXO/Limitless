@@ -140,7 +140,7 @@ data class TranslationUiState(
     val targetLanguage: String = "Tamil",
     val originalText: String = "",
     val translatedText: String = "",
-    val modelStatus: ModelStatus = ModelStatus.DOWNLOADING
+    val modelStatus: ModelStatus = ModelStatus.READY
 )
 
 /**

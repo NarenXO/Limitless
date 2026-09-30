@@ -49,7 +49,11 @@ class CaptionViewModel(private val context: Context?) : ViewModel() {
         modelLoadJob = viewModelScope.launch(Dispatchers.IO) {
             val isLoaded = voskEngine?.initialize() ?: false
             
-            if (!isLoaded) {
+            if (isLoaded) {
+                _uiState.value = _uiState.value.copy(
+                    status = CaptionEngineStatus.IDLE
+                )
+            } else {
                 _uiState.value = _uiState.value.copy(
                     status = CaptionEngineStatus.MODEL_MISSING
                 )

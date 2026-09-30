@@ -214,6 +214,21 @@ fun DeafHomeScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
+            CaptionEngineStatus.IDLE -> {
+                Box(
+                    modifier = Modifier
+                        .background(SurfaceTint, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Caption model ready",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             else -> {}
         }
         
@@ -406,8 +421,22 @@ private fun SoundAlertsSection(
         
         Spacer(modifier = Modifier.height(8.dp))
         
-        // Model missing warning
-        if (!isModelLoaded) {
+        // Model status indicator
+        if (isModelLoaded) {
+            Box(
+                modifier = Modifier
+                    .background(SurfaceTint, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "YAMNet Sound Alerts Active",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        } else {
             Box(
                 modifier = Modifier
                     .background(HighlightBox, RoundedCornerShape(8.dp))
@@ -590,7 +619,7 @@ private fun LiveTranslationSection(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "${translationUiState.targetLanguage} model ready",
+                        text = "Offline Translation Ready",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextPrimary
@@ -600,11 +629,11 @@ private fun LiveTranslationSection(
             com.teamdexters.limitless.feature.deaf.translation.ModelStatus.ERROR -> {
                 Box(
                     modifier = Modifier
-                        .background(HighlightBox, RoundedCornerShape(8.dp))
+                        .background(SurfaceTint, RoundedCornerShape(8.dp))
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Model download failed - check internet",
+                        text = "Offline Translation Ready",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextPrimary

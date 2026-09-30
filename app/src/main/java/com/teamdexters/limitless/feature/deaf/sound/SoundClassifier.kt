@@ -16,7 +16,7 @@ class SoundClassifier(private val context: Context?) {
     private var isModelLoaded = false
     
     companion object {
-        private const val MODEL_PATH = "yamnet.tflite"
+        private const val MODEL_PATH = "yamnet_placeholder.tflite"
         private const val LABELS_PATH = "yamnet_label_list.txt"
     }
     
@@ -30,8 +30,11 @@ class SoundClassifier(private val context: Context?) {
             
             // Check if model file exists in assets
             val modelExists = try {
-                context.assets.open(MODEL_PATH).close()
-                true
+                val asset = context.assets.open(MODEL_PATH)
+                val size = asset.available()
+                asset.close()
+                // Model file should be larger than 1KB to be valid
+                size > 1024
             } catch (e: IOException) {
                 false
             }
