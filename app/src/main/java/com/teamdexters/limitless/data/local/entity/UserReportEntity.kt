@@ -72,6 +72,13 @@ data class UserReportEntity(
      * Higher values indicate more reliable reports.
      * Default value is 1 (initial report).
      */
+    val trustScore: Int = 1,
+
+    /**
+     * Trust score based on upvotes/confirmations from other users.
+     * Higher values indicate more reliable reports.
+     * Default value is 1 (initial report).
+     */
     val confirmationCount: Int = 1,
 
     /**

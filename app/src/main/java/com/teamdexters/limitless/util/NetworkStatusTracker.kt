@@ -96,8 +96,10 @@ class NetworkStatusTracker(
             val hasInternet = networkCapabilities.hasCapability(
                 NetworkCapabilities.NET_CAPABILITY_INTERNET
             )
+            @Suppress("DEPRECATION")
+            val isLegacyConnected = connectivityManager?.activeNetworkInfo?.isConnected == true
             Log.d(TAG, "Network capabilities changed. Has internet: $hasInternet")
-            _statusFlow.value = if (hasInternet) NetworkStatus.Online else NetworkStatus.Offline
+            _statusFlow.value = if (hasInternet || isLegacyConnected) NetworkStatus.Online else NetworkStatus.Offline
         }
 
         override fun onUnavailable() {
@@ -159,9 +161,15 @@ class NetworkStatusTracker(
      */
     private fun checkActiveNetwork(): Boolean {
         return try {
-            val activeNetwork = connectivityManager?.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            val activeNetwork = connectivityManager?.activeNetwork
+            if (activeNetwork != null) {
+                val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+                if (capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    return true
+                }
+            }
+            @Suppress("DEPRECATION")
+            connectivityManager?.activeNetworkInfo?.isConnected == true
         } catch (e: Exception) {
             Log.e(TAG, "Error checking active network: ${e.message}", e)
             false

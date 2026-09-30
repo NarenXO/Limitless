@@ -30,7 +30,6 @@ class HazelQueryHandler(
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
-        const val OFFLINE_FALLBACK_MESSAGE = "I couldn't understand that. Try again or use the app manually."
     }
 
     /**
@@ -53,17 +52,8 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
-            val isOnline = isNetworkAvailable()
-            val responseText = if (isOnline && isApiKeyPresent()) {
-                val result = geminiClient.queryGemini(rawQuery)
-                result.getOrElse { e ->
-                    Log.w(TAG, "Gemini API query failed or timed out: ${e.message}. Falling back to offline message.")
-                    OFFLINE_FALLBACK_MESSAGE
-                }
-            } else {
-                Log.i(TAG, "Device is offline or Gemini API key is missing. Using offline fallback.")
-                OFFLINE_FALLBACK_MESSAGE
-            }
+            val result = geminiClient.queryGemini(rawQuery)
+            val responseText = result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
@@ -94,9 +84,15 @@ class HazelQueryHandler(
         return try {
             val connectivityManager =
                 context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            val activeNetwork = connectivityManager?.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
-            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            val activeNetwork = connectivityManager?.activeNetwork
+            if (activeNetwork != null) {
+                val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+                if (capabilities != null && capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    return true
+                }
+            }
+            @Suppress("DEPRECATION")
+            connectivityManager?.activeNetworkInfo?.isConnected == true
         } catch (e: Exception) {
             false
         }
@@ -109,10 +105,50 @@ class HazelQueryHandler(
         return BuildConfig.GEMINI_API_KEY.trim().isNotEmpty()
     }
 
+    fun handleVisionQuery(
+        query: String,
+        scope: CoroutineScope,
+        tts: TextToSpeech?,
+        onResponseReady: (String) -> Unit
+    ) {
+        scope.launch {
+            val isOnline = isNetworkAvailable()
+            val offlineFallback = "I'm having trouble connecting right now. You can try asking me to open a specific tool like the Scanner or Community map."
+            
+            val responseText = if (isOnline && isApiKeyPresent()) {
+                val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
+                if (latestFrame != null) {
+                    val base64Image = bitmapToBase64(latestFrame)
+                    val result = geminiClient.queryGemini(query, base64Image)
+                    result.getOrElse { e ->
+                        Log.w(TAG, "Gemini Vision query failed: ${e.message}")
+                        "I had trouble analyzing the image. Please try again."
+                    }
+                } else {
+                    "My camera isn't active right now, so I can't see anything."
+                }
+            } else {
+                offlineFallback
+            }
+
+            withContext(Dispatchers.Main) {
+                onResponseReady(responseText)
+                speakResponse(tts, responseText)
+            }
+        }
+    }
+
+    private fun bitmapToBase64(bitmap: android.graphics.Bitmap): String {
+        val outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+        return android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+    }
+
     private fun speakResponse(tts: TextToSpeech?, text: String) {
         try {
+            Log.d("LIMITLESS_TRACE", "[Hazel] Speaking response aloud: $text")
             tts?.language = Locale.US
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hazel_response_${System.currentTimeMillis()}")
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAZEL_SPEECH_ID")
         } catch (e: Exception) {
             Log.e(TAG, "TextToSpeech speaking error: ${e.message}", e)
         }

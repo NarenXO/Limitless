@@ -46,7 +46,7 @@ class DefaultIntentRouter : IntentRouter {
         when {
             matchesAny(cleaned, READ_TEXT_KEYWORDS) -> return HazelIntent.BlindAssist("READ_TEXT")
             matchesAny(cleaned, DETECT_COLOR_KEYWORDS) -> return HazelIntent.BlindAssist("DETECT_COLOR")
-            matchesAny(cleaned, DESCRIBE_SCENE_KEYWORDS) -> return HazelIntent.BlindAssist("DESCRIBE_SCENE")
+            matchesAny(cleaned, DESCRIBE_SCENE_KEYWORDS) -> return HazelIntent.VisionQuery(spokenText)
             matchesAny(cleaned, SURROUNDINGS_KEYWORDS) -> return HazelIntent.BlindAssist("SURROUNDINGS")
             matchesAny(cleaned, BLIND_GENERAL_KEYWORDS) -> return HazelIntent.NavigateTo(Screen.BlindHome.route, "Blind Assist")
         }
@@ -142,7 +142,7 @@ class DefaultIntentRouter : IntentRouter {
 
         private val DESCRIBE_SCENE_KEYWORDS = arrayOf(
             "describe scene", "describe picture", "what is this", "what is in front of me",
-            "describe image", "describe"
+            "describe image", "describe", "what am i looking at", "read this", "what's this"
         )
 
         private val SURROUNDINGS_KEYWORDS = arrayOf(

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MicOff
@@ -32,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,16 +53,17 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teamdexters.limitless.assistant.DefaultIntentRouter
-import com.teamdexters.limitless.assistant.DefaultWakeWordListener
 import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
 import com.teamdexters.limitless.data.local.LimitlessDatabase
+import com.teamdexters.limitless.assistant.openwakeword.OpenWakeWordManager
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.components.NetworkStatusBadge
-import com.teamdexters.limitless.ui.components.SharedToolsBar
+import com.teamdexters.limitless.ui.components.DemoBottomNavBar
+import com.teamdexters.limitless.ui.components.DemoTopAppBar
 import com.teamdexters.limitless.ui.navigation.LimitlessNavHost
 import com.teamdexters.limitless.ui.navigation.Screen
 import com.teamdexters.limitless.ui.theme.HighlightBox
@@ -68,8 +71,14 @@ import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     /**
@@ -84,6 +93,7 @@ class MainActivity : ComponentActivity() {
      */
     private val micPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            android.util.Log.d("LIMITLESS_TRACE", "RECORD_AUDIO permission result: micGranted: $isGranted")
             micGranted.value = isGranted
         }
 
@@ -97,6 +107,7 @@ class MainActivity : ComponentActivity() {
 
         // Request on cold start if not yet granted
         if (!micGranted.value) {
+            android.util.Log.d("LIMITLESS_TRACE", "Requesting RECORD_AUDIO permission on cold start")
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
 
@@ -155,6 +166,9 @@ fun HazelAssistantWrapper(
         }
     }
     val networkStatus by networkStatusTracker.statusFlow.collectAsState()
+    LaunchedEffect(networkStatus) {
+        android.util.Log.d("LIMITLESS_TRACE", "Network status changed: ${if(networkStatus is com.teamdexters.limitless.util.NetworkStatus.Online) "ONLINE" else "OFFLINE"}")
+    }
 
     // Hazel query handler with network status tracker integration
     val queryHandler = remember(networkStatusTracker) {
@@ -182,27 +196,41 @@ fun HazelAssistantWrapper(
 
     // Hazel state management
     var isHazelListening by remember { mutableStateOf(false) }
-    var transcribedText by remember { mutableStateOf("") }
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
 
-    // Initialize wake-word detection pipeline (only when mic is granted)
-    DisposableEffect(context, micGranted) {
-        if (!micGranted) return@DisposableEffect onDispose {}
-        val wakeWordListener = DefaultWakeWordListener(context)
-        wakeWordListener.startListening {
-            isHazelListening = true
-        }
-        onDispose {
-            wakeWordListener.stopListening()
+    // openWakeWord background engine
+    val openWakeWordManager = remember(context) {
+        OpenWakeWordManager(
+            context = context,
+            onWakeWordDetected = {
+                coroutineScope.launch(Dispatchers.Main) {
+                    delay(300L) // Wait 300ms for audio HAL release
+                    isHazelListening = true
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(currentRoute, isHazelListening) {
+        if (currentRoute in personaHomeRoutes && !isHazelListening) {
+            delay(500L)
+            openWakeWordManager.resume()
+        } else {
+            openWakeWordManager.pause()
         }
     }
 
+    DisposableEffect(openWakeWordManager) {
+        onDispose { openWakeWordManager.destroy() }
+    }
+    
     // Register BroadcastReceiver for accessibility service action
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == HazelAccessibilityService.ACTION_OPEN_HAZEL) {
+                    android.util.Log.d("LIMITLESS_TRACE", "Physical Volume shortcut triggered (ACTION_OPEN_HAZEL)")
                     isHazelListening = true
                 }
             }
@@ -220,16 +248,28 @@ fun HazelAssistantWrapper(
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            bottomBar = {
+            topBar = {
                 if (showToolsBar) {
-                    SharedToolsBar(
+                    DemoTopAppBar(
                         currentRoute = currentRoute,
                         onNavigate = { route ->
                             if (currentRoute != route) {
                                 navController.navigate(route) { launchSingleTop = true }
                             }
                         },
-                        onBackClick = { navController.popBackStack() }
+                        modifier = Modifier.statusBarsPadding().padding(top = 12.dp)
+                    )
+                }
+            },
+            bottomBar = {
+                if (showToolsBar) {
+                    DemoBottomNavBar(
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (currentRoute != route) {
+                                navController.navigate(route) { launchSingleTop = true }
+                            }
+                        }
                     )
                 }
             }
@@ -269,8 +309,8 @@ fun HazelAssistantWrapper(
                 ) {
                     HazelFloatingMicButton(
                         onClick = {
+                            android.util.Log.d("LIMITLESS_TRACE", "Hazel floating mic FAB tapped")
                             isHazelListening = true
-                            transcribedText = ""
                         }
                     )
                 }
@@ -286,11 +326,10 @@ fun HazelAssistantWrapper(
                 // ── Hazel listening overlay ──────────────────────────────────
                 HazelListeningOverlay(
                     isVisible = isHazelListening,
-                    transcribedText = transcribedText,
                     onDismiss = {
                         isHazelListening = false
-                        transcribedText = ""
                     },
+                    intentRouter = intentRouter,
                     onIntentResult = { intent ->
                         handleHazelIntent(
                             intent = intent,
@@ -302,13 +341,9 @@ fun HazelAssistantWrapper(
                                 responseBannerText = text
                                 isBannerVisible = true
                             },
-                            onHandled = {
-                                isHazelListening = false
-                                transcribedText = ""
-                            }
+                            onHandled = {}
                         )
-                    },
-                    intentRouter = intentRouter
+                    }
                 )
             }
         }
@@ -372,20 +407,60 @@ private fun handleHazelIntent(
     onShowBanner: (String) -> Unit,
     onHandled: () -> Unit
 ) {
+    fun speak(text: String) {
+        android.util.Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
+        tts?.language = java.util.Locale.US
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "intent_feedback")
+    }
+
+    val intentName = intent.javaClass.simpleName
+    val targetRoute = when (intent) {
+        is HazelIntent.NavigateTo -> intent.route
+        is HazelIntent.OpenScanner -> Screen.Scanner.route
+        is HazelIntent.OpenCommunity -> Screen.Community.route
+        is HazelIntent.OpenPhraseCards -> Screen.SpeechHome.route
+        is HazelIntent.OpenNavigation -> Screen.MobilityHome.route
+        is HazelIntent.BlindAssist -> Screen.BlindHome.route
+        is HazelIntent.DeafAssist -> Screen.DeafHome.route
+        is HazelIntent.SpeechAssist -> Screen.SpeechHome.route
+        is HazelIntent.MobilityAssist -> Screen.MobilityHome.route
+        else -> "dynamic_query"
+    }
+    android.util.Log.d("LIMITLESS_TRACE", "IntentRouter classified: $intentName -> Target Route: $targetRoute")
+
     when (intent) {
-        is HazelIntent.NavigateTo    -> { navController.navigate(intent.route); onHandled() }
-        is HazelIntent.OpenScanner   -> { navController.navigate(Screen.Scanner.route); onHandled() }
-        is HazelIntent.OpenCommunity -> { navController.navigate(Screen.Community.route); onHandled() }
-        is HazelIntent.OpenPhraseCards -> { navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.OpenNavigation  -> { navController.navigate(Screen.MobilityHome.route); onHandled() }
-        is HazelIntent.BlindAssist   -> { navController.navigate(Screen.BlindHome.route); onHandled() }
-        is HazelIntent.DeafAssist    -> { navController.navigate(Screen.DeafHome.route); onHandled() }
-        is HazelIntent.SpeechAssist  -> { navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.MobilityAssist-> { navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.NavigateTo    -> { 
+            when (intent.route) {
+                Screen.BlindHome.route -> speak("Navigating to Blind and Low Vision mode for you.")
+                Screen.DeafHome.route -> speak("Navigating to Deaf and Hard of Hearing mode for you.")
+                Screen.SpeechHome.route -> speak("Navigating to Speech Impaired mode for you.")
+                Screen.MobilityHome.route -> speak("Navigating to Mobility and Wheelchair mode for you.")
+                Screen.PersonaSelect.route -> speak("Navigating to the main menu for you.")
+            }
+            navController.navigate(intent.route)
+            onHandled()
+        }
+        is HazelIntent.OpenScanner   -> { speak("Opening Accessibility Scanner for you."); navController.navigate(Screen.Scanner.route); onHandled() }
+        is HazelIntent.OpenCommunity -> { speak("Opening Community Reports for you."); navController.navigate(Screen.Community.route); onHandled() }
+        is HazelIntent.OpenPhraseCards -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.OpenNavigation  -> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.BlindAssist   -> { speak("Navigating to Blind and Low Vision mode for you."); navController.navigate(Screen.BlindHome.route); onHandled() }
+        is HazelIntent.DeafAssist    -> { speak("Navigating to Deaf and Hard of Hearing mode for you."); navController.navigate(Screen.DeafHome.route); onHandled() }
+        is HazelIntent.SpeechAssist  -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
+        is HazelIntent.MobilityAssist-> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
         is HazelIntent.GeneralQuery  -> {
             onHandled()
             queryHandler.handleGeneralQuery(
                 rawQuery = intent.rawQuery,
+                scope = scope,
+                tts = tts,
+                onResponseReady = onShowBanner
+            )
+        }
+        is HazelIntent.VisionQuery  -> {
+            onHandled()
+            queryHandler.handleVisionQuery(
+                query = intent.query,
                 scope = scope,
                 tts = tts,
                 onResponseReady = onShowBanner

@@ -22,6 +22,10 @@ import com.teamdexters.limitless.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import com.teamdexters.limitless.routing.model.Route
+import com.teamdexters.limitless.routing.model.RouteStep
+import com.teamdexters.limitless.routing.model.TurnType
+
 /**
  * Full-screen navigation overlay for turn-by-turn directions.
  *
@@ -35,7 +39,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun NavigationOverlay(
-    route: List<MockRouteStep>,
+    route: Route,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -65,8 +69,10 @@ fun NavigationOverlay(
         mutableStateOf<kotlinx.coroutines.Job?>(null)
     }
 
+    val routeSteps = route.steps
+
     // Prevent an empty route from causing an IndexOutOfBoundsException.
-    if (route.isEmpty()) {
+    if (routeSteps.isEmpty()) {
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -100,10 +106,10 @@ fun NavigationOverlay(
         return
     }
 
-    val currentStep = route[currentStepIndex]
+    val currentStep = routeSteps[currentStepIndex]
 
     val isLastStep =
-        currentStepIndex == route.size - 1
+        currentStepIndex == routeSteps.size - 1
 
     /**
      * Initialize Text-to-Speech.
@@ -234,6 +240,16 @@ fun NavigationOverlay(
                         FontWeight.Bold
                 )
 
+                if (route.fallbackWarning != null) {
+                    Text(
+                        text = route.fallbackWarning,
+                        color = androidx.compose.ui.graphics.Color.Yellow,
+                        modifier = Modifier.padding(start = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Button(
                     onClick = {
                         // Clean exit: cancel auto-advance, stop TTS, stop vibration
@@ -273,7 +289,7 @@ fun NavigationOverlay(
                     currentStepIndex + 1,
 
                 totalSteps =
-                    route.size,
+                    routeSteps.size,
 
                 onStepSpoken = {
                     isSpeaking = false
@@ -374,7 +390,7 @@ fun NavigationOverlay(
                  */
                 Text(
                     text =
-                        "Step ${currentStepIndex + 1} of ${route.size}",
+                        "Step ${currentStepIndex + 1} of ${routeSteps.size}",
 
                     style =
                         MaterialTheme.typography.bodyMedium,
@@ -397,7 +413,7 @@ fun NavigationOverlay(
  */
 @Composable
 private fun NavigationStepCard(
-    step: MockRouteStep,
+    step: RouteStep,
     stepNumber: Int,
     totalSteps: Int,
     onStepSpoken: () -> Unit
@@ -536,13 +552,13 @@ private fun TurnTypeIndicator(
 
             when (turnType) {
 
-                TurnType.LEFT ->
+                TurnType.LEFT, TurnType.SLIGHT_LEFT ->
                     drawLeftArrow(
                         strokeWidth,
                         arrowColor
                     )
 
-                TurnType.RIGHT ->
+                TurnType.RIGHT, TurnType.SLIGHT_RIGHT ->
                     drawRightArrow(
                         strokeWidth,
                         arrowColor

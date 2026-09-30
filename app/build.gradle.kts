@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -15,7 +16,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
+        
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -23,6 +24,9 @@ android {
 
         val geminiKey = project.findProperty("GEMINI_API_KEY") as? String ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     buildTypes {
@@ -62,6 +66,13 @@ android {
     androidResources {
         noCompress += "tflite"
     }
+    
+    packaging {
+        jniLibs {
+            // Skip llvm-strip (NDK binary missing on this machine)
+            keepDebugSymbols += "**/*.so"
+        }
+    }
 }
 
 dependencies {
@@ -98,6 +109,13 @@ dependencies {
     // Google ML Kit Text Recognition
     implementation("com.google.mlkit:text-recognition:16.0.0")
     
+    // Google ML Kit Image Labeling for Object Detection
+    implementation("com.google.mlkit:image-labeling:17.0.7")
+    
+    // Google ML Kit Barcode Scanning
+    // TODO(Naren): confirm ML Kit Barcode dependency is acceptable — same SDK family as existing ML Kit OCR.
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
     // Google ML Kit Translation
     implementation("com.google.mlkit:translate:17.0.1")
     
@@ -113,14 +131,29 @@ dependencies {
     // Vosk-android (offline STT)
     implementation("com.alphacephei:vosk-android:0.3.32")
     
-    // TensorFlow Lite
+    // TensorFlow Lite & ONNX Runtime
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
     implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    
+    // Hilt Dependency Injection
+    implementation("com.google.dagger:hilt-android:2.48")
+    ksp("com.google.dagger:hilt-compiler:2.48")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    
+    // Coil Image Loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    
+    // Accompanist Permissions
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     
     // Testing
     testImplementation("junit:junit:4.13.2")
