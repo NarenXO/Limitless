@@ -176,12 +176,19 @@ fun CommunityReportScreen(
                 .padding(innerPadding)
         ) {
             val syncStatus by viewModel.syncStatus.collectAsState()
+            val analyticsData by viewModel.analyticsData.collectAsState()
             
             // Profile Card
             UserProfileCard(
                 syncStatus = syncStatus,
                 onSyncClick = { viewModel.triggerCloudSync() },
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
+
+            // Analytics Dashboard
+            CommunityAnalyticsCard(
+                analyticsData = analyticsData,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             
             // View Toggle

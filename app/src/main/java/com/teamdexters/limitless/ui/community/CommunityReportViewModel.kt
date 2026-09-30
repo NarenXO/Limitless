@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.teamdexters.limitless.data.local.dao.UserReportDao
+import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
 import com.teamdexters.limitless.data.local.entity.UserReportEntity
 
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -36,12 +37,27 @@ enum class SortOrder(val label: String) {
 
 enum class SyncStatus { IDLE, SYNCING, SYNCED, OFFLINE, ERROR }
 
+data class CommunityAnalyticsData(
+    val totalReports: Int = 0,
+    val averageScore: Int = 0,
+    val verifiedCount: Int = 0,
+    val rampPercentage: Float = 0f,
+    val elevatorPercentage: Float = 0f,
+    val restroomPercentage: Float = 0f,
+    val generalPercentage: Float = 0f,
+    val topLocations: List<UserReportEntity> = emptyList()
+)
+
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
     private val userReportDao: UserReportDao,
+    private val accessibilityScoreDao: AccessibilityScoreDao,
     private val syncManager: com.teamdexters.limitless.data.sync.SupabaseSyncManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val _analyticsData = MutableStateFlow(CommunityAnalyticsData())
+    val analyticsData: StateFlow<CommunityAnalyticsData> = _analyticsData
 
     private val _syncStatus = MutableStateFlow(SyncStatus.IDLE)
     val syncStatus: StateFlow<SyncStatus> = _syncStatus
@@ -50,6 +66,52 @@ class CommunityReportViewModel @Inject constructor(
         viewModelScope.launch {
             DatabaseSeeder.seedIfEmpty(userReportDao, context)
             triggerCloudSync()
+        }
+        viewModelScope.launch {
+            calculateAnalytics()
+        }
+    }
+
+    private suspend fun calculateAnalytics() {
+        combine(
+            userReportDao.getAllReports(),
+            accessibilityScoreDao.getAllScores()
+        ) { reports, scores ->
+            val total = reports.size
+            val avgScore = if (scores.isNotEmpty()) scores.map { it.overallScore }.average().toInt() else 0
+            val verified = reports.count { it.trustScore > 80 }
+            
+            var ramp = 0
+            var lift = 0
+            var washroom = 0
+            var general = 0
+            
+            reports.forEach { r ->
+                when {
+                    r.hasRamp -> ramp++
+                    r.hasElevator -> lift++
+                    r.hasAccessibleRestroom -> washroom++
+                    else -> general++
+                }
+            }
+            
+            val totalCategories = (ramp + lift + washroom + general).coerceAtLeast(1).toFloat()
+            val topLocations = reports.filter { it.trustScore > 80 }
+                .sortedByDescending { it.trustScore }
+                .take(3)
+                
+            CommunityAnalyticsData(
+                totalReports = total,
+                averageScore = avgScore,
+                verifiedCount = verified,
+                rampPercentage = ramp / totalCategories,
+                elevatorPercentage = lift / totalCategories,
+                restroomPercentage = washroom / totalCategories,
+                generalPercentage = general / totalCategories,
+                topLocations = topLocations
+            )
+        }.collect { data ->
+            _analyticsData.value = data
         }
     }
 
