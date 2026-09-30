@@ -144,9 +144,9 @@ class ScannerAnalyzer(private val context: Context) {
             2. Detect any person and their emotion/state.
             Return a JSON object exactly like this:
             {
-              "objects": ["Chair", "Desk"],
+              "objects": ["Laptop", "Desk"],
               "emotion": "Friendly & Smiling 😊",
-              "summary": "Objects found: Chair, Desk. Person is friendly & smiling."
+              "summary": "Objects found: Laptop, Desk. Person is friendly & smiling."
             }
         """.trimIndent()
         
@@ -154,32 +154,55 @@ class ScannerAnalyzer(private val context: Context) {
         bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
         val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
         
-        var emotion = "No Person Detected 👤"
-        var summary = "Scan complete. Objects detected in scene: ${objects.joinToString { it.label }}. No person detected. Lighting is ${if (lighting > 60) "good" else "dim"}."
+        var emotion = "No Person in Scene 🚫"
+        var cleanPersonState = "No person detected in scene"
+        var summary = "Scan complete. Objects detected: none. Person state: $cleanPersonState. Lighting condition is ${if (lighting > 60) "good" else "dim"}."
         
         try {
             val response = geminiClient.queryGemini(prompt, base64Image)
             if (response.isSuccess) {
                 val txt = response.getOrNull() ?: ""
                 if (txt.contains("No Person", ignoreCase = true)) {
-                    emotion = "No Person Detected 🚫"
-                } else if (txt.contains("Friendly", ignoreCase = true)) {
+                    emotion = "No Person in Scene 🚫"
+                    cleanPersonState = "No person detected in scene"
+                } else if (txt.contains("Friendly", ignoreCase = true) || txt.contains("Smiling", ignoreCase = true)) {
                     emotion = "Friendly & Smiling 😊"
-                } else if (txt.contains("Calm", ignoreCase = true)) {
-                    emotion = "Calm & Focused 😐"
+                    cleanPersonState = "One person detected, appearing friendly and smiling"
+                } else if (txt.contains("Calm", ignoreCase = true) || txt.contains("Neutral", ignoreCase = true)) {
+                    emotion = "Calm & Neutral 😐"
+                    cleanPersonState = "One person detected, appearing calm and neutral"
+                } else if (txt.contains("Focused", ignoreCase = true) || txt.contains("Attentive", ignoreCase = true)) {
+                    emotion = "Focused & Attentive 🧐"
+                    cleanPersonState = "One person detected, appearing focused and attentive"
                 } else {
                     emotion = "1 Person in Frame 👤"
+                    cleanPersonState = "One person detected"
                 }
-                
-                val objectsStr = objects.take(5).joinToString(", ") { it.label }
-                summary = "Scan complete. Objects detected in scene: $objectsStr. $emotion. Lighting is ${if (lighting > 60) "good" else "dim"}."
             }
         } catch(e: Exception) {
             android.util.Log.e("ScannerAnalyzer", "Gemini categorization failed: ${e.message}")
         }
         
+        val mappedObjects = objects.map { obj ->
+            val label = obj.label.lowercase()
+            when {
+                label.contains("laptop") || label.contains("computer") || label.contains("pc") || label.contains("keyboard") || label.contains("monitor") || label.contains("screen") -> "Laptop / PC 💻"
+                label.contains("guitar") || label.contains("piano") || label.contains("violin") || label.contains("flute") || label.contains("musical instrument") || label.contains("drum") -> "Musical Instrument 🎸"
+                label.contains("desk") || label.contains("table") || label.contains("chair") || label.contains("bench") || label.contains("shelf") -> "Desk / Chair 🪑"
+                label.contains("ramp") || label.contains("wheelchair ramp") -> "Wheelchair Ramp ♿"
+                label.contains("door") || label.contains("doorway") -> "Wide Doorway 🚪"
+                label.contains("stairs") -> "Stairs 🪜"
+                else -> "${obj.label.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() }} 📦"
+            }
+        }.distinct().take(5)
+        
+        val cleanObjectsList = mappedObjects.joinToString(", ") { it.dropLast(2) } // Remove emoji and space for TTS
+        val objectsVoice = if (cleanObjectsList.isNotEmpty()) cleanObjectsList else "None"
+        
+        summary = "Scan complete. Objects detected: $objectsVoice. Person state: $cleanPersonState. Lighting condition is ${if (lighting > 60) "good" else "dim"}."
+        
         CategorizedScanResult(
-            detectedObjects = objects.map { "${it.label.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() }} (${(it.confidence * 100).toInt()}%)" }.take(5),
+            detectedObjects = mappedObjects,
             personEmotion = emotion,
             lightingScoreText = if (lighting > 60) "Good Lighting ($lighting/100) ☀️" else "Dim Lighting ($lighting/100) 🌙",
             spokenVoiceSummary = summary

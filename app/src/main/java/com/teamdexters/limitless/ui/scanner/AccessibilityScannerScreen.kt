@@ -287,7 +287,7 @@ fun AccessibilityScannerScreen(
                             val emotionText = result.personEmotion ?: "No Person Detected 👤"
                             val lightingText = result.lightingScoreText
                             
-                            val synthesizedText = "📦 Objects Found: $objectsText\n$emotionText\n💡 Lighting: $lightingText"
+                            val synthesizedText = "📦 Objects: $objectsText\n👤 Person: $emotionText\n💡 Lighting: $lightingText"
                             Text(
                                 text = synthesizedText,
                                 color = Color(0xFF1F1F1F),
@@ -299,17 +299,17 @@ fun AccessibilityScannerScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             // Detailed Categorized Rows
-                            Text("📦 Detected Objects", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text("📦 Detected Objects & Devices", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
                             Text(objectsText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
-                            Text("👤 Person & Emotion", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text("👤 Person & Emotion State", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
                             Text(emotionText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
-                            Text("💡 Lighting Condition", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                            Text("💡 Lighting & Environment", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
                             Text(lightingText, color = Color(0xFF1F1F1F), fontSize = 16.sp)
                             
                             Spacer(modifier = Modifier.height(24.dp))
