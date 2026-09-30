@@ -70,6 +70,7 @@ import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
+import com.teamdexters.limitless.util.PowerTriggerBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -96,6 +97,12 @@ class MainActivity : ComponentActivity() {
             android.util.Log.d("LIMITLESS_TRACE", "RECORD_AUDIO permission result: micGranted: $isGranted")
             micGranted.value = isGranted
         }
+    private var isVolUpPressed = false
+    private var isVolDownPressed = false
+    private val dualPressTimestamps = mutableListOf<Long>()
+    private val DUAL_PRESS_WINDOW_MILLIS = 3000L
+    private val TARGET_DUAL_PRESSES = 3
+    private var lastDualPressTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,6 +135,50 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+    
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val action = event.action
+        val keyCode = event.keyCode
+
+        when (keyCode) {
+            android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
+                isVolUpPressed = (action == android.view.KeyEvent.ACTION_DOWN)
+            }
+            android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                isVolDownPressed = (action == android.view.KeyEvent.ACTION_DOWN)
+            }
+        }
+
+        if (isVolUpPressed && isVolDownPressed) {
+            val now = System.currentTimeMillis()
+            // debounce simultaneous presses
+            if (now - lastDualPressTime > 300) {
+                lastDualPressTime = now
+                dualPressTimestamps.add(now)
+                dualPressTimestamps.removeAll { now - it > DUAL_PRESS_WINDOW_MILLIS }
+
+                if (dualPressTimestamps.size >= TARGET_DUAL_PRESSES) {
+                    dualPressTimestamps.clear()
+                    android.util.Log.d("LIMITLESS_TRACE", "MainActivity: 3x Dual Volume presses detected!")
+
+                    // Vibrate 200ms
+                    val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                        vm.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                    }
+                    vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+
+                    com.teamdexters.limitless.util.PowerTriggerBus.emitTrigger()
+                }
+            }
+            return true // Consume event
+        }
+
+        return super.dispatchKeyEvent(event)
     }
 }
 

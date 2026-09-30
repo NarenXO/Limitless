@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -138,6 +139,47 @@ fun DemoTopAppBar(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Community",
+                    style = LimitlessTypography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // 3. Map Rooms Action Button
+        val isMappingActive = currentRoute == "mapping-home"
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .background(
+                    color = if (isMappingActive) HighlightBox else SurfaceTint,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = LimitlessPrimary,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .clickable { onNavigate("mapping-home") }
+                .semantics { contentDescription = "Map Rooms" }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Map,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Map",
                     style = LimitlessTypography.labelLarge,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary

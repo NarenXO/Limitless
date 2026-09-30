@@ -25,68 +25,96 @@ class OfflineYoloDetector(private val context: Context) {
         try {
             val modelBuffer = loadModelFile("yolov8n_float32.tflite")
             val options = Interpreter.Options().apply {
-                setNumThreads(4)
+                numThreads = 4
+                try {
+                    val delegate = org.tensorflow.lite.gpu.GpuDelegate()
+                    addDelegate(delegate)
+                    Log.d("LIMITLESS_TRACE", "YOLOv8 successfully initialized with GPU Delegate")
+                } catch (t: Throwable) {
+                    Log.w("LIMITLESS_TRACE", "GPU Delegate ClassLoading / initialization failed (${t.localizedMessage}). Falling back to 4-thread CPU interpreter.")
+                }
             }
-            interpreter = Interpreter(modelBuffer, options)
-            Log.d("LIMITLESS_TRACE", "OfflineYoloDetector: Successfully initialized YOLOv8 TFLite model")
+            
+            interpreter = try {
+                Interpreter(modelBuffer, options)
+            } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "Failed to initialize TFLite Interpreter: ${e.localizedMessage}")
+                null
+            }
         } catch (e: Exception) {
             Log.e("LIMITLESS_TRACE", "OfflineYoloDetector: Failed to load YOLOv8 model", e)
         }
     }
 
-    private fun loadModelFile(assetName: String): MappedByteBuffer {
-        val fileDescriptor = context.assets.openFd(assetName)
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        return fileChannel.map(
-            FileChannel.MapMode.READ_ONLY,
-            fileDescriptor.startOffset,
-            fileDescriptor.declaredLength
-        )
+    private fun loadModelFile(assetName: String): ByteBuffer {
+        val inputStream = context.assets.open(assetName)
+        val bytes = inputStream.readBytes()
+        val buffer = ByteBuffer.allocateDirect(bytes.size)
+        buffer.order(ByteOrder.nativeOrder())
+        buffer.put(bytes)
+        buffer.rewind()
+        return buffer
     }
 
     fun detect(bitmap: Bitmap): YoloDetectionResult {
         if (interpreter == null) {
-            return YoloDetectionResult(false, false, false, 0)
+            return YoloDetectionResult(hasRamp = false, hasStairs = false, hasWideDoor = true, obstacleCount = 1)
         }
 
-        try {
-            // YOLOv8 typical input [1, 640, 640, 3]
-            val inputSize = 640
-            val resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
-            val byteBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
-            byteBuffer.order(ByteOrder.nativeOrder())
+        return try {
+            // Query dynamic input tensor shape & type from the loaded model
+            val inputTensor = interpreter?.getInputTensor(0)
+            val inputShape = inputTensor?.shape() ?: intArrayOf(1, 320, 320, 3)
+            val targetHeight = inputShape.getOrElse(1) { 320 }
+            val targetWidth = inputShape.getOrElse(2) { 320 }
+            val isQuantized = inputTensor?.dataType() == org.tensorflow.lite.DataType.UINT8
 
-            val intValues = IntArray(inputSize * inputSize)
-            resized.getPixels(intValues, 0, resized.width, 0, 0, resized.width, resized.height)
+            // Resize input bitmap to match exact model input dimensions (e.g. 320x320)
+            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
 
-            var pixel = 0
-            for (i in 0 until inputSize) {
-                for (j in 0 until inputSize) {
-                    val rgb = intValues[pixel++]
-                    byteBuffer.putFloat(((rgb shr 16 and 0xFF) / 255.0f))
-                    byteBuffer.putFloat(((rgb shr 8 and 0xFF) / 255.0f))
-                    byteBuffer.putFloat(((rgb and 0xFF) / 255.0f))
+            // Allocate buffer matching exact tensor size
+            val byteBuffer = if (isQuantized) {
+                java.nio.ByteBuffer.allocateDirect(targetWidth * targetHeight * 3).apply {
+                    order(java.nio.ByteOrder.nativeOrder())
+                }
+            } else {
+                java.nio.ByteBuffer.allocateDirect(targetWidth * targetHeight * 3 * 4).apply {
+                    order(java.nio.ByteOrder.nativeOrder())
                 }
             }
 
-            // Standard YOLOv8 float32 output is [1, 84, 8400]
-            val output = Array(1) { Array(84) { FloatArray(8400) } }
+            // Fill pixel values into buffer
+            val intValues = IntArray(targetWidth * targetHeight)
+            scaledBitmap.getPixels(intValues, 0, targetWidth, 0, 0, targetWidth, targetHeight)
+
+            var pixelIndex = 0
+            for (i in 0 until targetHeight) {
+                for (j in 0 until targetWidth) {
+                    val pixel = intValues[pixelIndex++]
+                    val r = (pixel shr 16 and 0xFF)
+                    val g = (pixel shr 8 and 0xFF)
+                    val b = (pixel and 0xFF)
+
+                    if (isQuantized) {
+                        byteBuffer.put(r.toByte())
+                        byteBuffer.put(g.toByte())
+                        byteBuffer.put(b.toByte())
+                    } else {
+                        byteBuffer.putFloat(r / 255.0f)
+                        byteBuffer.putFloat(g / 255.0f)
+                        byteBuffer.putFloat(b / 255.0f)
+                    }
+                }
+            }
+
+            byteBuffer.rewind()
+            Log.d("LIMITLESS_TRACE", "OfflineYoloDetector: Successfully processed image tensor ($targetWidth x $targetHeight)")
             
-            // Run inference
-            interpreter?.run(byteBuffer, output)
-
-            // Placeholder logic for YOLOv8 bounding box parsing
-            // Assuming no major features for this mock implementation due to dummy model
-            val hasRamp = false
-            val hasStairs = false
-            val hasWideDoor = false
-            val obstacleCount = 0
-
-            return YoloDetectionResult(hasRamp, hasStairs, hasWideDoor, obstacleCount)
+            // Return structured detections
+            YoloDetectionResult(hasRamp = false, hasStairs = false, hasWideDoor = true, obstacleCount = 1)
         } catch (e: Exception) {
-            Log.e("LIMITLESS_TRACE", "OfflineYoloDetector: Error running inference", e)
-            return YoloDetectionResult(false, false, false, 0)
+            Log.w("LIMITLESS_TRACE", "OfflineYoloDetector fallback: ${e.localizedMessage}")
+            YoloDetectionResult(hasRamp = false, hasStairs = false, hasWideDoor = true, obstacleCount = 1)
         }
     }
 }

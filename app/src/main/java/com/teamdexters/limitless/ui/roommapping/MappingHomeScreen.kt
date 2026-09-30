@@ -35,6 +35,24 @@ fun MappingHomeScreen(
     val roomCount by (mappedRoomDao?.getRoomCount() ?: kotlinx.coroutines.flow.flowOf(0)).collectAsState(initial = 0)
     val connectionCount by (roomConnectionDao?.getConnectionCount() ?: kotlinx.coroutines.flow.flowOf(0)).collectAsState(initial = 0)
     val rooms by (mappedRoomDao?.getAllRooms() ?: kotlinx.coroutines.flow.flowOf(emptyList())).collectAsState(initial = emptyList())
+    
+    // Seed initial sample room in DB if empty
+    LaunchedEffect(roomCount) {
+        if (roomCount == 0 && rooms.isEmpty() && mappedRoomDao != null) {
+            val sampleRoom = com.teamdexters.limitless.data.local.entity.MappedRoomEntity(
+                id = "LIMITLESS_ROOM_KCG_101",
+                roomName = "KCG Main Block Hallway",
+                hasRamp = true,
+                hasStairs = false,
+                hasWideDoor = true,
+                hasObstacles = false,
+                obstacleCount = 0,
+                notes = "Sample seeded room",
+                timestamp = System.currentTimeMillis()
+            )
+            mappedRoomDao.insertRoom(sampleRoom)
+        }
+    }
 
     Column(
         modifier = Modifier

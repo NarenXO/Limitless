@@ -74,7 +74,16 @@ fun RoomAnalysisScreen(
     if (isAnalyzing) {
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F1EE)), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = Color(0xFFF791A9))
+                // Safe Circular Progress Indicator
+                androidx.compose.foundation.Canvas(modifier = Modifier.size(36.dp)) {
+                    drawArc(
+                        color = Color(0xFFF791A9),
+                        startAngle = 0f,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx())
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Analyzing Room with AI...", color = Color(0xFF1F1F1F))
             }
