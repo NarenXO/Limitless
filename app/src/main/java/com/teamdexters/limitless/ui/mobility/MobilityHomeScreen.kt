@@ -131,7 +131,7 @@ fun MobilityHomeScreenContent(
         if (isSeeding) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    LinearProgressIndicator(color = Color(0xFFF791A9))
+                    Text("Seeding mobility database...", color = Color(0xFFF791A9), fontWeight = FontWeight.Bold)
                 }
             }
         } else {
