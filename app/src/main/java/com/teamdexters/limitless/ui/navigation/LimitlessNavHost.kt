@@ -14,6 +14,7 @@ import com.teamdexters.limitless.ui.screens.DeafHomeScreen
 import com.teamdexters.limitless.ui.scanner.LocationDetailScreen
 import com.teamdexters.limitless.ui.screens.ScannerScreen
 import com.teamdexters.limitless.ui.speech.SpeechHomeScreen
+import com.teamdexters.limitless.ui.speech.SpeechComposerScreen
 
 /**
  * Navigation host for the Limitless application.
@@ -58,7 +59,16 @@ fun LimitlessNavHost(
         
         // Speech Home Screen
         composable(Screen.SpeechHome.route) {
-            SpeechHomeScreen(onBack = navigateBackToPersonaSelect)
+            SpeechHomeScreen(
+                onBack = navigateBackToPersonaSelect,
+                onNavigateToComposer = { navController.navigate(Screen.SpeechComposer.route) }
+            )
+        }
+        
+        composable(Screen.SpeechComposer.route) {
+            SpeechComposerScreen(
+                onBack = { navController.popBackStack() }
+            )
         }
         
         // Mobility Home Screen
