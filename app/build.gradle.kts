@@ -113,6 +113,9 @@ dependencies {
     // Google ML Kit Image Labeling for Object Detection
     implementation("com.google.mlkit:image-labeling:17.0.7")
     
+    // Google ML Kit Face Detection
+    implementation("com.google.mlkit:face-detection:16.1.6")
+    
     // Google ML Kit Barcode Scanning
     // TODO(Naren): confirm ML Kit Barcode dependency is acceptable — same SDK family as existing ML Kit OCR.
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
