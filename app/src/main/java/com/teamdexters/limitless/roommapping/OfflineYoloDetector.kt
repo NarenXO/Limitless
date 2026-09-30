@@ -46,15 +46,14 @@ class OfflineYoloDetector(private val context: Context) {
         }
     }
 
-    private fun loadModelFile(assetName: String): MappedByteBuffer {
-        val fileDescriptor = context.assets.openFd(assetName)
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        return fileChannel.map(
-            FileChannel.MapMode.READ_ONLY,
-            fileDescriptor.startOffset,
-            fileDescriptor.declaredLength
-        )
+    private fun loadModelFile(assetName: String): ByteBuffer {
+        val inputStream = context.assets.open(assetName)
+        val bytes = inputStream.readBytes()
+        val buffer = ByteBuffer.allocateDirect(bytes.size)
+        buffer.order(ByteOrder.nativeOrder())
+        buffer.put(bytes)
+        buffer.rewind()
+        return buffer
     }
 
     fun detect(bitmap: Bitmap): YoloDetectionResult {
