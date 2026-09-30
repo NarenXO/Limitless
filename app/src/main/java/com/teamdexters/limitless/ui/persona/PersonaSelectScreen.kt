@@ -1,11 +1,13 @@
 package com.teamdexters.limitless.ui.persona
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -43,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,29 +102,67 @@ fun PersonaSelectScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+    val prefs = remember { 
+        context.getSharedPreferences("limitless_user_session", Context.MODE_PRIVATE) 
+    }
+
+    // Get current app version code
+    val packageInfo = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: Exception) { null }
+    }
+    val currentVersion = packageInfo?.let { 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            it.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            it.versionCode.toLong()
+        }
+    } ?: 1L
+    val savedVersion = prefs.getLong("onboarding_version", 0L)
+
+    // If app version changed (reinstall/update), reset onboarding
+    val isFreshInstall = currentVersion != savedVersion
+
+    // Read from disk: has the user completed the name stage?
+    val hasCompletedNameOnDisk = remember { 
+        prefs.getBoolean("has_completed_name_stage", false) && !isFreshInstall
+    }
+    val savedNameOnDisk = remember { 
+        if (isFreshInstall) "" else prefs.getString("saved_user_name", "") ?: "" 
+    }
+
     // ── Stage tracking ──────────────────────────────────────────────────────
     // true  = Stage 1 (name capture)
     // false = Stage 2 (persona selection)
-    var isNameStage by remember { mutableStateOf(true) }
-    var capturedName by remember { mutableStateOf("") }
+    var isNameStage by rememberSaveable { mutableStateOf(!hasCompletedNameOnDisk) }
+    var capturedName by rememberSaveable { mutableStateOf(savedNameOnDisk) }
+    var nameStrikes by remember { mutableStateOf(0) }
+
+    fun completeNameStage(name: String) {
+        val finalName = name.ifBlank { "there" }
+        capturedName = finalName
+        isNameStage = false
+        
+        // WRITE SYNCHRONOUSLY TO DISK
+        prefs.edit()
+            .putBoolean("has_completed_name_stage", true)
+            .putString("saved_user_name", finalName)
+            .putLong("onboarding_version", currentVersion)
+            .apply()
+    }
 
     // ── Speech-recognition UI state ─────────────────────────────────────────
     var isListening by remember { mutableStateOf(false) }
     var listeningHint by remember { mutableStateOf("") }
 
-    // ── TTS ──────────────────────────────────────────────────────────────────
+    // ── TTS & Speech State ───────────────────────────────────────────────────
+    var ttsFinished by remember { mutableStateOf(false) }
     var ttsRef: TextToSpeech? by remember { mutableStateOf(null) }
-    // SpeechRecognizer MUST be created on the UI thread
     var recognizerRef: SpeechRecognizer? by remember { mutableStateOf(null) }
 
     // ── Helper: build a fresh RecognitionListener ────────────────────────────
-    /**
-     * Creates a RecognitionListener that handles both the name-capture stage
-     * and the persona-selection stage.
-     *
-     * @param onResult Invoked with the best-match string on success.
-     * @param onRetry  Invoked when a recoverable error occurs (timeout / no match).
-     */
     fun makeRecognitionListener(
         onResult: (String) -> Unit,
         onRetry: (Int) -> Unit
@@ -210,30 +251,43 @@ fun PersonaSelectScreen(
         tts.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, java.util.UUID.randomUUID().toString())
     }
 
+    // ── Helper: speak prompt ────────────────────────────────────────────────
+    fun speakPrompt(utterance: String) {
+        ttsFinished = false
+        isListening = false
+        listeningHint = "Speaking…"
+        ttsRef?.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, "prompt")
+
+    }
+
     // ── Stage 1 name-retry loop ───────────────────────────────────────────────
     fun startNameCapture() {
         Log.d("LIMITLESS_TRACE", "[Stage 1] Name Capture started")
         val nameListener = makeRecognitionListener(
             onResult = { name ->
-                capturedName = name.replaceFirstChar { it.uppercase() }
-                isNameStage = false
+                val enteredName = name.replaceFirstChar { it.uppercase() }
+                completeNameStage(enteredName)
             },
             onRetry = { error ->
-                // Do NOT loop or flash the mic. The UI will say "Tap mic to speak".
+                nameStrikes++
+                if (nameStrikes >= 2) {
+                    completeNameStage("there")
+                } else {
+                    speakPrompt("I didn't catch that. What is your name?")
+                }
             }
         )
         startListening(nameListener)
     }
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
-    fun startPersonaListening(saveFn: (String) -> Unit) {
+    fun startPersonaListening() {
         if (recognizerRef != null) {
             Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy previous recognizer before recreating at ${System.currentTimeMillis()}")
             recognizerRef?.destroy()
         }
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
         Log.d("LIMITLESS_TRACE", "SpeechRecognizer creation timestamp: ${System.currentTimeMillis()}")
-        
         val personaListener = makeRecognitionListener(
             onResult = { spoken ->
                 val lower = spoken.lowercase()
@@ -246,9 +300,9 @@ fun PersonaSelectScreen(
                 }
                 if (match != null) {
                     Log.d("LIMITLESS_TRACE", "Matched Route (\"$match-home\")")
-                    saveFn(match)
+                    savePersonaAndNavigate(match, navController, database, coroutineScope)
                 } else {
-                    // Do NOT auto-retry. Just stop and wait for tap.
+                    speakPrompt("Sorry, I didn't recognise that. Please say Blind, Deaf, Speech, or Mobility.")
                 }
             },
             onRetry = { error ->
@@ -256,8 +310,10 @@ fun PersonaSelectScreen(
                     Log.d("LIMITLESS_TRACE", "[Stage 2] Auto-restarting due to ERROR_11 after 500ms")
                     coroutineScope.launch(Dispatchers.Main) {
                         delay(500)
-                        startPersonaListening(saveFn)
+                        startPersonaListening()
                     }
+                } else {
+                    speakPrompt("I didn't catch that. Please say one of: Blind, Deaf, Speech, or Mobility.")
                 }
             }
         )
@@ -266,59 +322,34 @@ fun PersonaSelectScreen(
 
     // ── Lifecycle: init TTS + SpeechRecognizer (UI thread) ───────────────────
     DisposableEffect(Unit) {
-        // SpeechRecognizer must be on UI thread — DisposableEffect runs on composition
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
-
-        val tts = TextToSpeech(context) { status ->
+        var ttsInstance: TextToSpeech? = null
+        ttsInstance = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                ttsRef?.language = Locale.US
-                ttsRef?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                ttsInstance?.language = Locale.US
+                ttsInstance?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
-                        if (utteranceId == "welcome") {
-                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' STARTED")
-                        } else {
-                            Log.d("LIMITLESS_TRACE", "TTS greeting STARTED")
+                        if (utteranceId == "welcome" || utteranceId == "prompt") {
+                            Log.d("LIMITLESS_TRACE", "TTS prompt STARTED")
                         }
                     }
                     override fun onDone(utteranceId: String?) {
-                        if (utteranceId == "welcome") {
-                            Log.d("LIMITLESS_TRACE", "TTS prompt 'What is your name?' DONE at ${System.currentTimeMillis()}")
-                        } else {
-                            Log.d("LIMITLESS_TRACE", "TTS greeting DONE at ${System.currentTimeMillis()}")
-                        }
-                        coroutineScope.launch(Dispatchers.Main) {
-                            if (utteranceId == "welcome" && isNameStage) {
-                                delay(600)
-                                startNameCapture()
-                            } else {
-                                delay(1500)
-                                Log.d("LIMITLESS_TRACE", "[Stage 2] Auto-starting persona selection mic hands-free...")
-                                currentOnTtsDone.getAndSet(null)?.invoke()
-                            }
-                        }
+                        Log.d("LIMITLESS_TRACE", "TTS prompt DONE at ${System.currentTimeMillis()}")
+                        ttsFinished = true
                     }
+                    @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
-                        coroutineScope.launch(Dispatchers.Main) {
-                            if (utteranceId != "welcome") {
-                                currentOnTtsDone.getAndSet(null)?.invoke()
-                            }
-                        }
+                        ttsFinished = true
                     }
                 })
-                // Stage 1: welcome + listen for name
-                ttsRef?.speak(
-                    "Welcome to Limitless. What is your name?",
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "welcome"
-                )
+                // Triggers the initial LaunchedEffect
+                ttsRef = ttsInstance
             }
         }
-        ttsRef = tts
 
         onDispose {
-            tts.stop()
-            tts.shutdown()
+            ttsInstance?.stop()
+            ttsInstance?.shutdown()
             Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy SpeechRecognizer on dispose")
             recognizerRef?.destroy()
             recognizerRef = null
@@ -326,14 +357,34 @@ fun PersonaSelectScreen(
         }
     }
 
-    // ── Stage 2 auto-listen after name is captured ────────────────────────────
-    LaunchedEffect(isNameStage, capturedName) {
-        if (isNameStage) return@LaunchedEffect
-        Log.d("LIMITLESS_TRACE", "[Stage 2] Short TTS prompt started")
-        val greeting = "Hello $capturedName. Select your assist mode."
-        speakThenListen(greeting) {
-            startPersonaListening { persona ->
-                savePersonaAndNavigate(persona, navController, database, coroutineScope)
+    val wasReturning = remember { hasCompletedNameOnDisk }
+
+    // ── Issue Prompts when Stage Changes ──────────────────────────────────────
+    LaunchedEffect(isNameStage, ttsRef) {
+        if (ttsRef == null) return@LaunchedEffect
+        delay(500) // Small delay for TTS engine to initialize or transition
+        
+        if (isNameStage) {
+            nameStrikes = 0
+            speakPrompt("Welcome to Limitless. What is your name?")
+        } else {
+            val greeting = if (wasReturning) {
+                "Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+            } else {
+                "Hello $capturedName. Choose your assist mode: Blind and Low Vision, Deaf and Hard of Hearing, Speech Impaired, or Mobility and Wheelchair."
+            }
+            speakPrompt(greeting)
+        }
+    }
+
+    // ── Open Mic Only After TTS Finishes ──────────────────────────────────────
+    LaunchedEffect(ttsFinished) {
+        if (ttsFinished) {
+            delay(1500) // Brief pause after TTS ends to prevent feedback loop and wait for HAL
+            if (isNameStage) {
+                startNameCapture()
+            } else {
+                startPersonaListening()
             }
         }
     }
