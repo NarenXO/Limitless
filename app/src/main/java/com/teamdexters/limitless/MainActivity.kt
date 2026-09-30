@@ -170,11 +170,13 @@ fun HazelAssistantWrapper(
         android.util.Log.d("LIMITLESS_TRACE", "Network status changed: ${if(networkStatus is com.teamdexters.limitless.util.NetworkStatus.Online) "ONLINE" else "OFFLINE"}")
     }
 
-    // Hazel query handler with network status tracker integration
-    val queryHandler = remember(networkStatusTracker) {
+    // Hazel query handler with network status tracker and conversation memory
+    val queryHandler = remember(networkStatusTracker, database) {
+        val memoryStore = com.teamdexters.limitless.hazel.HazelMemoryStore(database.hazelConversationDao())
         HazelQueryHandler(
             context = context,
-            networkStatusTracker = networkStatusTracker
+            networkStatusTracker = networkStatusTracker,
+            hazelMemoryStore = memoryStore
         )
     }
 

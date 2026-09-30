@@ -6,6 +6,7 @@ import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
 import com.teamdexters.limitless.data.local.dao.PersonaPreferenceDao
 import com.teamdexters.limitless.data.local.dao.TaggedLocationDao
 import com.teamdexters.limitless.data.local.dao.UserReportDao
+import com.teamdexters.limitless.data.local.dao.HazelConversationDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -38,4 +39,7 @@ object DatabaseModule {
 
     @Provides
     fun providePersonaPreferenceDao(database: LimitlessDatabase): PersonaPreferenceDao = database.personaPreferenceDao()
+
+    @Provides
+    fun provideHazelConversationDao(database: LimitlessDatabase): HazelConversationDao = database.hazelConversationDao()
 }

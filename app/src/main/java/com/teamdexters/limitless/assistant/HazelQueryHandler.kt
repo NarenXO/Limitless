@@ -5,6 +5,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.teamdexters.limitless.BuildConfig
 import com.teamdexters.limitless.assistant.cloud.GeminiClient
+import com.teamdexters.limitless.hazel.HazelMemoryStore
 import com.teamdexters.limitless.util.NetworkStatus
 import com.teamdexters.limitless.util.NetworkStatusProvider
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +27,8 @@ import java.util.Locale
 class HazelQueryHandler(
     private val context: Context,
     private val geminiClient: GeminiClient = GeminiClient(),
-    private val networkStatusTracker: NetworkStatusProvider? = null
+    private val networkStatusTracker: NetworkStatusProvider? = null,
+    private val hazelMemoryStore: HazelMemoryStore? = null
 ) {
     companion object {
         private const val TAG = "HazelQueryHandler"
@@ -52,8 +54,23 @@ class HazelQueryHandler(
         onResponseReady: (String) -> Unit
     ) {
         scope.launch {
-            val result = geminiClient.queryGemini(rawQuery)
+            val historyContext = hazelMemoryStore?.getFormattedHistoryForPrompt(3) ?: ""
+            val fullPrompt = if (historyContext.isNotEmpty()) {
+                "$historyContext\nUser: $rawQuery"
+            } else {
+                rawQuery
+            }
+
+            val result = geminiClient.queryGemini(fullPrompt)
             val responseText = result.getOrDefault("I'm sorry, I couldn't process that right now. How can I help you?")
+
+            hazelMemoryStore?.saveTurn(
+                userMessage = rawQuery,
+                hazelResponse = responseText,
+                persona = "general",
+                intent = "query",
+                wasActionExecuted = false
+            )
 
             withContext(Dispatchers.Main) {
                 onResponseReady(responseText)
