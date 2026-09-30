@@ -24,11 +24,58 @@ import com.teamdexters.limitless.routing.RouteStep
 import com.teamdexters.limitless.routing.StepDirection
 import com.teamdexters.limitless.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+import android.util.Log
+
 @Composable
 fun MobilityHomeScreen(
     viewModel: MobilityViewModel = hiltViewModel(),
     onNavigateToRoom: (String) -> Unit = {}
+) {
+    var hasError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    if (hasError) {
+        // Safe Fallback UI if composition fails
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF7F1EE))
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Mobility Navigation",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1F1F1F)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Loading accessible route engine...",
+                    fontSize = 14.sp,
+                    color = Color(0xFF1F1F1F)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { hasError = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9))
+                ) {
+                    Text("Retry", color = Color.White)
+                }
+            }
+        }
+    } else {
+        // Main Mobility UI Content
+        MobilityHomeScreenContent(viewModel = viewModel, onNavigateToRoom = onNavigateToRoom)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MobilityHomeScreenContent(
+    viewModel: MobilityViewModel,
+    onNavigateToRoom: (String) -> Unit
 ) {
     val context = LocalContext.current
     val graph by viewModel.graph.collectAsState()
