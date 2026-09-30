@@ -60,6 +60,7 @@ fun DeafHomeScreen(
     val detectedAlerts by viewModel.detectedAlerts.collectAsState()
     val currentCategory by viewModel.currentSoundCategory.collectAsState()
     val decibelLevel by viewModel.decibelLevel.collectAsState()
+    val sosCountdown by viewModel.sosCountdown.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.startListening()
@@ -244,7 +245,7 @@ fun DeafHomeScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .weight(1f)
             ) {
                 items(detectedAlerts) { alert ->
                     Card(
@@ -263,7 +264,63 @@ fun DeafHomeScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Emergency Section: SOS Button
+            androidx.compose.material3.Button(
+                onClick = { viewModel.triggerSOS() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFFDBDF)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "EMERGENCY SOS",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = Color(0xFF1F1F1F)
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Full-screen overlay for SOS
+        sosCountdown?.let { count ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFBAD6DA).copy(alpha = 0.9f))
+                    .zIndex(200f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "SOS in...",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "$count",
+                        fontSize = 120.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Red
+                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                    androidx.compose.material3.Button(
+                        onClick = { viewModel.cancelSOS() },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.White)
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            fontSize = 24.sp,
+                            color = Color.Black,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

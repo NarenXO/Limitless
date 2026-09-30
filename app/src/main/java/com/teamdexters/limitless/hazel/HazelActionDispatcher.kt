@@ -25,6 +25,13 @@ class HazelActionDispatcher @Inject constructor() {
         }
 
         return when {
+            // SOS / Emergency
+            Regex("\\b(sos|help|emergency)\\b").containsMatchIn(cleanIntent) -> {
+                logTrace("EmergencyIntent", "StartSOS")
+                _systemCommand.tryEmit(HazelCommand.StartSOS)
+                true
+            }
+
             // Camera / Vision
             Regex("\\b(open camera|camera|take photo|describe|in front|front of me|what is around|what am i holding)\\b").containsMatchIn(cleanIntent) -> {
                 logTrace("OpenCameraIntent", "VisionAnalyze")

@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teamdexters.limitless.core.audio.AudioRouter
 import com.teamdexters.limitless.core.audio.SoundCategory
+import com.teamdexters.limitless.core.safety.LimitlessSmsManager
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.core.hazel.HazelCommand
 import com.teamdexters.limitless.haptics.HapticManager
@@ -30,7 +31,8 @@ class DeafViewModel @Inject constructor(
     private val secureKeyProvider: SecureKeyProvider,
     private val hazelActionDispatcher: HazelActionDispatcher,
     private val hapticManager: HapticManager,
-    private val audioRouter: AudioRouter
+    private val audioRouter: AudioRouter,
+    private val limitlessSmsManager: LimitlessSmsManager
 ) : ViewModel() {
 
     private val _liveCaptions = MutableStateFlow("")
@@ -45,6 +47,9 @@ class DeafViewModel @Inject constructor(
     private val _decibelLevel = MutableStateFlow(0f)
     val decibelLevel: StateFlow<Float> = _decibelLevel.asStateFlow()
 
+    private val _sosCountdown = MutableStateFlow<Int?>(null)
+    val sosCountdown: StateFlow<Int?> = _sosCountdown.asStateFlow()
+
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
     private val userName: String by lazy {
@@ -56,8 +61,7 @@ class DeafViewModel @Inject constructor(
             hazelActionDispatcher.systemCommand.collect { command ->
                 when (command) {
                     is HazelCommand.StartSOS -> {
-                        addAlert("SOS Triggered via voice")
-                        hapticManager.playSOSLoopPattern()
+                        triggerSOS()
                     }
                     else -> {}
                 }
@@ -182,6 +186,31 @@ class DeafViewModel @Inject constructor(
         speechRecognizer = null
         isListening = false
         Log.d("LIMITLESS_TRACE", "DeafCore -> Listening stopped")
+    }
+
+    fun triggerSOS() {
+        if (_sosCountdown.value != null) return
+        _sosCountdown.value = 5
+        hapticManager.playSOSLoopPattern()
+        addAlert("SOS Triggered")
+        viewModelScope.launch {
+            for (i in 4 downTo 0) {
+                kotlinx.coroutines.delay(1000)
+                if (_sosCountdown.value == null) return@launch // Cancelled
+                _sosCountdown.value = i
+            }
+            if (_sosCountdown.value == 0) {
+                _sosCountdown.value = null
+                limitlessSmsManager.sendEmergencySOS(userName, "911")
+                hapticManager.stop()
+            }
+        }
+    }
+    
+    fun cancelSOS() {
+        _sosCountdown.value = null
+        hapticManager.stop()
+        addAlert("SOS Cancelled")
     }
     
     fun dismissSOS() {
