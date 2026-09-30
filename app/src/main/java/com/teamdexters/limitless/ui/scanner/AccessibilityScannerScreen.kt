@@ -295,8 +295,7 @@ fun AccessibilityScannerScreen(
             // Manual Checklist
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
             ) {
