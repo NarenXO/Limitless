@@ -37,6 +37,8 @@ import com.teamdexters.limitless.data.local.LimitlessDatabase
 import com.teamdexters.limitless.ui.blind.*
 import com.teamdexters.limitless.ui.theme.*
 import com.teamdexters.limitless.util.NetworkStatusTracker
+import com.teamdexters.limitless.routing.engine.AccessibleRouter
+import com.teamdexters.limitless.routing.model.AccessibilityFilter
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.zIndex
@@ -113,6 +115,14 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
     // Navigation state
     var showNavigationOverlay by remember { mutableStateOf(false) }
     val vibrationHelper = remember { VibrationHelper(context) }
+    val accessibleRouter = remember { AccessibleRouter() }
+    val currentRoute = remember { 
+        accessibleRouter.findRoute(
+            startNodeId = "KCG_MAIN_GATE",
+            destinationNodeId = "LIBRARY_2ND_FLOOR",
+            filter = AccessibilityFilter(requireRamp = true)
+        )
+    }
 
     // Managers
     val ttsManager = remember { TTSManager(context) }
@@ -839,7 +849,7 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
             // Navigation overlay
             if (showNavigationOverlay) {
                 NavigationOverlay(
-                    route = sampleMockRoute,
+                    route = currentRoute,
                     onExit = {
                         showNavigationOverlay = false
                     }

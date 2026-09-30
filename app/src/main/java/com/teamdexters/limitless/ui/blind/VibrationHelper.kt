@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.teamdexters.limitless.routing.model.TurnType
 
 /**
  * Helper class for generating vibration patterns for turn-by-turn navigation.
@@ -28,8 +29,8 @@ class VibrationHelper(private val context: Context) {
         if (!hasVibrator()) return
 
         val pattern = when (turnType) {
-            TurnType.LEFT -> createLeftPattern()
-            TurnType.RIGHT -> createRightPattern()
+            TurnType.LEFT, TurnType.SLIGHT_LEFT -> createLeftPattern()
+            TurnType.RIGHT, TurnType.SLIGHT_RIGHT -> createRightPattern()
             TurnType.STRAIGHT -> createStraightPattern()
             TurnType.ARRIVE -> createArrivePattern()
         }
