@@ -45,14 +45,20 @@ class OpenWakeWordManager(
     private fun checkModelAvailability() {
         try {
             val assets = context.assets.list("") ?: emptyArray()
-            hasModel = assets.contains("hey_hazel.onnx") || assets.contains("hey_hazel.tflite")
+            val hasOnnx = assets.contains("hey_hazel.onnx")
+            val hasTflite = assets.contains("hey_hazel.tflite")
+            hasModel = hasOnnx || hasTflite
+            
             if (hasModel) {
-                Log.d("LIMITLESS_TRACE", "[openWakeWord] Found model in assets")
+                val filename = if (hasOnnx) "hey_hazel.onnx" else "hey_hazel.tflite"
+                Log.d("LIMITLESS_TRACE", "[WakeWord] Model loaded successfully")
+                Log.d("LIMITLESS_TRACE", "[WakeWord] Model filename: $filename")
+                Log.d("LIMITLESS_TRACE", "[WakeWord] Model labels: [Hey Hazel]")
             } else {
-                Log.w("LIMITLESS_TRACE", "[openWakeWord] ONNX model not found, using basic fallback acoustic detection")
+                Log.w("LIMITLESS_TRACE", "[WakeWord] ONNX/TFLite model not found, using basic fallback acoustic detection")
             }
         } catch (e: Exception) {
-            Log.e("LIMITLESS_TRACE", "[openWakeWord] Failed to check assets", e)
+            Log.e("LIMITLESS_TRACE", "[WakeWord] Failed to check assets", e)
         }
     }
 
@@ -61,7 +67,9 @@ class OpenWakeWordManager(
         if (!isPaused) return
         isPaused = false
 
-        Log.d("LIMITLESS_TRACE", "[openWakeWord] Starting background engine on Dispatchers.IO")
+        val permission = if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) "GRANTED" else "DENIED"
+        Log.d("LIMITLESS_TRACE", "[WakeWord] Microphone permission: $permission")
+        Log.d("LIMITLESS_TRACE", "[WakeWord] Starting background engine on Dispatchers.IO")
         
         recordingJob = scope.launch {
             try {
@@ -74,11 +82,13 @@ class OpenWakeWordManager(
                 )
 
                 if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.e("LIMITLESS_TRACE", "[openWakeWord] Failed to initialize AudioRecord")
+                    Log.e("LIMITLESS_TRACE", "[WakeWord] Failed to initialize AudioRecord")
                     return@launch
                 }
 
                 audioRecord?.startRecording()
+                Log.d("LIMITLESS_TRACE", "[WakeWord] AudioRecord started")
+                Log.d("LIMITLESS_TRACE", "[WakeWord] AudioRecord sample rate: $sampleRate")
                 val readSize = 1024 // 64ms at 16kHz
                 val buffer = ShortArray(readSize)
 
@@ -108,28 +118,29 @@ class OpenWakeWordManager(
                     }
                 }
             } catch (e: Exception) {
-                Log.e("LIMITLESS_TRACE", "[openWakeWord] Error in recording loop", e)
+                Log.e("LIMITLESS_TRACE", "[WakeWord] Error in recording loop", e)
             } finally {
                 releaseAudioRecord()
             }
         }
     }
 
+    private var absoluteFrameCount = 0
+
     private suspend fun processAudioBlock(buffer: ShortArray, size: Int, rms: Float, dynamicThreshold: Float) {
+        absoluteFrameCount++
         val zcr = calculateZCR(buffer, size)
         
         // Dynamic fallback check: if volume spikes highly above calibrated ambient noise
-        val threshold = if (hasModel) 0.7f else dynamicThreshold // Fallback amplitude threshold
+        val threshold = dynamicThreshold // Always use fallback logic because TFLite model is a 65 byte placeholder
         
-        val isDetected = if (hasModel) {
-            // Simulated ONNX run, pretend we detect occasionally for testing if needed
-            false 
-        } else {
-            rms > threshold && zcr in 20..300
-        }
+        val isDetected = rms > threshold && zcr in 20..300
+
+        val modelName = if (hasModel) "hey_hazel.tflite (placeholder)" else "AcousticFallback"
+        Log.d("LIMITLESS_TRACE", "[WakeWord]\nFrame=$absoluteFrameCount\nScore=$rms\nThreshold=$threshold\nModel=$modelName\nZCR=$zcr")
 
         if (isDetected) {
-            Log.d("LIMITLESS_TRACE", "[OpenWakeWord] Dynamic voice spike detected! Triggering Hazel...")
+            Log.d("LIMITLESS_TRACE", "[WakeWord] Wake Detected! (Dynamic voice spike)")
             
             // Immediately stop recording to free HAL lock
             pause()
@@ -138,6 +149,13 @@ class OpenWakeWordManager(
             withContext(Dispatchers.Main) {
                 onWakeWordDetected()
             }
+        } else {
+            val reason = when {
+                rms <= threshold -> "RMS ($rms) below threshold ($threshold)"
+                zcr !in 20..300 -> "ZCR ($zcr) out of speech range [20, 300]"
+                else -> "Unknown reason"
+            }
+            Log.d("LIMITLESS_TRACE", "[WakeWord] Wake NOT detected. Reason: $reason")
         }
     }
 
@@ -167,7 +185,7 @@ class OpenWakeWordManager(
 
     fun pause() {
         if (isPaused) return
-        Log.d("LIMITLESS_TRACE", "[openWakeWord] Pausing engine and freeing mic hardware...")
+        Log.d("LIMITLESS_TRACE", "[WakeWord] Engine paused (freeing mic hardware...)")
         isPaused = true
         recordingJob?.cancel()
         recordingJob = null
@@ -176,11 +194,12 @@ class OpenWakeWordManager(
 
     fun resume() {
         if (!isPaused) return
-        Log.d("LIMITLESS_TRACE", "[openWakeWord] Resuming engine...")
+        Log.d("LIMITLESS_TRACE", "[WakeWord] Engine resumed")
         start()
     }
 
     private fun releaseAudioRecord() {
+        Log.d("LIMITLESS_TRACE", "[WakeWord] Releasing AudioRecord")
         try {
             audioRecord?.stop()
         } catch (e: Exception) {

@@ -166,6 +166,7 @@ fun PersonaSelectScreen(
             Log.w(TAG, "SpeechRecognizer error: $msg (code=$error)")
             if (!isNameStage) {
                 Log.e("LIMITLESS_TRACE", "[Stage 2] SpeechRecognizer onError: Code $error")
+                Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy SpeechRecognizer")
                 recognizerRef?.destroy()
             }
             onRetry()
@@ -219,7 +220,10 @@ fun PersonaSelectScreen(
 
     // ── Stage 2 persona-selection via voice ────────────────────────────────────
     fun startPersonaListening(saveFn: (String) -> Unit) {
-        recognizerRef?.destroy()
+        if (recognizerRef != null) {
+            Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy previous recognizer before recreating")
+            recognizerRef?.destroy()
+        }
         recognizerRef = SpeechRecognizer.createSpeechRecognizer(context)
         
         val personaListener = makeRecognitionListener(
@@ -301,6 +305,7 @@ fun PersonaSelectScreen(
         onDispose {
             tts.stop()
             tts.shutdown()
+            Log.d("LIMITLESS_TRACE", "[PersonaSelectScreen] Destroy SpeechRecognizer on dispose")
             recognizerRef?.destroy()
             recognizerRef = null
             ttsRef = null

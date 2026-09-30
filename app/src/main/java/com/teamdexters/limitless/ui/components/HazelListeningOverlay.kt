@@ -183,7 +183,7 @@ fun HazelListeningOverlay(
         }
         
         onDispose {
-            Log.d(TAG, "Overlay closed. Destroying recognizer.")
+            Log.d("LIMITLESS_TRACE", "[HazelListeningOverlay] Destroy SpeechRecognizer (Overlay closed)")
             recognizerRef?.stopListening()
             recognizerRef?.destroy()
             recognizerRef = null

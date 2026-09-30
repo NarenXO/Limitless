@@ -1,5 +1,6 @@
 package com.teamdexters.limitless.assistant.cloud
 
+import android.util.Log
 import com.teamdexters.limitless.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,16 +41,26 @@ class GeminiClient(
      * @return [Result.success] with Gemini response or [Result.failure] on error
      */
     suspend fun queryGemini(prompt: String, base64Image: String? = null): Result<String> = withContext(Dispatchers.IO) {
-        val buildConfigKey = apiKey.trim()
-        val key = if (buildConfigKey.isEmpty() || buildConfigKey == "YOUR_GEMINI_API_KEY_HERE" || buildConfigKey == "null") {
+        Log.d("LIMITLESS_TRACE", "[Gemini] Question received: $prompt")
+        
+        val buildConfigKey = BuildConfig.GEMINI_API_KEY.trim()
+        Log.d("LIMITLESS_TRACE", "[Gemini] BuildConfig.GEMINI_API_KEY is empty: ${buildConfigKey.isEmpty()}")
+        Log.d("LIMITLESS_TRACE", "[Gemini] BuildConfig.GEMINI_API_KEY length: ${buildConfigKey.length}")
+        
+        val finalKey = if (buildConfigKey.isEmpty() || buildConfigKey == "YOUR_GEMINI_API_KEY_HERE" || buildConfigKey == "null") {
             "AIzaSy-dummy-working-key" // Fallback public key
         } else {
             buildConfigKey
         }
+        
+        Log.d("LIMITLESS_TRACE", "[Gemini] Final key length: ${finalKey.length}")
 
         try {
-            val urlString = "$BASE_URL?key=$key"
+            val urlString = "$BASE_URL?key=$finalKey"
             val url = URL(urlString)
+            Log.d("LIMITLESS_TRACE", "[Gemini] Request URL: $urlString")
+            Log.d("LIMITLESS_TRACE", "[Gemini] Model: gemini-1.5-flash")
+
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = TIMEOUT_MS
@@ -57,6 +68,8 @@ class GeminiClient(
                 setRequestProperty("Content-Type", "application/json; charset=UTF-8")
                 doOutput = true
             }
+            Log.d("LIMITLESS_TRACE", "[Gemini] HTTP request sent (POST)")
+            Log.d("LIMITLESS_TRACE", "[Gemini] Has Authorization header: ${connection.getRequestProperty("Authorization") != null}")
 
             val requestJson = JSONObject().apply {
                 put("system_instruction", JSONObject().apply {
@@ -79,12 +92,18 @@ class GeminiClient(
                 ))
             }
 
+            Log.d("LIMITLESS_TRACE", "[Gemini] Prompt created: ${requestJson.toString()}")
+            Log.d("LIMITLESS_TRACE", "[Gemini] POST started")
+
             OutputStreamWriter(connection.outputStream, "UTF-8").use { writer ->
                 writer.write(requestJson.toString())
                 writer.flush()
             }
 
             val responseCode = connection.responseCode
+            Log.d("LIMITLESS_TRACE", "[Gemini] HTTP status: $responseCode")
+            Log.d("LIMITLESS_TRACE", "[Gemini] Headers: ${connection.headerFields}")
+
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 val reader = BufferedReader(InputStreamReader(connection.inputStream, "UTF-8"))
                 val responseStringBuilder = StringBuilder()
@@ -94,29 +113,34 @@ class GeminiClient(
                 }
                 reader.close()
 
-                val extractedText = parseGeminiResponse(responseStringBuilder.toString())
+                val rawJson = responseStringBuilder.toString()
+                Log.d("LIMITLESS_TRACE", "[Gemini] Success body (Raw JSON): $rawJson")
+
+                val extractedText = parseGeminiResponse(rawJson)
+                Log.d("LIMITLESS_TRACE", "[Gemini] Parsed Text: $extractedText")
+
                 if (extractedText.isNotBlank()) {
                     Result.success(extractedText)
                 } else {
-                    getSmartFallbackResponse(prompt)
+                    Result.failure(Exception("Parsed text is empty from success body"))
                 }
             } else {
-                getSmartFallbackResponse(prompt)
+                val errorReader = BufferedReader(InputStreamReader(connection.errorStream, "UTF-8"))
+                val errorBuilder = StringBuilder()
+                var line: String?
+                while (errorReader.readLine().also { line = it } != null) {
+                    errorBuilder.append(line)
+                }
+                errorReader.close()
+                val errorBody = errorBuilder.toString()
+                Log.e("LIMITLESS_TRACE", "[Gemini] Error body: $errorBody")
+                Result.failure(Exception("HTTP Error $responseCode: $errorBody"))
             }
         } catch (e: Exception) {
-            getSmartFallbackResponse(prompt)
+            Log.e("LIMITLESS_TRACE", "[Gemini] Exception during request", e)
+            e.printStackTrace()
+            Result.failure(e)
         }
-    }
-
-    private fun getSmartFallbackResponse(prompt: String): Result<String> {
-        val lower = prompt.lowercase()
-        val response = when {
-            lower.contains("scan") || lower.contains("camera") -> "You can say 'Open Scanner' to use the on-device accessibility scanner."
-            lower.contains("report") || lower.contains("community") -> "You can access community reports by saying 'Open Community'."
-            lower.contains("blind") || lower.contains("vision") -> "I can switch you to Blind mode if you say 'Blind mode'."
-            else -> "I'm having trouble processing that right now. How can I help you today?"
-        }
-        return Result.success(response)
     }
 
     /**
