@@ -17,10 +17,6 @@ import com.teamdexters.limitless.data.local.entity.RoomConnectionEntity
 import com.teamdexters.limitless.data.local.dao.MappedRoomDao
 import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
 
-import com.teamdexters.limitless.data.local.dao.MappedRoomDao
-import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
-import com.teamdexters.limitless.data.local.entity.MappedRoomEntity
-import com.teamdexters.limitless.data.local.entity.RoomConnectionEntity
 
 /**
  * Main Room database for the Limitless application.
@@ -69,12 +65,7 @@ abstract class LimitlessDatabase : RoomDatabase() {
      * Used for managing the user's accessibility persona preference.
      */
     abstract fun personaPreferenceDao(): PersonaPreferenceDao
-    
     abstract fun mappedRoomDao(): MappedRoomDao
-    abstract fun roomConnectionDao(): RoomConnectionDao
-
-    abstract fun mappedRoomDao(): MappedRoomDao
-
     abstract fun roomConnectionDao(): RoomConnectionDao
 
     companion object {
