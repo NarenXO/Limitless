@@ -920,7 +920,7 @@ private fun ActionButton(
         border = BorderStroke(2.dp, TextPrimary)
     ) {
         if (isProcessing) {
-            CircularProgressIndicator(
+            com.teamdexters.limitless.ui.components.SafeCircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
                 color = TextPrimary,
                 strokeWidth = 2.dp

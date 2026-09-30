@@ -9,9 +9,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class MobilityViewModel(application: Application) : AndroidViewModel(application) {
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
+@HiltViewModel
+class MobilityViewModel @Inject constructor(
+    application: Application,
+    private val currentLocationTracker: CurrentLocationTracker
+) : AndroidViewModel(application) {
 
     private val db = LimitlessDatabase.getDatabase(application)
     private val roomDao = db.mappedRoomDao()
@@ -38,12 +46,12 @@ class MobilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun calculateRoute(originId: String, destId: String, preferRamp: Boolean) {
+    fun calculateAndNavigateRoute(startRoomId: String, endRoomId: String, preferRamp: Boolean = true) {
         val currentGraph = _graph.value ?: return
         val router = AStarAccessibleRouter(currentGraph)
         val route = router.findRoute(
-            fromRoomId = originId,
-            toRoomId = destId,
+            fromRoomId = startRoomId,
+            toRoomId = endRoomId,
             preferRamp = preferRamp
         )
         if (route != null) {
@@ -58,6 +66,29 @@ class MobilityViewModel(application: Application) : AndroidViewModel(application
             seeder.seedIfEmpty()
             val builtGraph = graphBuilder.buildGraph()
             _graph.value = builtGraph
+        }
+    }
+
+    /**
+     * Public hook for Rhasspy / Hazel voice commands (e.g. "Take me to Library")
+     * // TODO(Naren): register startVoiceNavigation in HazelActionDispatcher
+     */
+    fun startVoiceNavigation(destinationName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val rooms = roomDao.getAllRooms().first()
+            val targetRoom = rooms.firstOrNull {
+                it.roomName.contains(destinationName, ignoreCase = true) ||
+                it.id.contains(destinationName, ignoreCase = true)
+            }
+
+            if (targetRoom == null) {
+                android.util.Log.w("LIMITLESS_TRACE", "Mobility -> Room not found for query: $destinationName")
+                // Trigger TTS feedback: "Could not find room $destinationName. Try Entrance, Library, or Canteen."
+                return@launch
+            }
+
+            val startRoomId = currentLocationTracker.getCurrentRoomId() ?: "LIMITLESS_ROOM_KCG_ENTRANCE"
+            calculateAndNavigateRoute(startRoomId = startRoomId, endRoomId = targetRoom.id)
         }
     }
 

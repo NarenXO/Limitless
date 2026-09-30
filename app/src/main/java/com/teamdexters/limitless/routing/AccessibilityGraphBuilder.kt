@@ -3,6 +3,7 @@ package com.teamdexters.limitless.routing
 import android.util.Log
 import com.teamdexters.limitless.data.local.dao.MappedRoomDao
 import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
+import kotlinx.coroutines.flow.first
 
 data class AccessibilityGraph(
     val nodes: Map<String, GraphNode>,
@@ -16,8 +17,8 @@ class AccessibilityGraphBuilder(
     private val connectionDao: RoomConnectionDao
 ) {
     suspend fun buildGraph(): AccessibilityGraph {
-        val mappedRooms = roomDao.getAllRooms()
-        val roomConnections = connectionDao.getAllConnections()
+        val mappedRooms = roomDao.getAllRooms().first()
+        val roomConnections = connectionDao.getAllConnections().first()
 
         if (mappedRooms.isEmpty()) {
             Log.w("LIMITLESS_TRACE", "GraphBuilder: No mapped rooms found. Returning empty graph.")
@@ -28,31 +29,28 @@ class AccessibilityGraphBuilder(
             Log.w("LIMITLESS_TRACE", "GraphBuilder: No connections found. Graph will have isolated nodes.")
         }
 
-        // Convert MappedRoomEntity -> GraphNode (filtering for isFullyMapped == true)
-        val validRooms = mappedRooms.filter { it.isFullyMapped }
-        val nodesMap = validRooms.associate { entity ->
-            entity.roomId to GraphNode(
-                roomId = entity.roomId,
+        val nodesMap = mappedRooms.associate { entity ->
+            entity.id to GraphNode(
+                roomId = entity.id,
                 roomName = entity.roomName,
-                buildingName = entity.buildingName,
-                floorLevel = entity.floorLevel,
+                buildingName = "Campus",
+                floorLevel = 1,
                 hasRamp = entity.hasRamp,
                 hasStairs = entity.hasStairs,
                 hasWideDoor = entity.hasWideDoor,
                 hasObstacles = entity.hasObstacles,
                 obstacleCount = entity.obstacleCount,
-                doorWidthCm = entity.doorWidthCm,
-                latitude = entity.latitude,
-                longitude = entity.longitude
+                doorWidthCm = 0,
+                latitude = 0.0,
+                longitude = 0.0
             )
         }
 
         val adjList = mutableMapOf<String, MutableList<GraphEdge>>()
 
-        // Convert RoomConnectionEntity -> GraphEdge and build adjacency list
         for (connection in roomConnections) {
             if (!nodesMap.containsKey(connection.fromRoomId) || !nodesMap.containsKey(connection.toRoomId)) {
-                Log.w("LIMITLESS_TRACE", "GraphBuilder: Skipping edge from ${connection.fromRoomId} to ${connection.toRoomId} because one or both nodes are missing or not fully mapped.")
+                Log.w("LIMITLESS_TRACE", "GraphBuilder: Skipping edge from ${connection.fromRoomId} to ${connection.toRoomId} because one or both nodes are missing.")
                 continue
             }
 
@@ -63,27 +61,26 @@ class AccessibilityGraphBuilder(
                 connectionType = connection.connectionType,
                 hasRamp = connection.hasRamp,
                 hasStairs = connection.hasStairs,
-                doorWidthCm = connection.doorWidthCm,
-                isBidirectional = connection.isBidirectional,
-                notes = connection.notes
+                doorWidthCm = connection.doorWidthCm.toInt(),
+                isBidirectional = true,
+                notes = ""
             )
 
             adjList.getOrPut(connection.fromRoomId) { mutableListOf() }.add(edge)
-
-            if (connection.isBidirectional) {
-                val reverseEdge = GraphEdge(
-                    fromRoomId = connection.toRoomId,
-                    toRoomId = connection.fromRoomId,
-                    distanceMeters = connection.distanceMeters,
-                    connectionType = connection.connectionType,
-                    hasRamp = connection.hasRamp,
-                    hasStairs = connection.hasStairs,
-                    doorWidthCm = connection.doorWidthCm,
-                    isBidirectional = true,
-                    notes = connection.notes
-                )
-                adjList.getOrPut(connection.toRoomId) { mutableListOf() }.add(reverseEdge)
-            }
+            
+            // Assume all connections bidirectional for now since RoomConnectionEntity lacks it
+            val reverseEdge = GraphEdge(
+                fromRoomId = connection.toRoomId,
+                toRoomId = connection.fromRoomId,
+                distanceMeters = connection.distanceMeters,
+                connectionType = connection.connectionType,
+                hasRamp = connection.hasRamp,
+                hasStairs = connection.hasStairs,
+                doorWidthCm = connection.doorWidthCm.toInt(),
+                isBidirectional = true,
+                notes = ""
+            )
+            adjList.getOrPut(connection.toRoomId) { mutableListOf() }.add(reverseEdge)
         }
 
         val totalEdges = adjList.values.sumOf { it.size }

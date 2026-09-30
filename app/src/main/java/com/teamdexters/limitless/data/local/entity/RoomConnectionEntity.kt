@@ -5,15 +5,13 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "room_connections")
 data class RoomConnectionEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String,
     val fromRoomId: String,
     val toRoomId: String,
-    val connectionType: String = "doorway",   // doorway | hallway | ramp | stairs | elevator
-    val hasRamp: Boolean = false,
-    val hasStairs: Boolean = false,
-    val doorWidthCm: Int = 80,
-    val distanceMeters: Float = 5f,
-    val isBidirectional: Boolean = true,
-    val notes: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val connectionType: String,
+    val hasRamp: Boolean,
+    val hasStairs: Boolean,
+    val distanceMeters: Float,
+    val doorWidthCm: Float,
+    val timestamp: Long
 )

@@ -14,20 +14,120 @@ import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.teamdexters.limitless.data.local.dao.UserReportDao
+import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
 import com.teamdexters.limitless.data.local.entity.UserReportEntity
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.teamdexters.limitless.data.seed.DatabaseSeeder
 
+enum class ViewMode { LIST, MAP }
+enum class ReportFilterCategory(val label: String) {
+    ALL("All"),
+    RAMP("Ramp Access"),
+    LIFT("Elevator / Lift"),
+    WASHROOM("Accessible Washroom"),
+    DOORWAY("Wide Doorway"),
+    VERIFIED("Team-Verified Only")
+}
+enum class SortOrder(val label: String) {
+    NEWEST("Newest First"),
+    TRUST_SCORE("Highest Trust Score"),
+    NEAREST("Nearest Distance")
+}
+
+enum class SyncStatus { IDLE, SYNCING, SYNCED, OFFLINE, ERROR }
+
+data class CommunityAnalyticsData(
+    val totalReports: Int = 0,
+    val averageScore: Int = 0,
+    val verifiedCount: Int = 0,
+    val rampPercentage: Float = 0f,
+    val elevatorPercentage: Float = 0f,
+    val restroomPercentage: Float = 0f,
+    val generalPercentage: Float = 0f,
+    val topLocations: List<UserReportEntity> = emptyList()
+)
+
 @HiltViewModel
 class CommunityReportViewModel @Inject constructor(
     private val userReportDao: UserReportDao,
+    private val accessibilityScoreDao: AccessibilityScoreDao,
+    private val syncManager: com.teamdexters.limitless.data.sync.SupabaseSyncManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val _analyticsData = MutableStateFlow(CommunityAnalyticsData())
+    val analyticsData: StateFlow<CommunityAnalyticsData> = _analyticsData
+
+    private val _syncStatus = MutableStateFlow(SyncStatus.IDLE)
+    val syncStatus: StateFlow<SyncStatus> = _syncStatus
+
     init {
-        // TODO(Naren): Call DatabaseSeeder.seedIfEmpty(dao, context) inside Application.onCreate for global app pre-population
         viewModelScope.launch {
             DatabaseSeeder.seedIfEmpty(userReportDao, context)
+            triggerCloudSync()
+        }
+        viewModelScope.launch {
+            calculateAnalytics()
+        }
+    }
+
+    private suspend fun calculateAnalytics() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            combine(
+                userReportDao.getAllReports(),
+                accessibilityScoreDao.getAllScores()
+            ) { reports, scores ->
+                val total = reports.size
+                val avgScore = if (scores.isNotEmpty()) scores.map { it.overallScore }.average().toInt() else 0
+                val verified = reports.count { it.trustScore > 80 }
+                
+                var ramp = 0
+                var lift = 0
+                var washroom = 0
+                var general = 0
+                
+                reports.forEach { r ->
+                    when {
+                        r.hasRamp -> ramp++
+                        r.hasElevator -> lift++
+                        r.hasAccessibleRestroom -> washroom++
+                        else -> general++
+                    }
+                }
+                
+                val totalCategories = (ramp + lift + washroom + general).coerceAtLeast(1).toFloat()
+                val topLocations = reports.filter { it.trustScore > 80 }
+                    .sortedByDescending { it.trustScore }
+                    .take(3)
+                    
+                CommunityAnalyticsData(
+                    totalReports = total,
+                    averageScore = avgScore,
+                    verifiedCount = verified,
+                    rampPercentage = ramp / totalCategories,
+                    elevatorPercentage = lift / totalCategories,
+                    restroomPercentage = washroom / totalCategories,
+                    generalPercentage = general / totalCategories,
+                    topLocations = topLocations
+                )
+            }.collect { data ->
+                _analyticsData.value = data
+            }
+        }.onFailure {
+            android.util.Log.e("LIMITLESS_CRASH", "Analytics flow failed", it)
+        }
+    }
+
+    fun triggerCloudSync() {
+        viewModelScope.launch {
+            _syncStatus.value = SyncStatus.SYNCING
+            val result = syncManager.syncCommunityReports()
+            _syncStatus.value = when (result) {
+                is com.teamdexters.limitless.data.sync.SyncResult.Success -> SyncStatus.SYNCED
+                is com.teamdexters.limitless.data.sync.SyncResult.Offline -> SyncStatus.OFFLINE
+                is com.teamdexters.limitless.data.sync.SyncResult.Error -> SyncStatus.ERROR
+            }
         }
     }
     private val _selectedCategory = MutableStateFlow<Category?>(null)
@@ -60,39 +160,41 @@ class CommunityReportViewModel @Inject constructor(
     private val _isOnline = MutableStateFlow(true) // Should be updated via ConnectivityManager in a real app
     val isOnline: StateFlow<Boolean> = _isOnline
 
+    private val _viewMode = MutableStateFlow(ViewMode.LIST)
+    val viewMode: StateFlow<ViewMode> = _viewMode
+
+    private val _reportFilterCategory = MutableStateFlow(ReportFilterCategory.ALL)
+    val reportFilterCategory: StateFlow<ReportFilterCategory> = _reportFilterCategory
+
+    private val _sortOrder = MutableStateFlow(SortOrder.NEWEST)
+    val sortOrder: StateFlow<SortOrder> = _sortOrder
+
+    fun setViewMode(mode: ViewMode) { _viewMode.value = mode }
+    fun setFilterCategory(category: ReportFilterCategory) { _reportFilterCategory.value = category }
+    fun setSortOrder(order: SortOrder) { _sortOrder.value = order }
+
     // Expose real-time Flow of all reports from Room DAO
     val reports: kotlinx.coroutines.flow.Flow<List<UserReportEntity>> = userReportDao.getAllReports()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
-
-    private val _filterCategory = MutableStateFlow("All")
-    val filterCategory: StateFlow<String> = _filterCategory
-
-    val filteredReports = combine(reports, _searchQuery, _filterCategory) { reportList, query, filter ->
-        reportList.filter { report ->
-            val matchesQuery = query.isBlank() || 
-                report.locationName.contains(query, ignoreCase = true) || 
-                report.description.contains(query, ignoreCase = true)
-            
-            val matchesFilter = filter == "All" || 
-                report.category.equals(filter, ignoreCase = true) ||
-                (filter == "Ramps" && report.hasRamp) ||
-                (filter == "Elevators" && report.hasElevator) ||
-                (filter == "Washrooms" && report.hasAccessibleRestroom) ||
-                (filter == "Obstacles" && report.category.equals("OBSTACLE", ignoreCase = true))
-
-            matchesQuery && matchesFilter
+    val filteredReports = combine(reports, _reportFilterCategory, _sortOrder) { reportList, filter, sort ->
+        val filtered = reportList.filter { report ->
+            when (filter) {
+                ReportFilterCategory.ALL -> true
+                ReportFilterCategory.RAMP -> report.hasRamp
+                ReportFilterCategory.LIFT -> report.hasElevator
+                ReportFilterCategory.WASHROOM -> report.hasAccessibleRestroom
+                ReportFilterCategory.DOORWAY -> report.category.equals("ENTRANCE", ignoreCase = true)
+                ReportFilterCategory.VERIFIED -> report.trustScore >= 50 || report.confirmationCount >= 5
+            }
+        }
+        
+        when (sort) {
+            SortOrder.NEWEST -> filtered.sortedByDescending { it.timestamp }
+            SortOrder.TRUST_SCORE -> filtered.sortedByDescending { it.confirmationCount } // Assuming confirmation count translates to trust score for now
+            SortOrder.NEAREST -> filtered // Dummy distance sorting, no real distance logic provided
         }
     }
 
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun updateFilterCategory(category: String) {
-        _filterCategory.value = category
-    }
 
     fun confirmReport(reportId: Long) {
         viewModelScope.launch {
@@ -102,15 +204,20 @@ class CommunityReportViewModel @Inject constructor(
 
     fun fetchCurrentLocation(context: Context) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-        try {
+        runCatching {
             fusedLocationClient.getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { loc: android.location.Location? ->
                     if (loc != null) {
                         _location.value = loc
+                    } else {
+                        _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
                     }
                 }
-        } catch (e: SecurityException) {
-            // Handle missing permissions
+                .addOnFailureListener {
+                    _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
+                }
+        }.onFailure {
+            _location.value = android.location.Location("").apply { latitude = 13.0827; longitude = 80.2707 }
         }
     }
 
@@ -142,6 +249,7 @@ class CommunityReportViewModel @Inject constructor(
             try {
                 userReportDao.insertReport(report)
                 _submitResult.value = true
+                triggerCloudSync()
             } catch (e: Exception) {
                 _submitResult.value = false
             }
@@ -169,6 +277,7 @@ class CommunityReportViewModel @Inject constructor(
             
             try {
                 userReportDao.insertReport(report)
+                triggerCloudSync()
             } catch (e: Exception) {
                 // handle error if needed
             }

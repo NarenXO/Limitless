@@ -63,7 +63,7 @@ fun LimitlessNavHost(
         
         // Mobility Home Screen
         composable(Screen.MobilityHome.route) {
-            com.teamdexters.limitless.ui.mobility.MobilityHomeScreen(onBack = navigateBackToPersonaSelect)
+            com.teamdexters.limitless.ui.mobility.MobilityHomeScreen()
         }
 
         // Accessibility Scanner Screen

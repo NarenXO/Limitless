@@ -100,6 +100,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize OSMDroid
+        org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
+        org.osmdroid.config.Configuration.getInstance().load(
+            applicationContext,
+            applicationContext.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
+        )
+
         // Check current permission state before first frame renders
         micGranted.value = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
@@ -212,12 +219,20 @@ fun HazelAssistantWrapper(
         )
     }
 
-    LaunchedEffect(currentRoute, isHazelListening) {
-        if (currentRoute in personaHomeRoutes && !isHazelListening) {
+    LaunchedEffect(currentRoute, isHazelListening, micGranted) {
+        if (currentRoute in personaHomeRoutes && !isHazelListening && micGranted) {
             delay(500L)
-            openWakeWordManager.resume()
+            try {
+                openWakeWordManager.resume()
+            } catch (e: Exception) {
+                android.util.Log.e("LIMITLESS_CRASH", "Failed to resume wake word listener due to missing permissions or audio capture error", e)
+            }
         } else {
-            openWakeWordManager.pause()
+            try {
+                openWakeWordManager.pause()
+            } catch (e: Exception) {
+                android.util.Log.e("LIMITLESS_CRASH", "Failed to pause wake word listener", e)
+            }
         }
     }
 
@@ -254,7 +269,11 @@ fun HazelAssistantWrapper(
                         currentRoute = currentRoute,
                         onNavigate = { route ->
                             if (currentRoute != route) {
-                                navController.navigate(route) { launchSingleTop = true }
+                                navController.navigate(route) {
+                                    popUpTo(Screen.PersonaSelect.route) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         },
                         modifier = Modifier.statusBarsPadding().padding(top = 12.dp)
@@ -267,7 +286,11 @@ fun HazelAssistantWrapper(
                         currentRoute = currentRoute,
                         onNavigate = { route ->
                             if (currentRoute != route) {
-                                navController.navigate(route) { launchSingleTop = true }
+                                navController.navigate(route) {
+                                    popUpTo(Screen.PersonaSelect.route) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         }
                     )

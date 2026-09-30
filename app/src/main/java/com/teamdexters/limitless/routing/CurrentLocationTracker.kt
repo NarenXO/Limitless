@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.teamdexters.limitless.data.local.dao.MappedRoomDao
 import com.teamdexters.limitless.data.local.entity.MappedRoomEntity
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +27,7 @@ class CurrentLocationTracker @Inject constructor(
 
     suspend fun getCurrentRoom(): MappedRoomEntity? {
         val id = getCurrentRoomId() ?: return null
-        return mappedRoomDao.getRoomById(id)
+        return mappedRoomDao.getAllRooms().first().find { it.id == id }
     }
 
     fun clear() {

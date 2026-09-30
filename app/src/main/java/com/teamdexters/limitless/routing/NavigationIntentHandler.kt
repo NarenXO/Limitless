@@ -2,6 +2,7 @@ package com.teamdexters.limitless.routing
 
 import android.util.Log
 import com.teamdexters.limitless.data.local.dao.MappedRoomDao
+import kotlinx.coroutines.flow.first
 
 sealed class NavigationResult {
     data class Success(
@@ -17,13 +18,13 @@ sealed class NavigationResult {
 
     data class DestinationNotFound(
         val rawDestination: String,
-        val spokenResponse: String = "Could not find a mapped room matching $rawDestination."
+        val spokenResponse: String = "Could not find a mapped room matching \$rawDestination."
     ) : NavigationResult()
 
     data class NoAccessibleRoute(
         val fromRoomName: String,
         val toRoomName: String,
-        val spokenResponse: String = "No accessible route found between $fromRoomName and $toRoomName."
+        val spokenResponse: String = "No accessible route found between \$fromRoomName and \$toRoomName."
     ) : NavigationResult()
 
     data class NotNavigationQuery(
@@ -76,8 +77,8 @@ class NavigationIntentHandler(
             return NavigationResult.NeedsLocationAnchor()
         }
 
-        val allRooms = roomDao.getAllRooms()
-        val fromRoom = allRooms.find { it.roomId == currentRoomId }
+        val allRooms = roomDao.getAllRooms().first()
+        val fromRoom = allRooms.find { it.id == currentRoomId }
         
         if (fromRoom == null) {
             Log.w("LIMITLESS_TRACE", "NavIntentHandler: Current room ID not found in database.")
@@ -92,22 +93,23 @@ class NavigationIntentHandler(
         if (destRoom == null) {
             return NavigationResult.DestinationNotFound(
                 rawDestination = destinationStr,
-                spokenResponse = "Could not find a mapped room matching $destinationStr."
+                spokenResponse = "Could not find a mapped room matching \$destinationStr."
             )
         }
 
         val graph = graphBuilder.buildGraph()
         val router = AStarAccessibleRouter(graph)
-        val route = router.findRoute(fromRoomId = currentRoomId, toRoomId = destRoom.roomId, preferRamp = preferRamp)
+        val route = router.findRoute(fromRoomId = currentRoomId, toRoomId = destRoom.id, preferRamp = preferRamp)
 
         if (route == null) {
             return NavigationResult.NoAccessibleRoute(fromRoom.roomName, destRoom.roomName)
         }
 
-        val spokenResponse = "Found accessible route to ${destRoom.roomName}. Distance is ${route.totalDistanceMeters.toInt()} meters. ${if (route.hasRamps) "Includes ramp access." else ""}".trimEnd()
+        val rampText = if (route.hasRamps) " Includes ramp access." else ""
+        val spokenResponse = "Found accessible route to \${destRoom.roomName}. Distance is \${route.totalDistanceMeters.toInt()} meters.\$rampText".trimEnd()
         
         voiceNavigator.startNavigation(route)
-        Log.d("LIMITLESS_TRACE", "NavIntentHandler: Successfully started navigation to ${destRoom.roomName}")
+        Log.d("LIMITLESS_TRACE", "NavIntentHandler: Successfully started navigation to \${destRoom.roomName}")
 
         return NavigationResult.Success(
             route = route,

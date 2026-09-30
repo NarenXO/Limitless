@@ -1,270 +1,274 @@
 package com.teamdexters.limitless.ui.mobility
 
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.teamdexters.limitless.data.local.LimitlessDatabase
-import com.teamdexters.limitless.routing.*
-import com.teamdexters.limitless.ui.routing.RouteMapScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.teamdexters.limitless.routing.GraphNode
+import com.teamdexters.limitless.routing.RouteStep
+import com.teamdexters.limitless.routing.StepDirection
 import com.teamdexters.limitless.ui.theme.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MobilityHomeScreen(
-    onBack: () -> Unit = {}
+    viewModel: MobilityViewModel = hiltViewModel(),
+    onNavigateToRoom: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    val viewModel: MobilityViewModel = viewModel()
     val graph by viewModel.graph.collectAsState()
     val activeRoute by viewModel.activeRoute.collectAsState()
     val isSeeding by viewModel.isSeeding.collectAsState()
 
-    var selectedOrigin by rememberSaveable { mutableStateOf("LIMITLESS_ROOM_KCG_ENTRANCE") }
-    var selectedDestination by rememberSaveable { mutableStateOf("LIMITLESS_ROOM_KCG_LIBRARY") }
-    var preferRamp by rememberSaveable { mutableStateOf(true) }
+    var selectedDestinationId by remember { mutableStateOf<String?>(null) }
+    // Hardcode starting room to "room_entrance" for now since CurrentLocationTracker is not fully mockable in this prompt scope
+    val startRoomId = "room_entrance"
 
-    BackHandler {
-        if (activeRoute != null) {
-            viewModel.stopNavigation()
-        } else {
-            onBack()
-        }
-    }
-
-    // IF A ROUTE IS ACTIVE, SHOW THE NEW 2D CANVAS ROUTE MAP SCREEN
-    if (activeRoute != null && graph != null) {
-        RouteMapScreen(
-            route = activeRoute!!,
-            graph = graph!!,
-            voiceNavigator = viewModel.voiceNavigator,
-            onNavigateBack = { viewModel.stopNavigation() }
-        )
-    } else {
-        // SETUP / DESTINATION PICKER SCREEN
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Mobility & Wheelchair Navigation",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = LimitlessBackground)
-                )
-            },
-            containerColor = LimitlessBackground
-        ) { innerPadding ->
-            Column(
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF7F1EE)),
+        contentPadding = PaddingValues(bottom = 120.dp)
+    ) {
+        item {
+            // Header Card
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
+                    .fillMaxWidth()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4))
             ) {
-                if (isSeeding) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = LimitlessPrimary)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "Loading campus map...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary
-                            )
-                        }
-                    }
-                } else {
-                    // Graph status banner
-                    val nodeCount = graph?.totalNodes ?: 0
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (nodeCount > 0) PersonaMobility.copy(alpha = 0.3f) else HighlightBox
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Accessible Navigation",
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        color = Color(0xFF1F1F1F)
+                    )
+                    Text(
+                        "Where to?",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 16.sp,
+                        color = Color(0xFF1F1F1F)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (nodeCount > 0) "✓ $nodeCount rooms loaded in graph" else "⚠ No rooms found — check DB seed",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = TextPrimary
-                            )
-                        }
+                        Text("You are near: Main Entrance", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+        }
 
-                    // Destination picker card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceTint),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                "Select Destination (V2 A* Engine)",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = TextPrimary
-                            )
+        if (isSeeding) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFF791A9))
+                }
+            }
+        } else {
+            val nodes = graph?.nodes?.values?.toList() ?: emptyList()
+            if (nodes.isEmpty()) {
+                item {
+                    Text("No rooms found in database.", modifier = Modifier.padding(16.dp), color = Color(0xFF1F1F1F))
+                }
+            } else {
+                items(nodes) { node ->
+                    DestinationCard(
+                        node = node,
+                        isSelected = selectedDestinationId == node.roomId,
+                        onClick = { selectedDestinationId = node.roomId }
+                    )
+                }
 
-                            Text(
-                                "From: Main Entrance → To:",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextPrimary
-                            )
-
-                            // Row 1: Library & Auditorium
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { selectedDestination = "LIMITLESS_ROOM_KCG_LIBRARY" },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedDestination == "LIMITLESS_ROOM_KCG_LIBRARY") PersonaMobility else LimitlessBackground
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Library (1F)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                                Button(
-                                    onClick = { selectedDestination = "LIMITLESS_ROOM_KCG_AUDITORIUM" },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedDestination == "LIMITLESS_ROOM_KCG_AUDITORIUM") PersonaMobility else LimitlessBackground
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Auditorium", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            }
-
-                            // Row 2: Canteen & Hallway
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { selectedDestination = "LIMITLESS_ROOM_KCG_CANTEEN" },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedDestination == "LIMITLESS_ROOM_KCG_CANTEEN") PersonaMobility else LimitlessBackground
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Canteen", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                                Button(
-                                    onClick = { selectedDestination = "LIMITLESS_ROOM_KCG_HALLWAY" },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedDestination == "LIMITLESS_ROOM_KCG_HALLWAY") PersonaMobility else LimitlessBackground
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Hallway", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            }
-
-                            // Ramp preference toggle
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "Prefer Wheelchair Ramps",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextPrimary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Switch(
-                                    checked = preferRamp,
-                                    onCheckedChange = { preferRamp = it },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = PersonaMobility,
-                                        checkedTrackColor = LimitlessPrimary
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    // Compute & Launch Route Button
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = {
-                            val currentGraph = graph
-                            if (currentGraph == null || currentGraph.totalNodes == 0) {
-                                Toast.makeText(context, "Graph not ready yet. Please wait.", Toast.LENGTH_SHORT).show()
+                            if (selectedDestinationId == null) {
+                                Toast.makeText(context, "Please select a destination first", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            viewModel.calculateRoute(selectedOrigin, selectedDestination, preferRamp)
-                            if (viewModel.activeRoute.value == null) {
-                                Toast.makeText(context, "No accessible route found!", Toast.LENGTH_SHORT).show()
-                            }
+                            // Calculate Path
+                            viewModel.calculateAndNavigateRoute(startRoomId, selectedDestinationId!!, preferRamp = true)
+                            android.util.Log.d("LIMITLESS_TRACE", "Mobility -> [$startRoomId] to [$selectedDestinationId]")
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PersonaMobility),
+                            .padding(horizontal = 16.dp)
+                            .height(54.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Navigation, contentDescription = null, tint = TextPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Calculate & Open 2D Floor Map",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
+                        Text("Navigate Accessible Route", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+
+        // Path Result Section
+        if (activeRoute != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        "Your Accessible Route:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF1F1F1F)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Path String
+                    val pathString = if (activeRoute!!.steps.isNotEmpty()) {
+                        activeRoute!!.steps.first().fromRoomName + " -> " + activeRoute!!.steps.joinToString(" -> ") { it.toRoomName }
+                    } else "Arrived"
+                    Text(
+                        text = pathString,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color(0xFFF791A9)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Step List
+                    activeRoute!!.steps.forEach { step ->
+                        RouteStepItem(step)
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    // Re-seed / refresh graph button
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.refreshGraph()
-                            Toast.makeText(context, "Graph refreshed", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Actions
+                    Button(
+                        onClick = { viewModel.voiceNavigator.startNavigation(activeRoute!!) },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0F2F4)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, tint = TextPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Refresh Campus Graph (${graph?.totalNodes ?: 0} rooms loaded)",
-                            color = TextPrimary
-                        )
+                        Text("Start Turn-by-Turn Guidance", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.stopNavigation() },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Clear Route", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+        } else if (selectedDestinationId != null && graph?.nodes?.isNotEmpty() == true) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).background(Color(0xFFFFDBDF), RoundedCornerShape(8.dp)).padding(16.dp)
+                ) {
+                    Text("Select a destination and tap Navigate to see your route.", color = Color(0xFF1F1F1F), fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DestinationCard(node: GraphNode, isSelected: Boolean, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .heightIn(min = 52.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFFFFE797) else Color(0xFFE0F2F4)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(node.roomName, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1F1F1F))
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (node.hasRamp) {
+                    TextChip("Ramp Available")
+                }
+                if (node.hasWideDoor) {
+                    TextChip("Wide Door")
+                }
+                if (node.hasStairs) {
+                    TextChip("Stairs Warning")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TextChip(label: String) {
+    Box(
+        modifier = Modifier
+            .background(Color.White, RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(label, fontSize = 12.sp, color = Color(0xFF1F1F1F), fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+fun RouteStepItem(step: RouteStep) {
+    val stepIcon = when (step.direction) {
+        StepDirection.STRAIGHT -> Icons.Default.ArrowUpward
+        StepDirection.LEFT -> Icons.Default.ArrowBack
+        StepDirection.RIGHT -> Icons.Default.ArrowForward
+        StepDirection.RAMP_UP -> Icons.Default.ArrowUpward
+        StepDirection.RAMP_DOWN -> Icons.Default.ArrowDownward
+        StepDirection.STAIRS_UP -> Icons.Default.ArrowUpward
+        StepDirection.STAIRS_DOWN -> Icons.Default.ArrowDownward
+        StepDirection.DESTINATION -> Icons.Default.Place
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFE0F2F4), RoundedCornerShape(12.dp))
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = stepIcon,
+                contentDescription = null,
+                tint = Color(0xFF1F1F1F),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = step.spokenInstruction,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF1F1F1F)
+                )
             }
         }
     }

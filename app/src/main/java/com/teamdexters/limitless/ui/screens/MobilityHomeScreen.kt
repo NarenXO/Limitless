@@ -11,5 +11,5 @@ import com.teamdexters.limitless.ui.mobility.MobilityHomeScreen as FullMobilityH
 fun MobilityHomeScreen(
     onBack: () -> Unit = {}
 ) {
-    FullMobilityHomeScreen(onBack = onBack)
+    FullMobilityHomeScreen()
 }
