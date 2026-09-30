@@ -72,8 +72,9 @@ class ScannerAnalyzer(private val context: Context) {
                 .build()
                 
             objectDetector = ObjectDetector.createFromOptions(context, options)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("ScannerAnalyzer", "Error setting up ObjectDetector", e)
+            objectDetector = null
         }
     }
 
@@ -81,7 +82,7 @@ class ScannerAnalyzer(private val context: Context) {
         val mpImage = BitmapImageBuilder(bitmap).build()
         try {
             objectDetector?.detectAsync(mpImage, System.currentTimeMillis())
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("ScannerAnalyzer", "Error in detectAsync", e)
         }
         return liveDetections.toList()

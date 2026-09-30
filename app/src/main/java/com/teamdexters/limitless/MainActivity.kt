@@ -100,6 +100,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize OSMDroid
+        org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
+        org.osmdroid.config.Configuration.getInstance().load(
+            applicationContext,
+            applicationContext.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
+        )
+
         // Check current permission state before first frame renders
         micGranted.value = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
