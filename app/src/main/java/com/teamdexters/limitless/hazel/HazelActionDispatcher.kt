@@ -12,7 +12,7 @@ class HazelActionDispatcher(
         val lowerIntent = rawIntent.lowercase()
         Log.d("LIMITLESS_TRACE", "MasterOrchestrator: Dispatched intent $rawIntent successfully")
         
-        when {
+        return when {
             // Blind Vision Intent
             lowerIntent.contains("what's in front of me") || 
             lowerIntent.contains("describe surroundings") || 

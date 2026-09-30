@@ -2,6 +2,7 @@ package com.teamdexters.limitless.ui.components
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -52,7 +53,7 @@ fun DemoResetPanel(
                 modifier = Modifier
                     .size(4.dp)
                     .clip(CircleShape)
-                    .androidx.compose.foundation.background(Color.Gray.copy(alpha = 0.3f))
+                    .background(Color.Gray.copy(alpha = 0.3f))
             )
         }
     }
