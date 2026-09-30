@@ -30,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,6 +59,7 @@ import com.teamdexters.limitless.feature.deaf.sound.VibrationVocabulary
 import com.teamdexters.limitless.feature.deaf.translation.TranslationViewModel
 import com.teamdexters.limitless.feature.deaf.camera.LabelOcrScanner
 import com.teamdexters.limitless.feature.deaf.camera.AutoFlashlightUtility
+import com.teamdexters.limitless.feature.deaf.components.SubtitleOverlay
 import com.teamdexters.limitless.ui.components.SoundAlertBanner
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
@@ -104,6 +106,10 @@ fun DeafHomeScreen(
     val autoFlashlight = remember { AutoFlashlightUtility() }
     val isLowLight by autoFlashlight.isLowLight.collectAsState()
     val averageBrightness by autoFlashlight.averageBrightness.collectAsState()
+    
+    // SubtitleOverlay demo state
+    var showSubtitleOverlay by remember { mutableStateOf(false) }
+    var subtitleText by remember { mutableStateOf("") }
     
     // Auto-scroll to latest caption
     LaunchedEffect(captionUiState.captionLines.size, captionUiState.partialText) {
@@ -259,6 +265,21 @@ fun DeafHomeScreen(
             onReadText = { labelScanner.readTextAloud(recognizedText) },
             onStopReading = { labelScanner.stopReading() },
             onClearText = { labelScanner.clearText() }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // SubtitleOverlay Demo Section
+        SubtitleOverlayDemoSection(
+            showOverlay = showSubtitleOverlay,
+            subtitleText = subtitleText,
+            onToggleOverlay = { 
+                showSubtitleOverlay = !showSubtitleOverlay
+                if (showSubtitleOverlay) {
+                    subtitleText = "This is a subtitle overlay demo text"
+                }
+            },
+            onDismiss = { showSubtitleOverlay = false }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -951,6 +972,62 @@ private fun SmartCameraToolsSection(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * SubtitleOverlay demo section for testing the reusable component.
+ */
+@Composable
+private fun SubtitleOverlayDemoSection(
+    showOverlay: Boolean,
+    subtitleText: String,
+    onToggleOverlay: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column {
+        // Section header
+        Text(
+            text = "Subtitle Overlay Demo",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Toggle button
+        Button(
+            onClick = onToggleOverlay,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = PersonaDeaf
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = if (showOverlay) "Hide Overlay" else "Show Overlay",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Floating overlay
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            SubtitleOverlay(
+                subtitle = subtitleText,
+                isVisible = showOverlay,
+                onDismiss = onDismiss
+            )
         }
     }
 }
