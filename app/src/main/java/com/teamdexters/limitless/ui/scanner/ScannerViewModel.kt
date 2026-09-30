@@ -117,11 +117,13 @@ class ScannerViewModel @Inject constructor(
             val catResult = analyzer.analyzeCategorizedFrame(bitmap, rotationDegrees)
             _categorizedResult.value = catResult
             
-            _scanObjects.value = catResult.detectedObjects.map { ScanObjectResult(it, 1.0f) }
-            _lightingScore.value = catResult.overallScore
-            
             _isScanning.value = false
         }
+    }
+
+    fun resetScan() {
+        _categorizedResult.value = null
+        _isScanning.value = false
     }
 
     private var latestBitmap: Bitmap? = null
