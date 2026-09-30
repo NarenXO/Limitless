@@ -49,17 +49,23 @@ class PdrEngine(context: Context) : SensorEventListener {
     private var lastUiUpdateTime = 0L
 
     fun start() {
-        stepCounterSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-        stepDetectorSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-        accelerometerSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-        magnetometerSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        try {
+            stepCounterSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+            stepDetectorSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+            accelerometerSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+            magnetometerSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+        } catch (e: SecurityException) {
+            android.util.Log.e("LIMITLESS_CRASH", "SecurityException: ACTIVITY_RECOGNITION permission missing", e)
+        } catch (e: Exception) {
+            android.util.Log.e("LIMITLESS_CRASH", "Exception registering PDR sensors", e)
         }
     }
 
