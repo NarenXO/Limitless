@@ -30,13 +30,11 @@ class SecureKeyProvider @Inject constructor(
     }
 
     fun getGeminiKey(): String? {
-        val key = sharedPreferences.getString("GEMINI_API_KEY", null)
-        if (key.isNullOrEmpty() && BuildConfig.DEBUG) {
-            val fallbackKey = BuildConfig.GEMINI_API_KEY
-            if (fallbackKey.isNotEmpty() && fallbackKey != "YOUR_GEMINI_API_KEY_HERE" && fallbackKey != "null") {
-                return fallbackKey
-            }
+        var key = sharedPreferences.getString("GEMINI_API_KEY", null)
+        if (key.isNullOrEmpty()) {
+            key = BuildConfig.GEMINI_API_KEY
         }
+        android.util.Log.d("LIMITLESS_TRACE", "SecureKeyProvider: Key present length=${key?.length ?: 0}")
         return key
     }
 

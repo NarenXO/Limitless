@@ -55,11 +55,15 @@ class HazelQueryHandler(
             val responseText = try {
                 if (isNetworkAvailable() && isApiKeyPresent()) {
                     val result = geminiClient.queryGemini(rawQuery)
-                    result.getOrElse { getOfflineResponse(rawQuery) }
+                    result.getOrElse { e -> 
+                        Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
+                        getOfflineResponse(rawQuery) 
+                    }
                 } else {
                     getOfflineResponse(rawQuery)
                 }
             } catch (e: Exception) {
+                Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
                 getOfflineResponse(rawQuery)
             }
 
@@ -110,7 +114,7 @@ class HazelQueryHandler(
      * Checks whether a valid BuildConfig.GEMINI_API_KEY is configured.
      */
     fun isApiKeyPresent(): Boolean {
-        return BuildConfig.GEMINI_API_KEY.trim().isNotEmpty()
+        return !geminiClient.secureKeyProvider.getGeminiKey().isNullOrEmpty()
     }
 
     fun handleVisionQuery(
@@ -128,8 +132,12 @@ class HazelQueryHandler(
                     val base64Image = bitmapToBase64(latestFrame)
                     try {
                         val result = geminiClient.queryGemini(query, base64Image)
-                        result.getOrElse { getOfflineResponse(query) }
+                        result.getOrElse { e -> 
+                            Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
+                            getOfflineResponse(query) 
+                        }
                     } catch (e: Exception) {
+                        Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
                         getOfflineResponse(query)
                     }
                 } else {
