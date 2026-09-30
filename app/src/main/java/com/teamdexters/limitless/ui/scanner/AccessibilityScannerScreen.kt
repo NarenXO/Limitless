@@ -252,7 +252,7 @@ fun AccessibilityScannerScreen(
                             if (isScanning) {
                                 Text("Scanning...", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             } else {
-                                Text("📸 Capture & Scan Scene", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Capture & Scan Scene", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             }
                         }
                     }
@@ -313,7 +313,7 @@ fun AccessibilityScannerScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF791A9)),
                                 shape = RoundedCornerShape(28.dp)
                             ) {
-                                Text("🔄 Retake / Scan New Scene", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Retake / Scan New Scene", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             }
                             
                             Spacer(modifier = Modifier.height(8.dp))
@@ -328,7 +328,7 @@ fun AccessibilityScannerScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFDBDF)),
                                 shape = RoundedCornerShape(28.dp)
                             ) {
-                                Text("🔊 Speak Report Again", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Speak Report Again", color = Color(0xFF1F1F1F), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                             }
                         }
                     }

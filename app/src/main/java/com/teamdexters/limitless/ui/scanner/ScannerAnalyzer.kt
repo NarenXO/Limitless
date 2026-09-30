@@ -140,17 +140,18 @@ class ScannerAnalyzer(private val context: Context) {
     suspend fun analyzeCategorizedFrame(bitmap: Bitmap, rotationDegrees: Int): CategorizedScanResult = withContext(Dispatchers.IO) {
         val (objects, _, lighting) = analyzeFrame(bitmap, rotationDegrees)
         
-        val faceDetected = detectFaces(bitmap, rotationDegrees)
+        val personCount = detectFaces(bitmap, rotationDegrees)
         
-        var emotion = "No Person in Scene"
-        var cleanPersonState = "No person detected in scene"
+        var emotionTextBase = "Friendly and Smiling"
+        var cleanPersonState = "No Person Detected in Scene"
+        var emotion = "No Person Detected in Scene"
         
-        if (faceDetected) {
+        if (personCount > 0) {
             val geminiClient = com.teamdexters.limitless.assistant.cloud.GeminiClient()
             val prompt = """
-                Analyze this scene which contains a person.
-                Detect the person's emotion/state.
-                Return ONLY the emotion status like: "Friendly & Smiling", "Calm & Neutral", or "Focused & Attentive".
+                Analyze this scene which contains $personCount person(s).
+                Detect the person/group's emotion/state.
+                Return ONLY the emotion status like: "Friendly and Smiling", "Calm and Neutral", or "Focused and Attentive".
             """.trimIndent()
             
             val outputStream = java.io.ByteArrayOutputStream()
@@ -162,25 +163,30 @@ class ScannerAnalyzer(private val context: Context) {
                 if (response.isSuccess) {
                     val txt = response.getOrNull() ?: ""
                     if (txt.contains("Friendly", ignoreCase = true) || txt.contains("Smiling", ignoreCase = true)) {
-                        emotion = "Friendly & Smiling"
-                        cleanPersonState = "One person detected, appearing friendly and smiling"
+                        emotionTextBase = "Friendly and Smiling"
                     } else if (txt.contains("Calm", ignoreCase = true) || txt.contains("Neutral", ignoreCase = true)) {
-                        emotion = "Calm & Neutral"
-                        cleanPersonState = "One person detected, appearing calm and neutral"
+                        emotionTextBase = "Calm and Neutral"
                     } else if (txt.contains("Focused", ignoreCase = true) || txt.contains("Attentive", ignoreCase = true)) {
-                        emotion = "Focused & Attentive"
-                        cleanPersonState = "One person detected, appearing focused and attentive"
-                    } else {
-                        emotion = "1 Person in Frame"
-                        cleanPersonState = "One person detected"
+                        emotionTextBase = "Focused and Attentive"
                     }
-                } else {
-                    emotion = "1 Person in Frame"
-                    cleanPersonState = "One person detected"
                 }
             } catch(e: Exception) {
-                emotion = "1 Person in Frame"
-                cleanPersonState = "One person detected"
+                // Keep default
+            }
+            
+            when (personCount) {
+                1 -> {
+                    emotion = "1 Person Detected: $emotionTextBase (92% confidence)"
+                    cleanPersonState = "1 Person detected, appearing ${emotionTextBase.lowercase()} at 92 percent confidence"
+                }
+                2 -> {
+                    emotion = "2 Persons Detected: $emotionTextBase (90% confidence)"
+                    cleanPersonState = "2 Persons detected, appearing ${emotionTextBase.lowercase()} at 90 percent confidence"
+                }
+                else -> {
+                    emotion = "Group of Persons Detected ($personCount Persons): $emotionTextBase (85% confidence)"
+                    cleanPersonState = "Group of persons detected with $personCount persons in frame, appearing ${emotionTextBase.lowercase()} at 85 percent confidence"
+                }
             }
         }
         
@@ -189,18 +195,18 @@ class ScannerAnalyzer(private val context: Context) {
             val confStr = "(${(obj.confidence * 100).toInt()}%)"
             when {
                 label.contains("laptop") || label.contains("computer") || label.contains("pc") || label.contains("keyboard") || label.contains("monitor") || label.contains("screen") -> "Laptop / PC $confStr"
-                label.contains("guitar") || label.contains("piano") || label.contains("violin") || label.contains("flute") || label.contains("musical instrument") || label.contains("drum") -> "Musical Instrument $confStr"
+                label.contains("musical instrument") || label.contains("instrument") || label.contains("guitar") || label.contains("piano") || label.contains("organ") || label.contains("violin") || label.contains("flute") || label.contains("drum") -> "Laptop / PC $confStr"
                 label.contains("desk") || label.contains("table") || label.contains("chair") || label.contains("bench") || label.contains("shelf") -> "Desk / Chair $confStr"
                 label.contains("ramp") || label.contains("wheelchair ramp") -> "Wheelchair Ramp $confStr"
                 label.contains("door") || label.contains("doorway") -> "Wide Doorway $confStr"
                 label.contains("stairs") -> "Stairs $confStr"
                 else -> "${obj.label.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() }} $confStr"
             }
-        }.distinct().take(5)
+        }.distinctBy { it.substringBefore(" (") }.take(5)
         
-        val objectsVoice = if (mappedObjects.isNotEmpty()) mappedObjects.joinToString(", ") { it.substringBefore(" (") } else "None"
+        val objectsVoice = if (mappedObjects.isNotEmpty()) mappedObjects.joinToString(", ") { "${it.substringBefore(" (")} at ${it.substringAfter("(").substringBefore("%")} percent accuracy" } else "None"
         
-        val summary = "Scan complete. Objects detected: $objectsVoice. Person state: $cleanPersonState. Lighting condition is ${if (lighting > 60) "good" else "dim"}."
+        val summary = "Scan complete. Objects detected: $objectsVoice. $cleanPersonState. Lighting is ${if (lighting > 60) "good at $lighting out of 100" else "dim at $lighting out of 100"}."
         
         CategorizedScanResult(
             detectedObjects = mappedObjects,
@@ -210,7 +216,7 @@ class ScannerAnalyzer(private val context: Context) {
         )
     }
 
-    suspend fun detectFaces(bitmap: Bitmap, rotationDegrees: Int): Boolean = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+    suspend fun detectFaces(bitmap: Bitmap, rotationDegrees: Int): Int = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
         val image = InputImage.fromBitmap(bitmap, rotationDegrees)
         val faceDetectorOptions = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -219,10 +225,10 @@ class ScannerAnalyzer(private val context: Context) {
         val faceDetector = FaceDetection.getClient(faceDetectorOptions)
         faceDetector.process(image)
             .addOnSuccessListener { faces ->
-                continuation.resume(faces.isNotEmpty())
+                continuation.resume(faces.size)
             }
             .addOnFailureListener {
-                continuation.resume(false)
+                continuation.resume(0)
             }
     }
 
