@@ -2,6 +2,17 @@ package com.teamdexters.limitless.deaf
 
 import android.content.Context
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Data class representing a single emergency contact.
+ */
+data class EmergencyContact(
+    val name: String,
+    val phone: String,
+    val priority: Int
+)
 
 /**
  * Singleton object for storing emergency contact information and speech settings.
@@ -12,6 +23,7 @@ object EmergencyContactStore {
     private const val PREFS_NAME = "limitless_emergency_prefs"
     private const val KEY_CONTACT_NAME = "contact_name"
     private const val KEY_CONTACT_PHONE = "contact_phone"
+    private const val KEY_CONTACTS_JSON = "limitless_emergency_contacts_json"
     private const val KEY_SPEECH_SPEED = "speech_speed"
     private const val KEY_SPEECH_PITCH = "speech_pitch"
     private const val KEY_SOS_CONSENT_GRANTED = "limitless_sos_consent_granted"
@@ -104,5 +116,64 @@ object EmergencyContactStore {
     fun hasSosConsent(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_SOS_CONSENT_GRANTED, false)
+    }
+    
+    /**
+     * Save multiple emergency contacts to SharedPreferences as JSON.
+     */
+    fun saveContacts(context: Context, contacts: List<EmergencyContact>) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val jsonArray = JSONArray()
+        
+        contacts.forEach { contact ->
+            val jsonContact = JSONObject()
+            jsonContact.put("name", contact.name)
+            jsonContact.put("phone", contact.phone)
+            jsonContact.put("priority", contact.priority)
+            jsonArray.put(jsonContact)
+        }
+        
+        prefs.edit()
+            .putString(KEY_CONTACTS_JSON, jsonArray.toString())
+            .apply()
+        Log.d("LIMITLESS_TRACE", "EmergencyContactStore: Saved ${contacts.size} contacts")
+    }
+    
+    /**
+     * Load multiple emergency contacts from SharedPreferences JSON.
+     * Returns default single contact if no contacts are saved.
+     */
+    fun getContacts(context: Context): List<EmergencyContact> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val jsonString = prefs.getString(KEY_CONTACTS_JSON, null)
+        
+        if (jsonString.isNullOrEmpty()) {
+            return listOf(EmergencyContact(DEFAULT_NAME, DEFAULT_PHONE, 1))
+        }
+        
+        return try {
+            val jsonArray = JSONArray(jsonString)
+            val contacts = mutableListOf<EmergencyContact>()
+            
+            for (i in 0 until jsonArray.length()) {
+                val jsonContact = jsonArray.getJSONObject(i)
+                contacts.add(
+                    EmergencyContact(
+                        name = jsonContact.getString("name"),
+                        phone = jsonContact.getString("phone"),
+                        priority = jsonContact.getInt("priority")
+                    )
+                )
+            }
+            
+            if (contacts.isEmpty()) {
+                listOf(EmergencyContact(DEFAULT_NAME, DEFAULT_PHONE, 1))
+            } else {
+                contacts.sortedBy { it.priority }
+            }
+        } catch (e: Exception) {
+            Log.e("LIMITLESS_TRACE", "EmergencyContactStore: Failed to parse contacts JSON", e)
+            listOf(EmergencyContact(DEFAULT_NAME, DEFAULT_PHONE, 1))
+        }
     }
 }

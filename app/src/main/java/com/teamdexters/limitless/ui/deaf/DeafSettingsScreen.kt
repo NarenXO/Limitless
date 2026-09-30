@@ -44,19 +44,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teamdexters.limitless.deaf.EmergencyContact
 import com.teamdexters.limitless.deaf.EmergencyContactStore
 import com.teamdexters.limitless.ui.theme.manropeFontFamily
 import java.util.Locale
 
 /**
- * Settings screen for configuring emergency contact and testing SOS SMS fallback.
+ * Settings screen for configuring emergency contacts and testing SOS SMS fallback.
  */
 @Composable
 fun DeafSettingsScreen() {
     val context = LocalContext.current
     
-    var contactName by remember { mutableStateOf(EmergencyContactStore.loadContactName(context)) }
-    var contactPhone by remember { mutableStateOf(EmergencyContactStore.loadContactPhone(context)) }
+    val initialContacts = remember { EmergencyContactStore.getContacts(context) }
+    
+    var contact1Name by remember { mutableStateOf(initialContacts.getOrNull(0)?.name ?: "") }
+    var contact1Phone by remember { mutableStateOf(initialContacts.getOrNull(0)?.phone ?: "") }
+    var contact2Name by remember { mutableStateOf(initialContacts.getOrNull(1)?.name ?: "") }
+    var contact2Phone by remember { mutableStateOf(initialContacts.getOrNull(1)?.phone ?: "") }
+    var contact3Name by remember { mutableStateOf(initialContacts.getOrNull(2)?.name ?: "") }
+    var contact3Phone by remember { mutableStateOf(initialContacts.getOrNull(2)?.phone ?: "") }
+    
     var showConsentDialog by remember { mutableStateOf(false) }
     var speechSpeed by remember { mutableStateOf(EmergencyContactStore.loadSpeechSpeed(context)) }
     var speechPitch by remember { mutableStateOf(EmergencyContactStore.loadSpeechPitch(context)) }
@@ -78,7 +86,8 @@ fun DeafSettingsScreen() {
     
     val triggerSos = {
         try {
-            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$contactPhone"))
+            val primaryPhone = if (contact1Phone.isNotEmpty()) contact1Phone else "112"
+            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$primaryPhone"))
             smsIntent.putExtra("sms_body", "EMERGENCY: I need help! My location: https://maps.google.com/?q=13.0827,80.2707")
             context.startActivity(smsIntent)
             vibrate(context, 200)
@@ -105,9 +114,20 @@ fun DeafSettingsScreen() {
         
         Spacer(modifier = Modifier.height(24.dp))
         
+        // Primary Contact (Priority 1)
+        Text(
+            text = "Primary Contact (Priority 1)",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
         OutlinedTextField(
-            value = contactName,
-            onValueChange = { contactName = it },
+            value = contact1Name,
+            onValueChange = { contact1Name = it },
             label = { Text("Contact Name") },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -130,8 +150,128 @@ fun DeafSettingsScreen() {
         Spacer(modifier = Modifier.height(16.dp))
         
         OutlinedTextField(
-            value = contactPhone,
-            onValueChange = { contactPhone = it },
+            value = contact1Phone,
+            onValueChange = { contact1Phone = it },
+            label = { Text("Phone Number") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFBAD6DA),
+                unfocusedBorderColor = Color(0xFFBAD6DA),
+                focusedContainerColor = Color(0xFFE0F2F4),
+                unfocusedContainerColor = Color(0xFFE0F2F4),
+                cursorColor = Color(0xFF1F1F1F),
+                focusedLabelColor = Color(0xFF1F1F1F),
+                unfocusedLabelColor = Color(0xFF1F1F1F)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontFamily = manropeFontFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                color = Color(0xFF1F1F1F)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Secondary Contact (Priority 2)
+        Text(
+            text = "Secondary Contact (Priority 2)",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedTextField(
+            value = contact2Name,
+            onValueChange = { contact2Name = it },
+            label = { Text("Contact Name") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFBAD6DA),
+                unfocusedBorderColor = Color(0xFFBAD6DA),
+                focusedContainerColor = Color(0xFFE0F2F4),
+                unfocusedContainerColor = Color(0xFFE0F2F4),
+                cursorColor = Color(0xFF1F1F1F),
+                focusedLabelColor = Color(0xFF1F1F1F),
+                unfocusedLabelColor = Color(0xFF1F1F1F)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontFamily = manropeFontFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                color = Color(0xFF1F1F1F)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        OutlinedTextField(
+            value = contact2Phone,
+            onValueChange = { contact2Phone = it },
+            label = { Text("Phone Number") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFBAD6DA),
+                unfocusedBorderColor = Color(0xFFBAD6DA),
+                focusedContainerColor = Color(0xFFE0F2F4),
+                unfocusedContainerColor = Color(0xFFE0F2F4),
+                cursorColor = Color(0xFF1F1F1F),
+                focusedLabelColor = Color(0xFF1F1F1F),
+                unfocusedLabelColor = Color(0xFF1F1F1F)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontFamily = manropeFontFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                color = Color(0xFF1F1F1F)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Tertiary Contact (Priority 3)
+        Text(
+            text = "Tertiary Contact (Priority 3)",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1F1F1F),
+            fontFamily = manropeFontFamily
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedTextField(
+            value = contact3Name,
+            onValueChange = { contact3Name = it },
+            label = { Text("Contact Name") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFBAD6DA),
+                unfocusedBorderColor = Color(0xFFBAD6DA),
+                focusedContainerColor = Color(0xFFE0F2F4),
+                unfocusedContainerColor = Color(0xFFE0F2F4),
+                cursorColor = Color(0xFF1F1F1F),
+                focusedLabelColor = Color(0xFF1F1F1F),
+                unfocusedLabelColor = Color(0xFF1F1F1F)
+            ),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontFamily = manropeFontFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                color = Color(0xFF1F1F1F)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        OutlinedTextField(
+            value = contact3Phone,
+            onValueChange = { contact3Phone = it },
             label = { Text("Phone Number") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth(),
@@ -156,8 +296,19 @@ fun DeafSettingsScreen() {
         
         Button(
             onClick = {
-                EmergencyContactStore.saveContact(context, contactName, contactPhone)
-                Toast.makeText(context, "Contact saved!", Toast.LENGTH_SHORT).show()
+                val contacts = listOfNotNull(
+                    if (contact1Name.isNotEmpty() || contact1Phone.isNotEmpty()) 
+                        EmergencyContact(contact1Name.ifEmpty { "Primary" }, contact1Phone.ifEmpty { "112" }, 1) 
+                    else null,
+                    if (contact2Name.isNotEmpty() || contact2Phone.isNotEmpty()) 
+                        EmergencyContact(contact2Name.ifEmpty { "Secondary" }, contact2Phone.ifEmpty { "112" }, 2) 
+                    else null,
+                    if (contact3Name.isNotEmpty() || contact3Phone.isNotEmpty()) 
+                        EmergencyContact(contact3Name.ifEmpty { "Tertiary" }, contact3Phone.ifEmpty { "112" }, 3) 
+                    else null
+                )
+                EmergencyContactStore.saveContacts(context, contacts)
+                Toast.makeText(context, "Contacts saved successfully", Toast.LENGTH_SHORT).show()
                 vibrate(context, 100)
             },
             modifier = Modifier
@@ -169,7 +320,7 @@ fun DeafSettingsScreen() {
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = "Save Contact",
+                text = "Save All Contacts",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF1F1F1F),
