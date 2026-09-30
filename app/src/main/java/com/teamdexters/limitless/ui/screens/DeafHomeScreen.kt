@@ -56,6 +56,8 @@ import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
 import com.teamdexters.limitless.feature.deaf.sound.SoundAlertViewModel
 import com.teamdexters.limitless.feature.deaf.sound.VibrationVocabulary
 import com.teamdexters.limitless.feature.deaf.translation.TranslationViewModel
+import com.teamdexters.limitless.feature.deaf.camera.LabelOcrScanner
+import com.teamdexters.limitless.feature.deaf.camera.AutoFlashlightUtility
 import com.teamdexters.limitless.ui.components.SoundAlertBanner
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
@@ -90,6 +92,18 @@ fun DeafHomeScreen(
     var hasMicPermission by remember {
         mutableStateOf(checkMicrophonePermission(context))
     }
+    
+    // Label OCR Scanner state
+    val labelScanner = remember { LabelOcrScanner(context) }
+    val recognizedText by labelScanner.recognizedText.collectAsState()
+    val isProcessing by labelScanner.isProcessing.collectAsState()
+    val ttsReady by labelScanner.ttsReady.collectAsState()
+    var showCameraView by remember { mutableStateOf(false) }
+    
+    // Auto-Flashlight Utility state
+    val autoFlashlight = remember { AutoFlashlightUtility() }
+    val isLowLight by autoFlashlight.isLowLight.collectAsState()
+    val averageBrightness by autoFlashlight.averageBrightness.collectAsState()
     
     // Auto-scroll to latest caption
     LaunchedEffect(captionUiState.captionLines.size, captionUiState.partialText) {
@@ -229,6 +243,22 @@ fun DeafHomeScreen(
             translationUiState = translationUiState,
             onSourceLanguageChange = { language -> translationViewModel.setSourceLanguage(language) },
             onTargetLanguageChange = { language -> translationViewModel.setTargetLanguage(language) }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Smart Camera Tools Section
+        SmartCameraToolsSection(
+            showCameraView = showCameraView,
+            onToggleCameraView = { showCameraView = !showCameraView },
+            recognizedText = recognizedText,
+            isProcessing = isProcessing,
+            ttsReady = ttsReady,
+            isLowLight = isLowLight,
+            averageBrightness = averageBrightness,
+            onReadText = { labelScanner.readTextAloud(recognizedText) },
+            onStopReading = { labelScanner.stopReading() },
+            onClearText = { labelScanner.clearText() }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -706,6 +736,218 @@ private fun LanguageSelector(
                                 color = TextPrimary
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Smart Camera Tools section with label OCR and auto-flashlight.
+ */
+@Composable
+private fun SmartCameraToolsSection(
+    showCameraView: Boolean,
+    onToggleCameraView: () -> Unit,
+    recognizedText: String,
+    isProcessing: Boolean,
+    ttsReady: Boolean,
+    isLowLight: Boolean,
+    averageBrightness: Int,
+    onReadText: () -> Unit,
+    onStopReading: () -> Unit,
+    onClearText: () -> Unit
+) {
+    Column {
+        // Section header
+        Text(
+            text = "Smart Camera Tools",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Open Label Reader button
+        Button(
+            onClick = onToggleCameraView,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = PersonaDeaf
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = if (showCameraView) "Close Label Reader" else "Open Label Reader",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
+        
+        if (showCameraView) {
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Low Light Indicator Chip
+            if (isLowLight) {
+                Box(
+                    modifier = Modifier
+                        .background(HighlightBox, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Low Light — Torch Auto-Enabled (Brightness: $averageBrightness)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            // Safety Banner
+            Box(
+                modifier = Modifier
+                    .background(SurfaceTint, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Reads printed text on labels only. Does NOT visually identify pills or medication.",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Camera placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .background(SurfaceTint, RoundedCornerShape(12.dp))
+                    .border(1.dp, PersonaDeaf, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (isProcessing) "Scanning..." else "Camera Preview",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                    if (isProcessing) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Point camera at label",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // TTS Readout button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onReadText,
+                    modifier = Modifier.weight(1f),
+                    enabled = ttsReady && recognizedText.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (ttsReady && recognizedText.isNotEmpty()) PersonaDeaf else SurfaceTint
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Read Aloud",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+                
+                Button(
+                    onClick = onStopReading,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SurfaceTint
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Stop Reading",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Clear text button
+            Button(
+                onClick = onClearText,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SurfaceTint
+                ),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "Clear Text",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Recognized text display
+            if (recognizedText.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = SurfaceTint
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Recognized Text",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = recognizedText,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                        )
                     }
                 }
             }
