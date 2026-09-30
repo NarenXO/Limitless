@@ -6,6 +6,8 @@ import com.teamdexters.limitless.data.local.dao.AccessibilityScoreDao
 import com.teamdexters.limitless.data.local.dao.PersonaPreferenceDao
 import com.teamdexters.limitless.data.local.dao.TaggedLocationDao
 import com.teamdexters.limitless.data.local.dao.UserReportDao
+import com.teamdexters.limitless.data.local.dao.MappedRoomDao
+import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -38,4 +40,12 @@ object DatabaseModule {
 
     @Provides
     fun providePersonaPreferenceDao(database: LimitlessDatabase): PersonaPreferenceDao = database.personaPreferenceDao()
+
+    @Provides
+    @Singleton
+    fun provideMappedRoomDao(database: LimitlessDatabase): MappedRoomDao = database.mappedRoomDao()
+
+    @Provides
+    @Singleton
+    fun provideRoomConnectionDao(database: LimitlessDatabase): RoomConnectionDao = database.roomConnectionDao()
 }
