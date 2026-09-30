@@ -1,5 +1,6 @@
 package com.teamdexters.limitless.ui.screens
 
+import android.app.Application
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -24,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,11 +48,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teamdexters.limitless.feature.deaf.caption.CaptionEngineStatus
 import com.teamdexters.limitless.feature.deaf.caption.CaptionViewModel
 import com.teamdexters.limitless.feature.deaf.sound.SoundAlertViewModel
 import com.teamdexters.limitless.feature.deaf.sound.VibrationVocabulary
+import com.teamdexters.limitless.feature.deaf.translation.TranslationViewModel
 import com.teamdexters.limitless.ui.components.SoundAlertBanner
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessBackground
@@ -62,17 +68,22 @@ import kotlinx.coroutines.launch
  * Deaf & Hard of Hearing Assistant - Live Captions Screen
  * Provides real-time offline speech-to-text captions using Vosk.
  * Integrated with YAMNet sound alerts and vibration vocabulary.
+ * Integrated with ML Kit offline translation.
  */
 @Composable
 fun DeafHomeScreen(
     captionViewModel: CaptionViewModel = viewModel(),
-    soundAlertViewModel: SoundAlertViewModel = viewModel()
+    soundAlertViewModel: SoundAlertViewModel = viewModel(),
+    translationViewModel: TranslationViewModel = viewModel(
+        factory = TranslationViewModelFactory(LocalContext.current.applicationContext as Application)
+    )
 ) {
     val context = LocalContext.current
     val captionUiState by captionViewModel.uiState.collectAsState()
     val soundAlertUiState by soundAlertViewModel.activeAlert.collectAsState()
     val isListening by soundAlertViewModel.isListening.collectAsState()
     val isModelLoaded by soundAlertViewModel.isModelLoaded.collectAsState()
+    val translationUiState by translationViewModel.uiState.collectAsState()
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     
@@ -88,6 +99,14 @@ fun DeafHomeScreen(
                     index = captionUiState.captionLines.size + if (captionUiState.partialText.isNotEmpty()) 1 else 0
                 )
             }
+        }
+    }
+    
+    // Auto-translate latest caption
+    LaunchedEffect(captionUiState.captionLines.lastOrNull()?.text) {
+        val latestText = captionUiState.captionLines.lastOrNull()?.text
+        if (!latestText.isNullOrEmpty()) {
+            translationViewModel.translateText(latestText)
         }
     }
     
@@ -201,6 +220,15 @@ fun DeafHomeScreen(
             isModelLoaded = isModelLoaded,
             onToggleListening = { soundAlertViewModel.toggleListening() },
             onTestSound = { soundType -> soundAlertViewModel.triggerAlert(soundType) }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Live Translation Section
+        LiveTranslationSection(
+            translationUiState = translationUiState,
+            onSourceLanguageChange = { language -> translationViewModel.setSourceLanguage(language) },
+            onTargetLanguageChange = { language -> translationViewModel.setTargetLanguage(language) }
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -424,8 +452,283 @@ private fun TestButton(
 }
 
 /**
+ * Live translation section with language selectors and side-by-side display.
+ */
+@Composable
+private fun LiveTranslationSection(
+    translationUiState: com.teamdexters.limitless.feature.deaf.translation.TranslationUiState,
+    onSourceLanguageChange: (String) -> Unit,
+    onTargetLanguageChange: (String) -> Unit
+) {
+    val supportedLanguages = listOf("English", "Tamil", "Hindi", "Spanish", "French")
+    
+    Column {
+        // Section header
+        Text(
+            text = "Live Offline Translation",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Language selectors row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Source language selector
+            LanguageSelector(
+                label = "From",
+                selectedLanguage = translationUiState.sourceLanguage,
+                languages = supportedLanguages,
+                onLanguageChange = onSourceLanguageChange,
+                modifier = Modifier.weight(1f)
+            )
+            
+            // Target language selector
+            LanguageSelector(
+                label = "To",
+                selectedLanguage = translationUiState.targetLanguage,
+                languages = supportedLanguages,
+                onLanguageChange = onTargetLanguageChange,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Model status indicator
+        when (translationUiState.modelStatus) {
+            com.teamdexters.limitless.feature.deaf.translation.ModelStatus.DOWNLOADING -> {
+                Box(
+                    modifier = Modifier
+                        .background(HighlightBox, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Downloading ${translationUiState.targetLanguage} model...",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+            }
+            com.teamdexters.limitless.feature.deaf.translation.ModelStatus.READY -> {
+                Box(
+                    modifier = Modifier
+                        .background(SurfaceTint, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "${translationUiState.targetLanguage} model ready",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+            }
+            com.teamdexters.limitless.feature.deaf.translation.ModelStatus.ERROR -> {
+                Box(
+                    modifier = Modifier
+                        .background(HighlightBox, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Model download failed - check internet",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Side-by-side / stacked display
+        if (translationUiState.originalText.isNotEmpty()) {
+            // Original text container
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = SurfaceTint
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Original (${translationUiState.sourceLanguage})",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = translationUiState.originalText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Translated text container
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(2.dp, PersonaDeaf, RoundedCornerShape(12.dp)),
+                colors = CardDefaults.cardColors(
+                    containerColor = SurfaceTint
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Translated (${translationUiState.targetLanguage})",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = PersonaDeaf
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = translationUiState.translatedText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Language selector dropdown.
+ */
+@Composable
+private fun LanguageSelector(
+    label: String,
+    selectedLanguage: String,
+    languages: List<String>,
+    onLanguageChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary.copy(alpha = 0.7f)
+        )
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (selectedLanguage == languages.first()) PersonaDeaf else SurfaceTint,
+                    RoundedCornerShape(8.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedLanguage,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+                
+                // Simple dropdown trigger
+                Button(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.size(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TextPrimary.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = if (expanded) "▲" else "▼",
+                        fontSize = 10.sp,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+        
+        // Dropdown menu
+        if (expanded) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = SurfaceTint
+                ),
+                shape = RoundedCornerShape(8.dp),
+                elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    languages.forEach { language ->
+                        Button(
+                            onClick = {
+                                onLanguageChange(language)
+                                expanded = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (language == selectedLanguage) PersonaDeaf else SurfaceTint
+                            ),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)
+                        ) {
+                            Text(
+                                text = language,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Check if microphone permission is granted.
  */
 private fun checkMicrophonePermission(context: Context): Boolean {
     return context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * Factory for creating TranslationViewModel with application context.
+ */
+private class TranslationViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(TranslationViewModel::class.java)) {
+            return TranslationViewModel(application) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
 }
