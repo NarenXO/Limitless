@@ -203,7 +203,7 @@ fun ThreeDIsometricMap(
                     val pathStyle = when {
                         i < actualIndex -> Stroke(width = 6f)
                         i == actualIndex -> Stroke(width = activeStrokeWidth * 2)
-                        else -> Stroke(width = 4f, pathEffect = PathEffect.dashPath(floatArrayOf(20f, 20f), 0f))
+                        else -> Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f))
                     }
                     
                     drawLine(color = pathColor, start = p1, end = p2, strokeWidth = if (pathStyle is Stroke) pathStyle.width else 4f, pathEffect = if (pathStyle is Stroke) pathStyle.pathEffect else null)
