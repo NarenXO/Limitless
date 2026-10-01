@@ -168,6 +168,10 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     
     // Testing
+    implementation("com.google.mediapipe:tasks-vision:0.10.0")
+    implementation("com.google.mlkit:face-detection:16.1.6")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-task-audio:0.4.4")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
@@ -176,3 +180,4 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
