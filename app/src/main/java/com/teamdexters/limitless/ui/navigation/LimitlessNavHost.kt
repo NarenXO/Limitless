@@ -68,7 +68,7 @@ fun LimitlessNavHost(
         
         // Blind Home Screen
         composable(Screen.BlindHome.route) {
-            BlindHomeScreen(navController = navController)
+            BlindHomeScreen(onBack = navigateBackToPersonaSelect)
         }
         
         // Deaf Home Screen
