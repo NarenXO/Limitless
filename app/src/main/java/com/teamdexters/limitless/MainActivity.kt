@@ -313,13 +313,7 @@ fun HazelAssistantWrapper(
                     database = database
                 )
 
-                // ── Network status badge: top-right corner, unobtrusive ──────
-                NetworkStatusBadge(
-                    networkStatus = networkStatus,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 8.dp, end = 8.dp)
-                )
+                // ── Network status badge moved to LimitlessScreenFrame ──────
 
 
 

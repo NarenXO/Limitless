@@ -3,6 +3,7 @@ package com.teamdexters.limitless.ui.scanner
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -202,135 +203,144 @@ fun AccessibilityScannerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
+                    .background(PureWhite)
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
             ) {
-                Text(
-                    text = "Manual Checklist",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = PureBlack,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = "Door Width (Reference: Standard is 80-90cm)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PureBlack,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Narrow", "Standard", "Wide").forEach { w ->
-                        FilterChip(
-                            selected = doorWidth == w,
-                            onClick = { viewModel.onDoorWidthSelected(w) },
-                            label = { Text(w) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PureBlack,
-                                selectedLabelColor = PureWhite,
-                                containerColor = SoftWhite,
-                                labelColor = PureBlack
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                borderColor = if (doorWidth == w) PureBlack else SubtleDivider,
-                                selectedBorderColor = PureBlack
-                            ),
-                            modifier = Modifier.semantics { contentDescription = "Select Door Width $w" }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = SoftWhite),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, SubtleDivider)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(
+                            text = "Manual Checklist",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = PureBlack,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
+
+                        // Door Width
+                        Text(
+                            text = "Door Width (Reference: Standard is 80–90 cm)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = PureBlack,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Narrow", "Standard", "Wide").forEach { w ->
+                                FilterChip(
+                                    selected = doorWidth == w,
+                                    onClick = { viewModel.onDoorWidthSelected(w) },
+                                    label = { Text(w, color = if (doorWidth == w) PureWhite else PureBlack) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = PureBlack,
+                                        selectedLabelColor = PureWhite,
+                                        containerColor = PureWhite,
+                                        labelColor = PureBlack
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = if (doorWidth == w) PureBlack else SubtleDivider,
+                                        selectedBorderColor = PureBlack
+                                    ),
+                                    modifier = Modifier.semantics { contentDescription = "Select Door Width $w" }
+                                )
+                            }
+                        }
+
+                        // Braille Signage
+                        Text(
+                            text = "Braille Signage Present",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = PureBlack,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = hasBraille,
+                                onClick = { viewModel.onBrailleSelected(true) },
+                                label = { Text("Yes", color = if (hasBraille) PureWhite else PureBlack) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PureBlack,
+                                    selectedLabelColor = PureWhite,
+                                    containerColor = PureWhite,
+                                    labelColor = PureBlack
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = if (hasBraille) PureBlack else SubtleDivider,
+                                    selectedBorderColor = PureBlack
+                                ),
+                                modifier = Modifier.semantics { contentDescription = "Braille Signage Yes" }
+                            )
+                            FilterChip(
+                                selected = !hasBraille,
+                                onClick = { viewModel.onBrailleSelected(false) },
+                                label = { Text("No", color = if (!hasBraille) PureWhite else PureBlack) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PureBlack,
+                                    selectedLabelColor = PureWhite,
+                                    containerColor = PureWhite,
+                                    labelColor = PureBlack
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = if (!hasBraille) PureBlack else SubtleDivider,
+                                    selectedBorderColor = PureBlack
+                                ),
+                                modifier = Modifier.semantics { contentDescription = "Braille Signage No" }
+                            )
+                        }
+
+                        // Accessible Washroom
+                        Text(
+                            text = "Accessible Washroom",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = PureBlack,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = hasWashroom,
+                                onClick = { viewModel.onWashroomSelected(true) },
+                                label = { Text("Yes", color = if (hasWashroom) PureWhite else PureBlack) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PureBlack,
+                                    selectedLabelColor = PureWhite,
+                                    containerColor = PureWhite,
+                                    labelColor = PureBlack
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = if (hasWashroom) PureBlack else SubtleDivider,
+                                    selectedBorderColor = PureBlack
+                                ),
+                                modifier = Modifier.semantics { contentDescription = "Accessible Washroom Yes" }
+                            )
+                            FilterChip(
+                                selected = !hasWashroom,
+                                onClick = { viewModel.onWashroomSelected(false) },
+                                label = { Text("No", color = if (!hasWashroom) PureWhite else PureBlack) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PureBlack,
+                                    selectedLabelColor = PureWhite,
+                                    containerColor = PureWhite,
+                                    labelColor = PureBlack
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = if (!hasWashroom) PureBlack else SubtleDivider,
+                                    selectedBorderColor = PureBlack
+                                ),
+                                modifier = Modifier.semantics { contentDescription = "Accessible Washroom No" }
+                            )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = "Braille Signage Present",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PureBlack,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = hasBraille,
-                        onClick = { viewModel.onBrailleSelected(true) },
-                        label = { Text("Yes") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PureBlack,
-                            selectedLabelColor = PureWhite,
-                            containerColor = SoftWhite,
-                            labelColor = PureBlack
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (hasBraille) PureBlack else SubtleDivider,
-                            selectedBorderColor = PureBlack
-                        ),
-                        modifier = Modifier.semantics { contentDescription = "Braille Signage Yes" }
-                    )
-                    FilterChip(
-                        selected = !hasBraille,
-                        onClick = { viewModel.onBrailleSelected(false) },
-                        label = { Text("No") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PureBlack,
-                            selectedLabelColor = PureWhite,
-                            containerColor = SoftWhite,
-                            labelColor = PureBlack
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (!hasBraille) PureBlack else SubtleDivider,
-                            selectedBorderColor = PureBlack
-                        ),
-                        modifier = Modifier.semantics { contentDescription = "Braille Signage No" }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = "Accessible Washroom",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PureBlack,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = hasWashroom,
-                        onClick = { viewModel.onWashroomSelected(true) },
-                        label = { Text("Yes") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PureBlack,
-                            selectedLabelColor = PureWhite,
-                            containerColor = SoftWhite,
-                            labelColor = PureBlack
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (hasWashroom) PureBlack else SubtleDivider,
-                            selectedBorderColor = PureBlack
-                        ),
-                        modifier = Modifier.semantics { contentDescription = "Accessible Washroom Yes" }
-                    )
-                    FilterChip(
-                        selected = !hasWashroom,
-                        onClick = { viewModel.onWashroomSelected(false) },
-                        label = { Text("No") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PureBlack,
-                            selectedLabelColor = PureWhite,
-                            containerColor = SoftWhite,
-                            labelColor = PureBlack
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = if (!hasWashroom) PureBlack else SubtleDivider,
-                            selectedBorderColor = PureBlack
-                        ),
-                        modifier = Modifier.semantics { contentDescription = "Accessible Washroom No" }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
-                    onClick = { 
+                    onClick = {
                         android.util.Log.d("LIMITLESS_TRACE", "Scanner score calculation triggered and saved")
                         viewModel.saveScan { insertedId ->
                             navController.navigate(com.teamdexters.limitless.ui.navigation.Screen.LocationDetail.createRoute(insertedId))

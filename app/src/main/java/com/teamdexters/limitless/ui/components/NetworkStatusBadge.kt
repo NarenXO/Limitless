@@ -23,6 +23,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.border
 import com.teamdexters.limitless.ui.theme.HighlightBox
 import com.teamdexters.limitless.ui.theme.LimitlessTypography
 import com.teamdexters.limitless.ui.theme.SurfaceTint
@@ -44,20 +47,36 @@ import com.teamdexters.limitless.util.NetworkStatus
  */
 @Composable
 fun NetworkStatusBadge(
-    networkStatus: NetworkStatus,
     modifier: Modifier = Modifier
 ) {
-    val isOnline = networkStatus is NetworkStatus.Online
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val networkStatusTracker = androidx.compose.runtime.remember { com.teamdexters.limitless.util.NetworkStatusTracker(context) }
+    
+    androidx.compose.runtime.DisposableEffect(networkStatusTracker) {
+        networkStatusTracker.register()
+        onDispose {
+            networkStatusTracker.unregister()
+        }
+    }
+    
+    val networkStatus by networkStatusTracker.statusFlow.collectAsState()
+    val isOnline = networkStatus is com.teamdexters.limitless.util.NetworkStatus.Online
 
-    val backgroundColor = if (isOnline) SurfaceTint else HighlightBox
+    val backgroundColor = if (isOnline) com.teamdexters.limitless.ui.theme.SoftWhite else com.teamdexters.limitless.ui.theme.HighlightBox
+    val borderColor = if (isOnline) com.teamdexters.limitless.ui.theme.SubtleDivider else com.teamdexters.limitless.ui.theme.HighlightBox
     val icon = if (isOnline) Icons.Default.Cloud else Icons.Default.CloudOff
-    val label = if (isOnline) "Online" else "Offline Mode"
+    val label = if (isOnline) "● Online" else "● Offline Mode"
     val accessibilityLabel = if (isOnline) "Network status: Online" else "Network status: Offline Mode"
 
     Row(
         modifier = modifier
             .background(
                 color = backgroundColor,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = borderColor,
                 shape = RoundedCornerShape(16.dp)
             )
             .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -71,17 +90,17 @@ fun NetworkStatusBadge(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = TextPrimary,
-            modifier = Modifier.size(14.dp)
+            tint = com.teamdexters.limitless.ui.theme.PureBlack,
+            modifier = Modifier.size(12.dp)
         )
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = label,
             style = LimitlessTypography.labelSmall.copy(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             ),
-            color = TextPrimary
+            color = com.teamdexters.limitless.ui.theme.PureBlack
         )
     }
 }

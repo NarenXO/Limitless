@@ -28,11 +28,15 @@ fun LimitlessScreenFrame(
             Column {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                            color = PureBlack
-                        )
+                        Column {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                                color = PureBlack
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            NetworkStatusBadge()
+                        }
                     },
                     navigationIcon = {
                         if (onBack != null) {

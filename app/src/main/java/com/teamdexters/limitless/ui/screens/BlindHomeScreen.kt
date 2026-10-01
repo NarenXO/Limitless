@@ -15,6 +15,7 @@ import dagger.hilt.components.SingletonComponent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -824,6 +825,7 @@ fun BlindHomeScreen(
 
 /**
  * Mode chip with TalkBack support.
+ * Always-visible text: inactive = PureBlack on SoftWhite; active = PureWhite on PureBlack.
  */
 @Composable
 private fun ModeChip(
@@ -832,26 +834,29 @@ private fun ModeChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Button(
-        onClick = onClick,
+    val bgColor = if (isActive) PureBlack else SoftWhite
+    val textColor = if (isActive) PureWhite else PureBlack
+    val borderColor = if (isActive) PureBlack else SubtleDivider
+
+    Box(
         modifier = modifier
             .height(64.dp)
+            .background(bgColor, RoundedCornerShape(12.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
             .semantics {
                 contentDescription = if (isActive) "$text mode selected" else "$text mode. Double tap to select."
             },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isActive) PureBlack else SoftWhite,
-            contentColor = if (isActive) PureWhite else PureBlack
-        ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, if (isActive) PureBlack else SubtleDivider)
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            textAlign = TextAlign.Center
+            color = textColor,          // ALWAYS explicit — never inherited
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
         )
     }
 }
