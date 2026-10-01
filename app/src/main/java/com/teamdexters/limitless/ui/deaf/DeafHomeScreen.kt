@@ -1,73 +1,85 @@
 package com.teamdexters.limitless.ui.deaf
 
-import androidx.activity.compose.BackHandler
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.teamdexters.limitless.ui.theme.TextPrimary
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.ui.zIndex
+
+val PersonaDeaf = Color(0xFFF791A9)
+val LimitlessBackground = Color(0xFFF7F1EE)
+val SurfaceTint = Color(0xFFE0F2F4)
+val HighlightBox = Color(0xFFFFDBDF)
+val TextPrimary = Color(0xFF1F1F1F)
 
 @Composable
 fun DeafHomeScreen(
     onBack: () -> Unit = {},
-    viewModel: DeafViewModel = hiltViewModel()
+    viewModel: DeafHomeViewModel = hiltViewModel()
 ) {
-    val liveCaptions by viewModel.liveCaptions.collectAsState()
-    val detectedAlerts by viewModel.detectedAlerts.collectAsState()
-    val sosCountdown by viewModel.sosCountdown.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.startListening()
+    val context = LocalContext.current
+    val isCapturing by viewModel.isCapturing.collectAsState()
+    val captions by viewModel.captions.collectAsState()
+    val partialCaption by viewModel.partialCaption.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
+    val detectedSound by viewModel.detectedSound.collectAsState()
+    
+    var isExtraLargeText by remember { mutableStateOf(false) }
+    val fontSize = if (isExtraLargeText) 28.sp else 22.sp
+    
+    var hasMicPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasMicPermission = isGranted
+        if (isGranted) {
+            viewModel.startCaptions()
+        }
+    }
+    
+    val listState = rememberLazyListState()
+    LaunchedEffect(captions.size, partialCaption) {
+        val totalItems = captions.size + if (!partialCaption.isNullOrBlank()) 1 else 0
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
+        }
+    }
+    
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.stopListening()
+            viewModel.stopCaptions()
         }
     }
 
-    BackHandler(enabled = true) {
-        android.util.Log.e("NAV_DEBUG", "System BackHandler triggered in DeafHomeScreen")
-        onBack()
-    }
-
     Scaffold(
+        containerColor = LimitlessBackground,
         topBar = {
             Box(
                 modifier = Modifier
@@ -82,183 +94,194 @@ fun DeafHomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = {
-                            android.util.Log.e("NAV_DEBUG", "TopBar Back Button Clicked")
-                            onBack()
-                        },
+                        onClick = { onBack() },
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Go back to persona selection",
+                            contentDescription = "Go back",
                             tint = TextPrimary
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Deaf & Hard-of-Hearing",
-                        fontSize = 18.sp,
+                        text = "Deaf & Hard-of-Hearing Assist",
+                        color = TextPrimary,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        modifier = Modifier.semantics { contentDescription = "Deaf and Hard of Hearing Assistant" }
                     )
                 }
             }
-        },
-        containerColor = Color(0xFFF7F1EE)
-    ) { innerPadding ->
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
         ) {
-            // Top: "Sound Status" card
+            // Detected Sound Alert
+            if (detectedSound != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .semantics { contentDescription = "Detected sound: $detectedSound" },
+                    colors = CardDefaults.cardColors(containerColor = HighlightBox),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "⚠️ Detected: $detectedSound",
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Status Chip & Controls
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isCapturing) Color(0xFFC8E6C9) else HighlightBox, // Greenish for active, Pinkish for stopped
+                    modifier = Modifier.semantics { contentDescription = "Status: $statusMessage" }
+                ) {
+                    Text(
+                        text = if (isCapturing) "🟢 $statusMessage" else "🔴 $statusMessage",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            
+            // Controls Row
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.clearCaptions() },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceTint, contentColor = TextPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Clear Captions", fontWeight = FontWeight.Bold)
+                }
+                
+                Button(
+                    onClick = { isExtraLargeText = !isExtraLargeText },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceTint, contentColor = TextPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (isExtraLargeText) "Text: Normal" else "Text: Large", fontWeight = FontWeight.Bold)
+                }
+            }
+            
+            // Live Captions Display Area
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFBAD6DA)),
+                    .weight(1f)
+                    .padding(bottom = 16.dp)
+                    .border(3.dp, PersonaDeaf, RoundedCornerShape(16.dp))
+                    .semantics { contentDescription = "Live captions display area" },
+                colors = CardDefaults.cardColors(containerColor = SurfaceTint),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Monitoring Environment...",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = Color.Black
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Center: Live Caption Area
-            Text(
-                text = "Live Captions",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = Color.Black,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFFE0F2F4)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = liveCaptions.ifEmpty { "Listening for speech..." },
-                        color = Color(0xFF1F1F1F),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bottom: Detected Alerts
-            Text(
-                text = "Detected Alerts",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = Color.Black,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                items(detectedAlerts) { alert ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(12.dp)
+                if (!hasMicPermission) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = alert,
-                            modifier = Modifier.padding(16.dp),
-                            color = Color(0xFF1F1F1F),
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Microphone permission required",
+                                color = TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                                colors = ButtonDefaults.buttonColors(containerColor = PersonaDeaf),
+                                modifier = Modifier.height(56.dp)
+                            ) {
+                                Text("Grant Permission", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(captions) { text ->
+                            Text(
+                                text = text,
+                                color = TextPrimary,
+                                fontSize = fontSize,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.semantics { contentDescription = text }
+                            )
+                        }
+                        if (!partialCaption.isNullOrBlank()) {
+                            item {
+                                Text(
+                                    text = partialCaption!!,
+                                    color = TextPrimary.copy(alpha = 0.7f),
+                                    fontSize = fontSize,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.semantics { contentDescription = "Current partial caption: $partialCaption" }
+                                )
+                            }
+                        }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Emergency Section: SOS Button
-            androidx.compose.material3.Button(
-                onClick = { viewModel.triggerSOS() },
+            
+            // Start / Stop Button
+            Button(
+                onClick = {
+                    if (isCapturing) {
+                        viewModel.stopCaptions()
+                    } else {
+                        if (hasMicPermission) {
+                            viewModel.startCaptions()
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFFDBDF)),
-                shape = RoundedCornerShape(16.dp)
+                    .height(60.dp)
+                    .padding(bottom = 12.dp)
+                    .semantics { 
+                        contentDescription = if (isCapturing) "Stop live captions" else "Start live captions" 
+                    },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isCapturing) HighlightBox else PersonaDeaf,
+                    contentColor = if (isCapturing) TextPrimary else Color.White
+                ),
+                shape = RoundedCornerShape(30.dp)
             ) {
                 Text(
-                    text = "EMERGENCY SOS",
-                    fontWeight = FontWeight.Bold,
+                    text = if (isCapturing) "STOP CAPTIONS" else "START LIVE CAPTIONS",
                     fontSize = 20.sp,
-                    color = Color(0xFF1F1F1F)
+                    fontWeight = FontWeight.Bold
                 )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Full-screen overlay for SOS
-        sosCountdown?.let { count ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFBAD6DA).copy(alpha = 0.9f))
-                    .zIndex(200f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "SOS in...",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Text(
-                        text = "$count",
-                        fontSize = 120.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Red
-                    )
-                    Spacer(modifier = Modifier.height(32.dp))
-                    androidx.compose.material3.Button(
-                        onClick = { viewModel.cancelSOS() },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.White)
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            fontSize = 24.sp,
-                            color = Color.Black,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
             }
         }
     }

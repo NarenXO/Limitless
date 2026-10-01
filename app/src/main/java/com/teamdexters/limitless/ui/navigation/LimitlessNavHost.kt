@@ -73,7 +73,7 @@ fun LimitlessNavHost(
         
         // Deaf Home Screen
         composable(Screen.DeafHome.route) {
-            androidx.hilt.navigation.compose.hiltViewModel<com.teamdexters.limitless.ui.deaf.DeafViewModel>()
+            androidx.hilt.navigation.compose.hiltViewModel<com.teamdexters.limitless.ui.deaf.DeafHomeViewModel>()
             DeafHomeScreen(onBack = navigateBackToPersonaSelect)
         }
         
