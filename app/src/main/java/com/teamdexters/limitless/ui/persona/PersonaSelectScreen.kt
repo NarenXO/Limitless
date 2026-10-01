@@ -18,7 +18,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,9 +41,12 @@ import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -543,47 +549,43 @@ private fun PersonaSelectionStage(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Row 1: Blind + Deaf  — compact 130dp height
+        // Row 1: Blind + Deaf
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             PersonaCard(
-                title = "BLIND\n& LOW-VISION",
-                color = PersonaBlind,
+                title = "BLIND & LOW VISION",
                 icon = Icons.Default.Visibility,
                 onClick = { onPersonaSelected("BLIND") },
-                modifier = Modifier.weight(1f).height(130.dp)
+                modifier = Modifier.weight(1f)
             )
             PersonaCard(
-                title = "DEAF\n& HARD-OF-HEARING",
-                color = PersonaDeaf,
+                title = "DEAF & HARD OF HEARING",
                 icon = Icons.Default.Hearing,
                 onClick = { onPersonaSelected("DEAF") },
-                modifier = Modifier.weight(1f).height(130.dp)
+                modifier = Modifier.weight(1f)
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Row 2: Speech + Mobility — compact 130dp height
+        // Row 2: Speech + Mobility
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             PersonaCard(
-                title = "SPEECH\nIMPAIRED",
-                color = PersonaSpeech,
+                title = "SPEECH & COMMUNICATION",
                 icon = Icons.Default.QuestionAnswer,
                 onClick = { onPersonaSelected("SPEECH") },
-                modifier = Modifier.weight(1f).height(130.dp)
+                modifier = Modifier.weight(1f)
             )
             PersonaCard(
-                title = "MOBILITY\n& WHEELCHAIR",
-                color = PersonaMobility,
+                title = "MOBILITY & WHEELCHAIR",
                 icon = Icons.Default.Accessible,
                 onClick = { onPersonaSelected("MOBILITY") },
-                modifier = Modifier.weight(1f).height(130.dp)
+                modifier = Modifier.weight(1f)
             )
         }
 
@@ -638,35 +640,29 @@ private fun MicStatusIndicator(isListening: Boolean, hint: String, onMicTap: () 
     }
 }
 
-/**
- * Composable card for persona selection.
- * Full accessibility semantics + high contrast design tokens.
- */
 @Composable
-fun PersonaCard(
+private fun PersonaCard(
     title: String,
-    color: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-    Box(
+    Card(
         modifier = modifier
-            .background(SoftWhite, RoundedCornerShape(4.dp))
-            .border(
-                width = 1.dp,
-                color = SubtleDivider,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(16.dp)
-            .semantics {
-                contentDescription = "$title. Tap to select this assist mode."
-            },
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .heightIn(min = 130.dp) // Use min height so it expands if text wraps
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = SoftWhite,   // #F5F5F5
+            contentColor = PureBlack      // #000000
+        ),
+        border = BorderStroke(1.dp, SubtleDivider), // #DDDDDD
+        shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -674,18 +670,22 @@ fun PersonaCard(
                 imageVector = icon,
                 contentDescription = null,
                 tint = PureBlack,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(32.dp) // 32dp clean icon
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title,
-                style = LimitlessTypography.titleSmall,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,          // 12sp scales cleanly on 2 lines
+                    lineHeight = 15.sp,        // Proper line height for multi-line text
+                    letterSpacing = 0.5.sp
+                ),
                 color = PureBlack,
-                fontWeight = FontWeight.Black,
-                fontSize = 14.sp,
-                letterSpacing = 1.sp,
                 textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                maxLines = 2,                  // ALLOW UP TO 2 LINES (NO TRUNCATION!)
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
