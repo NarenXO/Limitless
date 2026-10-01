@@ -27,6 +27,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -106,9 +107,13 @@ class VoiceManager @Inject constructor(
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     
+    // Application-wide scope for processing jobs that must survive state transitions
+    private val applicationScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    
     // AudioRecord elements - single instance
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
+    private var processingJob: Job? = null
     private var conversationTimeoutJob: Job? = null
     private var transitionJob: Job? = null
     
@@ -237,6 +242,8 @@ class VoiceManager @Inject constructor(
             VoiceState.ASSISTANT_RECORDING -> {
                 stopAssistantRecording()
                 stopNameMonitoring()
+                // NOTE: Do NOT cancel processingJob here - it runs in applicationScope
+                // and must complete even after state transitions
             }
             VoiceState.ASSISTANT_PROCESSING -> {
                 // Processing state doesn't hold audio resources
@@ -251,7 +258,7 @@ class VoiceManager @Inject constructor(
             VoiceState.BLIND_COMMAND, VoiceState.NAME_CAPTURE, VoiceState.PERSONA_SELECTION -> stopRecognizer()
             VoiceState.IDLE -> {}
         }
-        
+
         if (state == VoiceState.DEAF_CAPTION) {
             _liveCaptions.value = ""
         }
@@ -471,7 +478,6 @@ class VoiceManager @Inject constructor(
         
         recordingJob = scope.launch(Dispatchers.IO) {
             val timestamp = System.currentTimeMillis()
-            val audioFile = File(context.cacheDir, "assistant_audio_${timestamp}.wav")
             var totalBytesRecorded = 0L
             var totalFrames = 0
             var silenceFrames = 0
@@ -528,7 +534,6 @@ class VoiceManager @Inject constructor(
                 // Validate recording before processing
                 if (totalBytesRecorded < MIN_RECORDING_BYTES || duration < MIN_RECORDING_DURATION_MS) {
                     Log.w(TAG, "ASSISTANT[$timestamp]: Recording too short - discarding (bytes=$totalBytesRecorded, duration=${duration}ms)")
-                    audioFile.delete()
                     _results.tryEmit(VoiceResult.Error(-1, "Recording too short"))
                     requestState(VoiceState.ASSISTANT_RECORDING) // Restart recording
                     return@launch
@@ -537,27 +542,36 @@ class VoiceManager @Inject constructor(
                 // Transition to processing state
                 requestState(VoiceState.ASSISTANT_PROCESSING)
                 
-                // Process audio
-                processAssistantAudio(pcmData, audioFile, timestamp)
+                // Launch processing in a separate, non-cancellable job
+                // This ensures network requests complete even if state transitions occur
+                processingJob = applicationScope.launch(Dispatchers.IO + NonCancellable) {
+                    try {
+                        processAssistantAudio(pcmData, timestamp)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "ASSISTANT[$timestamp]: Processing error - ${e.message}", e)
+                        _results.tryEmit(VoiceResult.Error(-1, e.message ?: "Unknown error"))
+                        requestState(VoiceState.WAKEWORD)
+                    }
+                }
                 
             } catch (e: CancellationException) {
-                Log.d(TAG, "ASSISTANT[$timestamp]: Cancelled")
+                Log.d(TAG, "ASSISTANT[$timestamp]: Recording cancelled")
             } catch (e: Exception) {
-                Log.e(TAG, "ASSISTANT[$timestamp]: Error - ${e.message}", e)
+                Log.e(TAG, "ASSISTANT[$timestamp]: Recording error - ${e.message}", e)
                 _results.tryEmit(VoiceResult.Error(-1, e.message ?: "Unknown error"))
                 requestState(VoiceState.WAKEWORD)
             } finally {
                 stopAudioRecord()
-                stopNameMonitoring()
-                audioFile.delete()
             }
         }
     }
 
-    private suspend fun processAssistantAudio(pcmData: List<ShortArray>, audioFile: File, timestamp: Long) {
+    private suspend fun processAssistantAudio(pcmData: List<ShortArray>, timestamp: Long) {
         Log.d(TAG, "=== ASSISTANT_PROCESSING_START ===")
         Log.d(TAG, "ASSISTANT: Processing audio from $timestamp")
         val startTime = System.currentTimeMillis()
+        
+        val audioFile = File(context.cacheDir, "assistant_audio_${timestamp}.wav")
         
         try {
             // Normalize and trim audio
@@ -636,6 +650,9 @@ class VoiceManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "ASSISTANT: Processing error - ${e.message}", e)
             requestState(VoiceState.ASSISTANT_RECORDING)
+        } finally {
+            // Clean up audio file
+            audioFile.delete()
         }
         
         val duration = System.currentTimeMillis() - startTime
@@ -1243,6 +1260,8 @@ class VoiceManager @Inject constructor(
     fun shutdown() {
         Log.d(TAG, "=== SHUTDOWN ===")
         stopAllAudio()
+        processingJob?.cancel()
+        processingJob = null
         cancelConversationTimeout()
         releaseAudioFocus()
         requestState(VoiceState.IDLE, force = true)
