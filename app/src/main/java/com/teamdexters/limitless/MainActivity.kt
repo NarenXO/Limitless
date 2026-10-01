@@ -58,7 +58,6 @@ import com.teamdexters.limitless.assistant.HazelIntent
 import com.teamdexters.limitless.assistant.HazelQueryHandler
 import com.teamdexters.limitless.assistant.service.HazelAccessibilityService
 import com.teamdexters.limitless.data.local.LimitlessDatabase
-import com.teamdexters.limitless.assistant.openwakeword.OpenWakeWordManager
 import com.teamdexters.limitless.ui.components.HazelFloatingMicButton
 import com.teamdexters.limitless.ui.components.HazelListeningOverlay
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
@@ -102,7 +101,7 @@ class MainActivity : ComponentActivity() {
         }
 
     @Inject
-    lateinit var micArbiter: com.teamdexters.limitless.audio.MicArbiter
+    lateinit var voiceManager: com.teamdexters.limitless.core.audio.VoiceManager
 
     @Inject
     lateinit var secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
@@ -134,12 +133,42 @@ class MainActivity : ComponentActivity() {
                 HazelAssistantWrapper(
                     database = database,
                     micGranted = micGranted.value,
-                    micArbiter = micArbiter,
+                    voiceManager = voiceManager,
                     secureKeyProvider = secureKeyProvider,
                     mappedRoomDao = mappedRoomDao,
                     roomConnectionDao = roomConnectionDao,
                     hazelActionDispatcher = hazelActionDispatcher
                 )
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        android.util.Log.d("VoiceManager", "onStop: releasing mic (app going to background)")
+        voiceManager.shutdown()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        android.util.Log.d("VoiceManager", "onResume: requesting WAKEWORD (app returning to foreground)")
+        // Only re-request wakeword if permission is still granted
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED) {
+            val granted = voiceManager.requestState(
+                com.teamdexters.limitless.core.audio.VoiceState.WAKEWORD,
+                force = true
+            )
+            if (!granted) {
+                // A transition was in progress — retry after it clears
+                android.util.Log.d("VoiceManager", "onResume: transition in progress, scheduling deferred WAKEWORD retry")
+                CoroutineScope(Dispatchers.Main).launch {
+                    delay(600L)
+                    voiceManager.requestState(
+                        com.teamdexters.limitless.core.audio.VoiceState.WAKEWORD,
+                        force = true
+                    )
+                }
             }
         }
     }
@@ -158,7 +187,7 @@ class MainActivity : ComponentActivity() {
 fun HazelAssistantWrapper(
     database: LimitlessDatabase,
     micGranted: Boolean,
-    micArbiter: com.teamdexters.limitless.audio.MicArbiter,
+    voiceManager: com.teamdexters.limitless.core.audio.VoiceManager,
     secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider,
     mappedRoomDao: com.teamdexters.limitless.data.local.dao.MappedRoomDao,
     roomConnectionDao: com.teamdexters.limitless.data.local.dao.RoomConnectionDao,
@@ -206,61 +235,87 @@ fun HazelAssistantWrapper(
         )
     }
 
-    // TTS initialization
-    var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
-    DisposableEffect(context) {
-        val tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                ttsRef?.language = Locale.US
-            }
-        }
-        ttsRef = tts
-        onDispose {
-            tts.stop()
-            tts.shutdown()
-            ttsRef = null
-        }
-    }
-
     // Hazel state management
     var isHazelListening by remember { mutableStateOf(false) }
     var responseBannerText by remember { mutableStateOf("") }
     var isBannerVisible by remember { mutableStateOf(false) }
+    var waitForTTSCompletion by remember { mutableStateOf(false) }
 
-    // openWakeWord background engine
-    val openWakeWordManager = remember(context) {
-        OpenWakeWordManager(
-            context = context,
-            micArbiter = micArbiter,
-            onWakeWordDetected = {
-                coroutineScope.launch(Dispatchers.Main) {
-                    delay(300L) // Wait 300ms for audio HAL release
-                    isHazelListening = true
-                }
+    // TTS initialization — wired to VoiceManager so mic pauses during TTS
+    var ttsRef by remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        var ttsInstance: TextToSpeech? = null
+        ttsInstance = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsInstance?.language = Locale.US
+                ttsInstance?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        android.util.Log.d("VoiceManager", "=== TTS_START ===")
+                        android.util.Log.d("VoiceManager", "TTS: utteranceId=$utteranceId")
+                        voiceManager.onTTSStarted()
+                    }
+                    override fun onDone(utteranceId: String?) {
+                        android.util.Log.d("VoiceManager", "=== TTS_END ===")
+                        android.util.Log.d("VoiceManager", "TTS: utteranceId=$utteranceId")
+                        voiceManager.onTTSFinished()
+                        // VoiceManager handles state transition to ASSISTANT_RECORDING for continuous conversation
+                        // Overlay stays visible based on VoiceManager state
+                        android.util.Log.d("LIMITLESS_TRACE", "TTS completion - VoiceManager will return to ASSISTANT_RECORDING")
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        android.util.Log.w("VoiceManager", "=== TTS_END (error) ===")
+                        android.util.Log.d("VoiceManager", "TTS: utteranceId=$utteranceId")
+                        voiceManager.onTTSFinished()
+                        // VoiceManager handles state transition even on error
+                        android.util.Log.d("LIMITLESS_TRACE", "TTS error - VoiceManager will return to ASSISTANT_RECORDING")
+                    }
+                })
+                ttsRef = ttsInstance
             }
-        )
+        }
+        onDispose {
+            ttsInstance?.stop()
+            ttsInstance?.shutdown()
+            ttsRef = null
+        }
     }
 
     LaunchedEffect(currentRoute, isHazelListening) {
         if (currentRoute in personaHomeRoutes && !isHazelListening) {
             delay(500L)
-            openWakeWordManager.resume()
+            voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.WAKEWORD)
         } else {
-            openWakeWordManager.pause()
+            if (voiceManager.state.value == com.teamdexters.limitless.core.audio.VoiceState.WAKEWORD) {
+                voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.IDLE)
+            }
         }
     }
 
-    DisposableEffect(openWakeWordManager) {
-        onDispose { openWakeWordManager.destroy() }
+    LaunchedEffect(Unit) {
+        voiceManager.state.collect { state ->
+            when (state) {
+                com.teamdexters.limitless.core.audio.VoiceState.VOICE_ASSISTANT,
+                com.teamdexters.limitless.core.audio.VoiceState.ASSISTANT_RECORDING,
+                com.teamdexters.limitless.core.audio.VoiceState.ASSISTANT_PROCESSING,
+                com.teamdexters.limitless.core.audio.VoiceState.TTS_PLAYING -> {
+                    isHazelListening = true
+                }
+                else -> {
+                    isHazelListening = false
+                }
+            }
+        }
     }
-    
+
     // Register BroadcastReceiver for accessibility service action
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == HazelAccessibilityService.ACTION_OPEN_HAZEL) {
                     android.util.Log.d("LIMITLESS_TRACE", "Physical Volume shortcut triggered (ACTION_OPEN_HAZEL)")
-                    isHazelListening = true
+                    // Request ASSISTANT_RECORDING state - VoiceManager controls the transition
+                    voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.ASSISTANT_RECORDING, force = true)
                 }
             }
         }
@@ -341,7 +396,14 @@ fun HazelAssistantWrapper(
                     HazelFloatingMicButton(
                         onClick = {
                             android.util.Log.d("LIMITLESS_TRACE", "Hazel floating mic FAB tapped")
-                            isHazelListening = true
+                            // If TTS is playing, interrupt it and start recording
+                            if (voiceManager.state.value == com.teamdexters.limitless.core.audio.VoiceState.TTS_PLAYING) {
+                                android.util.Log.d("LIMITLESS_TRACE", "Interrupting TTS for user request")
+                                voiceManager.interruptTTS()
+                            } else {
+                                // Request ASSISTANT_RECORDING state - VoiceManager controls the transition
+                                voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.ASSISTANT_RECORDING, force = true)
+                            }
                         }
                     )
                 }
@@ -361,7 +423,6 @@ fun HazelAssistantWrapper(
                         isHazelListening = false
                     },
                     intentRouter = intentRouter,
-                    micArbiter = micArbiter,
                     onIntentResult = { intent ->
                         handleHazelIntent(
                             intent = intent,
@@ -441,13 +502,18 @@ private fun handleHazelIntent(
     onHandled: () -> Unit,
     hazelActionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 ) {
+    android.util.Log.d("LIMITLESS_TRACE", "=== INTENT_ROUTING_START ===")
+    android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ENTRY - Received intent: ${intent.javaClass.simpleName}")
+    
     fun speak(text: String) {
-        android.util.Log.d("LIMITLESS_TRACE", "Hazel speaking: '$text'")
+        android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: TTS - Speaking: '$text'")
         tts?.language = java.util.Locale.US
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "intent_feedback")
     }
 
     val intentName = intent.javaClass.simpleName
+    android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Intent type: $intentName")
+    
     val targetRoute = when (intent) {
         is HazelIntent.NavigateTo -> intent.route
         is HazelIntent.OpenScanner -> Screen.Scanner.route
@@ -460,10 +526,11 @@ private fun handleHazelIntent(
         is HazelIntent.MobilityAssist -> Screen.MobilityHome.route
         else -> "dynamic_query"
     }
-    android.util.Log.d("LIMITLESS_TRACE", "IntentRouter classified: $intentName -> Target Route: $targetRoute")
+    android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Target route: $targetRoute")
 
     when (intent) {
         is HazelIntent.NavigateTo    -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - NavigateTo")
             when (intent.route) {
                 Screen.BlindHome.route -> speak("Navigating to Blind and Low Vision mode for you.")
                 Screen.DeafHome.route -> speak("Navigating to Deaf and Hard of Hearing mode for you.")
@@ -472,30 +539,89 @@ private fun handleHazelIntent(
                 Screen.PersonaSelect.route -> speak("Navigating to the main menu for you.")
             }
             navController.navigate(intent.route)
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - NavigateTo completed")
             onHandled()
         }
-        is HazelIntent.OpenScanner   -> { speak("Opening Accessibility Scanner for you."); navController.navigate(Screen.Scanner.route); onHandled() }
-        is HazelIntent.OpenCommunity -> { speak("Opening Community Reports for you."); navController.navigate(Screen.Community.route); onHandled() }
-        is HazelIntent.OpenPhraseCards -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.OpenNavigation  -> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
-        is HazelIntent.BlindAssist   -> { speak("Navigating to Blind and Low Vision mode for you."); navController.navigate(Screen.BlindHome.route); onHandled() }
-        is HazelIntent.DeafAssist    -> { speak("Navigating to Deaf and Hard of Hearing mode for you."); navController.navigate(Screen.DeafHome.route); onHandled() }
-        is HazelIntent.SpeechAssist  -> { speak("Navigating to Speech Impaired mode for you."); navController.navigate(Screen.SpeechHome.route); onHandled() }
-        is HazelIntent.MobilityAssist-> { speak("Navigating to Mobility and Wheelchair mode for you."); navController.navigate(Screen.MobilityHome.route); onHandled() }
+        is HazelIntent.OpenScanner   -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - OpenScanner")
+            speak("Opening Accessibility Scanner for you."); 
+            navController.navigate(Screen.Scanner.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - OpenScanner completed")
+            onHandled() 
+        }
+        is HazelIntent.OpenCommunity -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - OpenCommunity")
+            speak("Opening Community Reports for you."); 
+            navController.navigate(Screen.Community.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - OpenCommunity completed")
+            onHandled() 
+        }
+        is HazelIntent.OpenPhraseCards -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - OpenPhraseCards")
+            speak("Navigating to Speech Impaired mode for you."); 
+            navController.navigate(Screen.SpeechHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - OpenPhraseCards completed")
+            onHandled() 
+        }
+        is HazelIntent.OpenNavigation  -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - OpenNavigation")
+            speak("Navigating to Mobility and Wheelchair mode for you."); 
+            navController.navigate(Screen.MobilityHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - OpenNavigation completed")
+            onHandled() 
+        }
+        is HazelIntent.BlindAssist   -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - BlindAssist")
+            speak("Navigating to Blind and Low Vision mode for you."); 
+            navController.navigate(Screen.BlindHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - BlindAssist completed")
+            onHandled() 
+        }
+        is HazelIntent.DeafAssist    -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - DeafAssist")
+            speak("Navigating to Deaf and Hard of Hearing mode for you."); 
+            navController.navigate(Screen.DeafHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - DeafAssist completed")
+            onHandled() 
+        }
+        is HazelIntent.SpeechAssist  -> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - SpeechAssist")
+            speak("Navigating to Speech Impaired mode for you."); 
+            navController.navigate(Screen.SpeechHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - SpeechAssist completed")
+            onHandled() 
+        }
+        is HazelIntent.MobilityAssist-> { 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - MobilityAssist")
+            speak("Navigating to Mobility and Wheelchair mode for you."); 
+            navController.navigate(Screen.MobilityHome.route); 
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - MobilityAssist completed")
+            onHandled() 
+        }
         is HazelIntent.GeneralQuery  -> {
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - GeneralQuery")
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Raw query: '${intent.rawQuery}'")
             onHandled()
             
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Checking HazelActionDispatcher")
             val handled = hazelActionDispatcher.parseIntent(intent.rawQuery)
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: HazelActionDispatcher result: $handled")
+            
             if (!handled) {
+                android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Delegating to HazelQueryHandler")
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,
                     scope = scope,
                     tts = tts,
                     onResponseReady = onShowBanner
                 )
+            } else {
+                android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - GeneralQuery handled by HazelActionDispatcher")
             }
         }
         is HazelIntent.VisionQuery  -> {
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - VisionQuery")
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Vision query: '${intent.query}'")
             onHandled()
             queryHandler.handleVisionQuery(
                 query = intent.query,
@@ -503,19 +629,29 @@ private fun handleHazelIntent(
                 tts = tts,
                 onResponseReady = onShowBanner
             )
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - VisionQuery completed")
         }
         is HazelIntent.Unknown -> {
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_START - Unknown")
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Raw query: '${intent.rawQuery}'")
             onHandled()
             
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Checking HazelActionDispatcher")
             val handled = hazelActionDispatcher.parseIntent(intent.rawQuery)
+            android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: HazelActionDispatcher result: $handled")
+            
             if (!handled) {
+                android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: Delegating to HazelQueryHandler")
                 queryHandler.handleGeneralQuery(
                     rawQuery = intent.rawQuery,
                     scope = scope,
                     tts = tts,
                     onResponseReady = onShowBanner
                 )
+            } else {
+                android.util.Log.d("LIMITLESS_TRACE", "INTENT_ROUTING: ACTION_SUCCESS - Unknown handled by HazelActionDispatcher")
             }
         }
     }
+    android.util.Log.d("LIMITLESS_TRACE", "=== INTENT_ROUTING_STOP ===")
 }

@@ -9,6 +9,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -20,7 +22,6 @@ import com.teamdexters.limitless.assistant.cloud.GroqWhisperClient
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.haptics.HapticManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,9 +47,11 @@ import javax.inject.Singleton
 enum class VoiceState {
     IDLE,
     WAKEWORD,
+    VOICE_ASSISTANT, // Legacy state for backward compatibility
+    ASSISTANT_RECORDING,
+    ASSISTANT_PROCESSING,
     DEAF_CAPTION,
     BLIND_COMMAND,
-    VOICE_ASSISTANT,
     NAME_CAPTURE,
     PERSONA_SELECTION,
     TTS_PLAYING
@@ -56,22 +59,9 @@ enum class VoiceState {
 
 sealed class VoiceResult {
     data class Partial(val text: String) : VoiceResult()
-    data class Final(val text: String)   : VoiceResult()
+    data class Final(val text: String) : VoiceResult()
     data class Error(val code: Int, val message: String) : VoiceResult()
 }
-
-private val STATE_PRIORITY = listOf(
-    VoiceState.TTS_PLAYING,
-    VoiceState.VOICE_ASSISTANT,
-    VoiceState.BLIND_COMMAND,
-    VoiceState.DEAF_CAPTION,
-    VoiceState.NAME_CAPTURE,
-    VoiceState.PERSONA_SELECTION,
-    VoiceState.WAKEWORD,
-    VoiceState.IDLE
-)
-
-private fun VoiceState.priority() = STATE_PRIORITY.indexOf(this)
 
 @Singleton
 class VoiceManager @Inject constructor(
@@ -83,6 +73,20 @@ class VoiceManager @Inject constructor(
     companion object {
         private const val TAG = "VoiceManager"
         private const val SAMPLE_RATE = 16000
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val BUFFER_SIZE_MULTIPLIER = 2
+        private const val CONVERSATION_TIMEOUT_MS = 8000L // 8 seconds of silence before returning to wake word
+        private const val MIN_RECORDING_DURATION_MS = 500L
+        private const val MIN_RECORDING_BYTES = 10000
+        
+        // Wake word phrases
+        private val WAKE_WORD_PHRASES = listOf(
+            "hazel",
+            "hey hazel",
+            "okay hazel",
+            "hi hazel"
+        )
     }
 
     private val _state = MutableStateFlow(VoiceState.IDLE)
@@ -95,496 +99,890 @@ class VoiceManager @Inject constructor(
     val liveCaptions: StateFlow<String> = _liveCaptions.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var recognizer: SpeechRecognizer? = null
-
-    // AudioRecord elements
+    
+    // AudioRecord elements - single instance
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
-
-    // Tracks the currently active transition coroutine so force requests can cancel it
+    private var conversationTimeoutJob: Job? = null
     private var transitionJob: Job? = null
+    
+    // SpeechRecognizer for DEAF_CAPTION and other states
+    private var recognizer: SpeechRecognizer? = null
+    private var recognizerJob: Job? = null
+    
+    // Continuous name monitoring recognizer (runs during assistant recording)
+    private var nameMonitoringRecognizer: SpeechRecognizer? = null
+    
+    // Wake word recognizer (single instance for continuous detection)
+    private var wakeWordRecognizer: SpeechRecognizer? = null
 
-    private var isContinuous = false
+    // Audio effects
+    private var agc: AutomaticGainControl? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+
+    // State tracking
     private var transitionInProgress = false
-    private var previousState: VoiceState = VoiceState.IDLE
-
+    private var isTtsSpeaking = false
+    private var userName: String = "" // Cached name for haptic vocabulary
+    private var muteWakeWordDuringTts = true // Mute wake word detection during TTS
+    
+    // Audio focus
     private val audioManager by lazy {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     private var audioFocusRequest: AudioFocusRequest? = null
 
-    // --- Dynamic name from SecureKeyProvider ---
-    private val currentUserName: String
-        get() = secureKeyProvider.getUserName()?.trim() ?: ""
-
-    /**
-     * Checks if the transcript contains the user's saved name (case-insensitive).
-     * Fires [HapticManager.playNameRhythm] and logs a LIMITLESS_TRACE entry.
-     * Runs across ALL states: WAKEWORD, DEAF_CAPTION, VOICE_ASSISTANT, etc.
-     */
-    private fun checkForNameAndVibrate(transcript: String) {
-        val name = currentUserName
-        Log.d(TAG, "Checking speech '$transcript' against target name '$name'")
-        if (name.isNotEmpty() && transcript.isNotEmpty()) {
-            if (transcript.lowercase().contains(name.lowercase())) {
-                Log.d("LIMITLESS_TRACE", "Haptic name match found for '$name' in speech: '$transcript'")
-                hapticManager.playNameRhythm(name)
-            }
-        }
+    init {
+        // Load user name once at initialization
+        loadUserName()
     }
 
-    // --- State Machine ---
+    private fun loadUserName() {
+        userName = secureKeyProvider.getUserName()?.trim().orEmpty()
+        Log.d(TAG, "HAPTIC_INIT: Loaded user name: '$userName'")
+    }
 
+    /**
+     * Public API for external components to request state changes.
+     * Overlay UI should NEVER call this - it's UI-only.
+     * Only MainActivity should call this for explicit user actions (FAB tap).
+     */
     fun requestState(newState: VoiceState, force: Boolean = false): Boolean {
         val current = _state.value
+        val timestamp = System.currentTimeMillis()
+        
+        // Legacy compatibility: map VOICE_ASSISTANT to ASSISTANT_RECORDING
+        val actualNewState = if (newState == VoiceState.VOICE_ASSISTANT) {
+            VoiceState.ASSISTANT_RECORDING
+        } else {
+            newState
+        }
+        
+        Log.d(TAG, "STATE_REQUEST[$timestamp]: $current → $actualNewState (force=$force, original=$newState)")
 
-        // ── Re-entrancy guard for VOICE_ASSISTANT ────────────────────────────
-        // If HazelListeningOverlay mounts while VOICE_ASSISTANT is already active
-        // and Groq Whisper is recording, silently return true to avoid cancelling
-        // the in-flight recordingJob.
-        if (newState == VoiceState.VOICE_ASSISTANT
-            && current == VoiceState.VOICE_ASSISTANT
-            && recordingJob?.isActive == true) {
-            Log.d(TAG, "requestState(VOICE_ASSISTANT): already recording — no-op to protect Whisper job")
+        // Prevent duplicate state requests
+        if (current == actualNewState) {
+            Log.d(TAG, "STATE_REQUEST[$timestamp]: Already in $actualNewState, ignoring")
             return true
         }
 
-        if (current == newState) return true
-        if (!force && newState.priority() > current.priority()) return false
-        if (transitionInProgress && !force) return false
+        // Prevent concurrent transitions
+        if (transitionInProgress && !force) {
+            Log.w(TAG, "STATE_REQUEST[$timestamp]: Transition in progress, denying request")
+            return false
+        }
 
-        // Force-preempt any in-progress transition (e.g. shutdown from onStop)
+        // Force override
         if (transitionInProgress && force) {
-            Log.w(TAG, "Force-preempting transition to ${_state.value} for $newState")
+            Log.w(TAG, "STATE_REQUEST[$timestamp]: Force-preempting transition")
             transitionJob?.cancel()
-            stopAudioRecord()
-            stopAndDestroyRecognizer()
+            stopAllAudio()
             transitionInProgress = false
         }
 
-        Log.i(TAG, "STATE CHANGE: $current → $newState")
-        transitionJob = scope.launch { doTransition(current, newState) }
+        transitionInProgress = true
+        transitionJob = scope.launch {
+            doTransition(current, actualNewState, timestamp)
+        }
         return true
     }
 
-    fun onTTSStarted() {
-        Log.d(TAG, "TTS START")
-        previousState = _state.value
-        requestState(VoiceState.TTS_PLAYING, force = true)
-    }
-
-    fun onTTSFinished() {
-        Log.d(TAG, "TTS END")
-        // After TTS completes, always return to WAKEWORD state
-        requestState(VoiceState.WAKEWORD, force = true)
-    }
-
-    fun shutdown() {
-        Log.d(TAG, "SHUTDOWN called — forcing IDLE")
-        requestState(VoiceState.IDLE, force = true)
-    }
-
-    private suspend fun doTransition(from: VoiceState, to: VoiceState) {
-        transitionInProgress = true
+    private suspend fun doTransition(from: VoiceState, to: VoiceState, timestamp: Long) {
+        Log.d(TAG, "=== STATE_TRANSITION_START ===")
+        Log.d(TAG, "STATE: $from → $to (timestamp=$timestamp)")
+        val startTime = System.currentTimeMillis()
+        
         try {
-            // Special case: WAKEWORD -> VOICE_ASSISTANT transition doesn't need teardown
-            // since they both use AudioRecord and we want to preserve the recording
-            if (from == VoiceState.WAKEWORD && to == VoiceState.VOICE_ASSISTANT) {
-                Log.d(TAG, "Direct WAKEWORD -> VOICE_ASSISTANT transition (no teardown)")
-                _state.value = to
-                Log.i(TAG, "MIC ACQUIRED for $to")
-                activate(to)
-            } else {
-                teardown(from)
-                delay(400) // Hardware settling
-                Log.d(TAG, "MIC RELEASED")
-                _state.value = to
-                Log.i(TAG, "MIC ACQUIRED for $to")
-                activate(to)
+            // Teardown current state
+            teardown(from)
+            
+            // Hardware settling delay
+            if (from != VoiceState.IDLE && to != VoiceState.IDLE) {
+                delay(200)
             }
+            
+            // Update state
+            _state.value = to
+            Log.d(TAG, "STATE: Updated to $to")
+            
+            // Activate new state
+            activate(to)
+            
+            val duration = System.currentTimeMillis() - startTime
+            Log.d(TAG, "=== STATE_TRANSITION_END === Duration=${duration}ms")
+        } catch (e: Exception) {
+            Log.e(TAG, "=== STATE_TRANSITION_ERROR ===")
+            Log.e(TAG, "STATE: ${e.message}", e)
+            _state.value = VoiceState.IDLE
         } finally {
             transitionInProgress = false
         }
     }
 
     private fun teardown(state: VoiceState) {
+        Log.d(TAG, "TEARDOWN: $state")
         when (state) {
-            VoiceState.WAKEWORD, VoiceState.VOICE_ASSISTANT -> {
-                Log.d(TAG, "WAKE WORD STOP / ASSISTANT STOP (releasing AudioRecord)")
-                stopAudioRecord()
+            VoiceState.WAKEWORD -> stopWakeWordRecording()
+            VoiceState.VOICE_ASSISTANT -> { // Legacy compatibility
+                stopAssistantRecording()
+                stopNameMonitoring()
             }
-            VoiceState.TTS_PLAYING -> releaseAudioFocus()
-            else -> stopAndDestroyRecognizer()
+            VoiceState.ASSISTANT_RECORDING -> {
+                stopAssistantRecording()
+                stopNameMonitoring()
+            }
+            VoiceState.ASSISTANT_PROCESSING -> {
+                // Processing state doesn't hold audio resources
+                stopNameMonitoring()
+            }
+            VoiceState.TTS_PLAYING -> {
+                releaseAudioFocus()
+                cancelConversationTimeout()
+                stopNameMonitoring()
+            }
+            VoiceState.DEAF_CAPTION -> stopRecognizer()
+            VoiceState.BLIND_COMMAND, VoiceState.NAME_CAPTURE, VoiceState.PERSONA_SELECTION -> stopRecognizer()
+            VoiceState.IDLE -> {}
         }
+        
         if (state == VoiceState.DEAF_CAPTION) {
             _liveCaptions.value = ""
         }
     }
 
     private fun activate(state: VoiceState) {
+        Log.d(TAG, "ACTIVATE: $state")
         when (state) {
             VoiceState.IDLE -> {}
-            VoiceState.WAKEWORD -> {
-                Log.d(TAG, "WAKE WORD START")
-                startWakeWordRecord()
-            }
-            VoiceState.VOICE_ASSISTANT -> {
+            VoiceState.WAKEWORD -> startWakeWordRecording()
+            VoiceState.VOICE_ASSISTANT -> { // Legacy compatibility
                 acquireAudioFocus()
-                startAssistantRecord()
+                startAssistantRecording()
             }
-            VoiceState.DEAF_CAPTION -> {
-                isContinuous = true
-                startRecognizer(continuous = true)
+            VoiceState.ASSISTANT_RECORDING -> {
+                acquireAudioFocus()
+                startAssistantRecording()
             }
+            VoiceState.DEAF_CAPTION -> startRecognizer(continuous = true)
             VoiceState.BLIND_COMMAND, VoiceState.NAME_CAPTURE, VoiceState.PERSONA_SELECTION -> {
-                isContinuous = false
                 startRecognizer(continuous = false)
             }
             VoiceState.TTS_PLAYING -> {}
+            VoiceState.ASSISTANT_PROCESSING -> {} // Processing state is passive
         }
     }
 
-    // --- AudioRecord for WakeWord & Assistant ---
+    // --- Wake Word Recording ---
 
-    private fun startWakeWordRecord() {
-        if (!hasMicPermission()) return
-        stopAudioRecord()
-        recordingJob = scope.launch(Dispatchers.IO) {
-            try {
-                audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                    AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2
-                )
-                audioRecord?.startRecording()
-                var ambientRms = 100.0f
-                var consecutiveSpeechFrames = 0
-                var postSpeechSilenceFrames = 0
-                var shouldExit = false
-                val buffer = ShortArray(1024)
-                val startTime = System.currentTimeMillis()
-
-                while (isActive && _state.value == VoiceState.WAKEWORD && !shouldExit) {
-                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                    if (read > 0) {
-                        val rms = calculateRMS(buffer)
-                        val zcr = calculateZCR(buffer, read)
-                        val durationMs = System.currentTimeMillis() - startTime
-
-                        // Dynamically adapt to ambient noise floor
-                        ambientRms = (0.95f * ambientRms + 0.05f * rms).coerceIn(50.0f, 1000.0f)
-                        val dynamicThreshold = (ambientRms * 2.2f).coerceIn(350.0f, 1200.0f)
-                        
-                        // Multi-parameter wake word validation: RMS >= 450.0, ZCR in 20..450, duration in 300..2500ms
-                        val isSpeechFrame = rms >= 450.0f && zcr in 20..450 && durationMs in 300..2500
-
-                        if (isSpeechFrame) {
-                            consecutiveSpeechFrames++
-                            postSpeechSilenceFrames = 0
-                            // Limit max utterance duration: >2.5s is continuous conversation/noise, not a wake phrase
-                            if (consecutiveSpeechFrames > 40) {
-                                consecutiveSpeechFrames = 0
-                            }
-                        } else {
-                            // Phrase completed if speech burst was between 320ms and 1600ms
-                            if (consecutiveSpeechFrames in 5..25) {
-                                postSpeechSilenceFrames++
-                                if (postSpeechSilenceFrames >= 2) {
-                                    Log.d(TAG, "Valid wake word speech detected (RMS=$rms, ZCR=$zcr, Duration=${durationMs}ms). Requesting VOICE_ASSISTANT.")
-                                    withContext(Dispatchers.Main) { 
-                                        requestState(VoiceState.VOICE_ASSISTANT)
-                                        shouldExit = true
-                                    }
-                                }
-                            } else {
-                                consecutiveSpeechFrames = 0
-                                postSpeechSilenceFrames = 0
-                            }
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                // Normal lifecycle event - log at debug level
-                Log.d(TAG, "Wake word recording cancelled (normal lifecycle event)")
-            } catch (e: Exception) {
-                Log.e(TAG, "WAKEWORD exception: ${e.message}")
-            } finally {
-                stopAudioRecord()
-            }
-        }
-    }
-
-    private fun startAssistantRecord() {
+    private fun startWakeWordRecording() {
+        Log.d(TAG, "=== WAKEWORD_START ===")
+        Log.d(TAG, "WAKEWORD: Starting wake word detection")
         if (!hasMicPermission()) {
-            _results.tryEmit(VoiceResult.Error(-1, "Permission denied"))
+            Log.e(TAG, "WAKEWORD: Permission denied")
             return
         }
-        stopAudioRecord()
+        
+        stopAllAudio()
+        
+        // Initialize wake word recognizer (single instance)
+        initializeWakeWordRecognizer()
+        
         recordingJob = scope.launch(Dispatchers.IO) {
-            val audioFile = File(context.cacheDir, "assistant_audio.wav")
+            val timestamp = System.currentTimeMillis()
             try {
-                audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                    AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2
-                )
+                initializeAudioRecord()
+                enableAudioEffects()
                 audioRecord?.startRecording()
-
-                val pcmData = mutableListOf<ShortArray>()
-                var silenceFrames = 0
+                Log.d(TAG, "=== AUDIO_START ===")
+                Log.d(TAG, "AUDIO: Wake word recording started at $timestamp")
+                
                 val buffer = ShortArray(1024)
-                val maxRecordingFrames = 250 // ~4 seconds at 16kHz
-
-                while (isActive && _state.value == VoiceState.VOICE_ASSISTANT && pcmData.size < maxRecordingFrames) {
+                var lastSpeechTime = System.currentTimeMillis()
+                
+                while (isActive && _state.value == VoiceState.WAKEWORD) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    
                     if (read > 0) {
-                        val chunk = buffer.copyOf(read)
-                        pcmData.add(chunk)
-
-                        // Silence detection (~1 second)
-                        val rms = calculateRMS(chunk)
-                        if (rms < 350f) silenceFrames++ else silenceFrames = 0
-
-                        if (silenceFrames > 30) {
-                            Log.d(TAG, "Silence detected, stopping recording")
+                        val rms = calculateRMS(buffer)
+                        
+                        // Speech detection
+                        if (rms > 450f) {
+                            lastSpeechTime = System.currentTimeMillis()
+                            
+                            // Use SpeechRecognizer for actual wake word detection
+                            // This is more accurate than audio analysis
+                            withContext(Dispatchers.Main) {
+                                if (_state.value == VoiceState.WAKEWORD) {
+                                    triggerWakeWordRecognition()
+                                }
+                            }
+                        }
+                        
+                        // Return to wake word after 30 seconds of silence
+                        if (System.currentTimeMillis() - lastSpeechTime > 30000) {
+                            Log.d(TAG, "WAKEWORD[$timestamp]: Timeout - restarting")
                             break
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                Log.d(TAG, "WAKEWORD[$timestamp]: Cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "WAKEWORD[$timestamp]: Error - ${e.message}", e)
+            } finally {
+                Log.d(TAG, "=== AUDIO_STOP ===")
+                Log.d(TAG, "AUDIO: Wake word recording stopped")
+                Log.d(TAG, "=== WAKEWORD_STOP ===")
                 stopAudioRecord()
+                stopWakeWordRecognizer()
+            }
+        }
+    }
+    
+    private fun initializeWakeWordRecognizer() {
+        wakeWordRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        if (wakeWordRecognizer == null) {
+            Log.e(TAG, "WAKEWORD: Failed to create SpeechRecognizer")
+            return
+        }
+        
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        }
+        
+        wakeWordRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                Log.d(TAG, "WAKEWORD: Ready for speech")
+            }
+            
+            override fun onBeginningOfSpeech() {
+                Log.d(TAG, "WAKEWORD: Speech detected")
+            }
+            
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                Log.d(TAG, "WAKEWORD: Speech ended")
+            }
+            
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                Log.d(TAG, "WAKEWORD: Recognized: '$text'")
+                
+                if (isWakeWord(text)) {
+                    Log.d(TAG, "=== WAKEWORD_DETECTED ===")
+                    Log.d(TAG, "WAKEWORD: Transitioning to ASSISTANT_RECORDING")
+                    requestState(VoiceState.ASSISTANT_RECORDING)
+                }
+            }
+            
+            override fun onPartialResults(partialResults: Bundle?) {
+                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                
+                if (isWakeWord(text)) {
+                    Log.d(TAG, "=== WAKEWORD_DETECTED (partial) ===")
+                    requestState(VoiceState.ASSISTANT_RECORDING)
+                }
+            }
+            
+            override fun onError(error: Int) {
+                Log.d(TAG, "WAKEWORD: Recognizer error: $error")
+            }
+        })
+    }
+    
+    private fun triggerWakeWordRecognition() {
+        if (wakeWordRecognizer == null) {
+            Log.e(TAG, "WAKEWORD: Recognizer not initialized")
+            return
+        }
+        
+        // Mute wake word detection during TTS to avoid false positives
+        if (muteWakeWordDuringTts) {
+            Log.d(TAG, "WAKEWORD: Muted during TTS - skipping recognition")
+            return
+        }
+        
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        }
+        
+        try {
+            wakeWordRecognizer?.startListening(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "WAKEWORD: Failed to start recognizer - ${e.message}")
+        }
+    }
+    
+    private fun stopWakeWordRecognizer() {
+        Log.d(TAG, "WAKEWORD_RECOGNIZER_STOP")
+        try { wakeWordRecognizer?.stopListening() } catch (_: Exception) {}
+        try { wakeWordRecognizer?.destroy() } catch (_: Exception) {}
+        wakeWordRecognizer = null
+    }
 
-                // Execute Whisper STT -> Groq LLM -> TTS pipeline with NonCancellable to prevent cancellation
-                withContext(NonCancellable) {
-                    Log.d(TAG, "WHISPER_START")
-                    saveAsWav(pcmData, audioFile)
-                    val result = groqWhisperClient.transcribeAudio(audioFile)
+    private fun isWakeWord(text: String): Boolean {
+        val lowerText = text.lowercase().trim()
+        return WAKE_WORD_PHRASES.any { lowerText.contains(it) }
+    }
 
-                    if (result.isSuccess) {
-                        val text = result.getOrNull() ?: ""
-                        Log.d(TAG, "WHISPER_STOP success text_len=${text.length}")
-                        // Check for user's name in assistant transcript too
-                        if (text.isNotEmpty()) checkForNameAndVibrate(text)
-                        withContext(Dispatchers.Main) {
-                            _results.tryEmit(VoiceResult.Final(text))
-                            // Request TTS to speak the response
-                            onTTSStarted()
+    private fun stopWakeWordRecording() {
+        Log.d(TAG, "WAKEWORD_STOP")
+        recordingJob?.cancel()
+        recordingJob = null
+        stopAudioRecord()
+        stopWakeWordRecognizer()
+    }
+
+    // --- Assistant Recording (Continuous Conversation Mode) ---
+
+    private fun startAssistantRecording() {
+        Log.d(TAG, "=== ASSISTANT_START ===")
+        Log.d(TAG, "ASSISTANT: Starting assistant recording")
+        if (!hasMicPermission()) {
+            Log.e(TAG, "ASSISTANT: Permission denied")
+            _results.tryEmit(VoiceResult.Error(-1, "Permission denied"))
+            requestState(VoiceState.WAKEWORD)
+            return
+        }
+        
+        stopAllAudio()
+        
+        // Start continuous name monitoring
+        startNameMonitoring()
+        
+        recordingJob = scope.launch(Dispatchers.IO) {
+            val timestamp = System.currentTimeMillis()
+            val audioFile = File(context.cacheDir, "assistant_audio_${timestamp}.wav")
+            var totalBytesRecorded = 0L
+            var totalFrames = 0
+            var silenceFrames = 0
+            val buffer = ShortArray(1024)
+            val pcmData = mutableListOf<ShortArray>()
+            
+            try {
+                initializeAudioRecord()
+                enableAudioEffects()
+                audioRecord?.startRecording()
+                Log.d(TAG, "=== AUDIO_START ===")
+                Log.d(TAG, "AUDIO: Assistant recording started at $timestamp")
+                
+                // Reset conversation timeout
+                resetConversationTimeout()
+                
+                while (isActive && _state.value == VoiceState.ASSISTANT_RECORDING) {
+                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    
+                    if (read > 0) {
+                        val chunk = buffer.copyOf(read)
+                        pcmData.add(chunk)
+                        totalBytesRecorded += read * 2
+                        totalFrames++
+                        
+                        val rms = calculateRMS(chunk)
+                        
+                        // VAD: Detect silence
+                        if (rms < 350f) {
+                            silenceFrames++
+                        } else {
+                            silenceFrames = 0
+                            resetConversationTimeout()
                         }
-                    } else {
-                        Log.e(TAG, "WHISPER_STOP error: ${result.exceptionOrNull()?.message}")
-                        withContext(Dispatchers.Main) {
-                            _results.tryEmit(VoiceResult.Error(-1, "Whisper failed"))
-                            requestState(VoiceState.WAKEWORD, force = true)
+                        
+                        // End recording after sufficient silence
+                        if (silenceFrames > 30 && totalFrames > 30) {
+                            Log.d(TAG, "ASSISTANT[$timestamp]: VAD: Silence detected - processing")
+                            break
+                        }
+                        
+                        // Max recording duration (10 seconds)
+                        if (totalFrames > 625) { // ~10 seconds at 16kHz
+                            Log.d(TAG, "ASSISTANT[$timestamp]: Max duration reached - processing")
+                            break
                         }
                     }
                 }
+                
+                val duration = System.currentTimeMillis() - timestamp
+                Log.d(TAG, "=== AUDIO_STOP ===")
+                Log.d(TAG, "AUDIO: Assistant recording stopped - Duration=${duration}ms, Frames=$totalFrames, Bytes=$totalBytesRecorded")
+                
+                // Validate recording before processing
+                if (totalBytesRecorded < MIN_RECORDING_BYTES || duration < MIN_RECORDING_DURATION_MS) {
+                    Log.w(TAG, "ASSISTANT[$timestamp]: Recording too short - discarding (bytes=$totalBytesRecorded, duration=${duration}ms)")
+                    audioFile.delete()
+                    _results.tryEmit(VoiceResult.Error(-1, "Recording too short"))
+                    requestState(VoiceState.ASSISTANT_RECORDING) // Restart recording
+                    return@launch
+                }
+                
+                // Transition to processing state
+                requestState(VoiceState.ASSISTANT_PROCESSING)
+                
+                // Process audio
+                processAssistantAudio(pcmData, audioFile, timestamp)
+                
             } catch (e: CancellationException) {
-                // Normal lifecycle event - log at debug level as specified
-                Log.d(TAG, "Assistant recording cancelled (normal lifecycle event)")
-                withContext(Dispatchers.Main) {
-                    requestState(VoiceState.WAKEWORD, force = true)
-                }
+                Log.d(TAG, "ASSISTANT[$timestamp]: Cancelled")
             } catch (e: Exception) {
-                Log.e(TAG, "Assistant recording exception: ${e.message}")
-                withContext(Dispatchers.Main) { 
-                    requestState(VoiceState.WAKEWORD, force = true)
-                }
+                Log.e(TAG, "ASSISTANT[$timestamp]: Error - ${e.message}", e)
+                _results.tryEmit(VoiceResult.Error(-1, e.message ?: "Unknown error"))
+                requestState(VoiceState.WAKEWORD)
             } finally {
                 stopAudioRecord()
+                stopNameMonitoring()
                 audioFile.delete()
             }
         }
     }
 
-    private fun calculateRMS(buffer: ShortArray): Float {
-        var sum = 0L
-        for (s in buffer) sum += s.toLong() * s.toLong()
-        return if (buffer.isNotEmpty()) Math.sqrt(sum.toDouble() / buffer.size).toFloat() else 0f
+    private suspend fun processAssistantAudio(pcmData: List<ShortArray>, audioFile: File, timestamp: Long) {
+        Log.d(TAG, "=== ASSISTANT_PROCESSING_START ===")
+        Log.d(TAG, "ASSISTANT: Processing audio from $timestamp")
+        val startTime = System.currentTimeMillis()
+        
+        try {
+            // Normalize and trim audio
+            Log.d(TAG, "ASSISTANT: Normalizing PCM data")
+            val normalizedPcm = normalizePCM(pcmData)
+            Log.d(TAG, "ASSISTANT: Trimming silence")
+            val trimmedPcm = trimSilence(normalizedPcm)
+            
+            // Save as WAV
+            Log.d(TAG, "ASSISTANT: Saving as WAV")
+            saveAsWav(trimmedPcm, audioFile)
+            Log.d(TAG, "ASSISTANT: WAV saved - ${audioFile.length()} bytes")
+            
+            // Transcribe with Whisper
+            Log.d(TAG, "=== WHISPER_START ===")
+            val whisperStart = System.currentTimeMillis()
+            val result = groqWhisperClient.transcribeAudio(audioFile)
+            val whisperDuration = System.currentTimeMillis() - whisperStart
+            
+            if (result.isSuccess) {
+                Log.d(TAG, "=== WHISPER_SUCCESS ===")
+                Log.d(TAG, "WHISPER: Completed in ${whisperDuration}ms")
+                val text = result.getOrNull()?.trim() ?: ""
+                Log.d(TAG, "WHISPER: Transcription: '$text'")
+                
+                if (text.isNotEmpty()) {
+                    // Emit final result
+                    _results.tryEmit(VoiceResult.Final(text))
+                    
+                    // Check for name in transcript
+                    checkForNameAndVibrate(text)
+                    
+                    // Reset conversation timeout for next turn
+                    resetConversationTimeout()
+                    
+                    // Return to recording for continuous conversation
+                    Log.d(TAG, "=== RETURN_TO_ASSISTANT ===")
+                    Log.d(TAG, "ASSISTANT: Returning to ASSISTANT_RECORDING for next turn")
+                    requestState(VoiceState.ASSISTANT_RECORDING)
+                } else {
+                    Log.w(TAG, "WHISPER: Empty transcription - restarting")
+                    requestState(VoiceState.ASSISTANT_RECORDING)
+                }
+            } else {
+                Log.e(TAG, "=== WHISPER_FAILURE ===")
+                Log.e(TAG, "WHISPER: Failed - restarting")
+                requestState(VoiceState.ASSISTANT_RECORDING)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ASSISTANT: Processing error - ${e.message}", e)
+            requestState(VoiceState.ASSISTANT_RECORDING)
+        }
+        
+        val duration = System.currentTimeMillis() - startTime
+        Log.d(TAG, "=== ASSISTANT_PROCESSING_END === Duration=${duration}ms")
     }
 
-    private fun calculateZCR(buffer: ShortArray, size: Int): Int {
-        var zeroCrossings = 0
-        if (size == 0) return 0
-        var prevSign = buffer[0] > 0
-        for (i in 1 until size) {
-            val sign = buffer[i] > 0
-            if (sign != prevSign) {
-                zeroCrossings++
-                prevSign = sign
+    private fun stopAssistantRecording() {
+        Log.d(TAG, "ASSISTANT_STOP")
+        recordingJob?.cancel()
+        recordingJob = null
+        stopAudioRecord()
+    }
+
+    // --- Conversation Timeout ---
+
+    private fun resetConversationTimeout() {
+        conversationTimeoutJob?.cancel()
+        conversationTimeoutJob = scope.launch {
+            delay(CONVERSATION_TIMEOUT_MS)
+            if (_state.value == VoiceState.ASSISTANT_RECORDING) {
+                Log.d(TAG, "=== CONVERSATION_TIMEOUT ===")
+                Log.d(TAG, "TIMEOUT: No speech for ${CONVERSATION_TIMEOUT_MS}ms")
+                Log.d(TAG, "=== RETURN_TO_WAKEWORD ===")
+                requestState(VoiceState.WAKEWORD)
             }
         }
-        return zeroCrossings
     }
 
-    private fun saveAsWav(pcmData: List<ShortArray>, file: File) {
-        val totalShorts = pcmData.sumOf { it.size }
-        val byteBuffer = ByteBuffer.allocate(totalShorts * 2).order(ByteOrder.LITTLE_ENDIAN)
-        for (chunk in pcmData) {
-            for (s in chunk) byteBuffer.putShort(s)
+    private fun cancelConversationTimeout() {
+        conversationTimeoutJob?.cancel()
+        conversationTimeoutJob = null
+    }
+
+    // --- Name Detection (Continuous) ---
+
+    private fun startNameMonitoring() {
+        if (userName.isEmpty()) {
+            Log.d(TAG, "NAME_MONITORING: No user name configured, skipping")
+            return
         }
-        val audioBytes = byteBuffer.array()
+        
+        Log.d(TAG, "=== NAME_MONITORING_START ===")
+        Log.d(TAG, "NAME_MONITORING: Monitoring for name '$userName'")
+        
+        nameMonitoringRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        if (nameMonitoringRecognizer == null) {
+            Log.e(TAG, "NAME_MONITORING: Failed to create SpeechRecognizer")
+            return
+        }
+        
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+        }
+        
+        nameMonitoringRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                Log.d(TAG, "NAME_MONITORING: Ready for speech")
+            }
+            
+            override fun onBeginningOfSpeech() {
+                Log.d(TAG, "NAME_MONITORING: Speech detected")
+            }
+            
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                Log.d(TAG, "NAME_MONITORING: Speech ended - restarting")
+                // Restart listening for continuous monitoring
+                try {
+                    nameMonitoringRecognizer?.startListening(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "NAME_MONITORING: Failed to restart - ${e.message}")
+                }
+            }
+            
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                Log.d(TAG, "NAME_MONITORING: Final result - '$text'")
+                checkForNameAndVibrate(text)
+                // Restart for continuous monitoring
+                try {
+                    nameMonitoringRecognizer?.startListening(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "NAME_MONITORING: Failed to restart - ${e.message}")
+                }
+            }
+            
+            override fun onPartialResults(partialResults: Bundle?) {
+                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull()?.trim() ?: ""
+                if (text.isNotEmpty()) {
+                    Log.d(TAG, "NAME_MONITORING: Partial result - '$text'")
+                    checkForNameAndVibrate(text)
+                }
+            }
+            
+            override fun onError(error: Int) {
+                val name = errorName(error)
+                Log.e(TAG, "NAME_MONITORING: Error $error ($name)")
+                // Restart on recoverable errors
+                if (error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                    try {
+                        nameMonitoringRecognizer?.startListening(intent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "NAME_MONITORING: Failed to restart - ${e.message}")
+                    }
+                }
+            }
+        })
+        
+        try {
+            nameMonitoringRecognizer?.startListening(intent)
+            Log.d(TAG, "NAME_MONITORING: Started listening")
+        } catch (e: Exception) {
+            Log.e(TAG, "NAME_MONITORING: Failed to start - ${e.message}")
+            stopNameMonitoring()
+        }
+    }
+    
+    private fun stopNameMonitoring() {
+        Log.d(TAG, "=== NAME_MONITORING_STOP ===")
+        try { nameMonitoringRecognizer?.stopListening() } catch (_: Exception) {}
+        try { nameMonitoringRecognizer?.destroy() } catch (_: Exception) {}
+        nameMonitoringRecognizer = null
+    }
 
-        val header = ByteArray(44)
-        val totalDataLen = audioBytes.size + 36
-        val sampleRate = SAMPLE_RATE.toLong()
-        val byteRate = sampleRate * 2
+    private fun checkForNameAndVibrate(transcript: String) {
+        if (userName.isEmpty() || transcript.isEmpty()) return
+        
+        // Fuzzy matching: ignore case, punctuation
+        val cleanTranscript = transcript.lowercase().replace(Regex("[^a-z\\s]"), "")
+        val cleanName = userName.lowercase()
+        
+        if (cleanTranscript.contains(cleanName)) {
+            Log.d(TAG, "=== HAPTIC_MATCH ===")
+            Log.d(TAG, "HAPTIC: Name '$userName' detected in: '$transcript'")
+            hapticManager.playNameRhythm(userName)
+        }
+    }
 
-        header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
-        header[4] = (totalDataLen and 0xff).toByte(); header[5] = ((totalDataLen shr 8) and 0xff).toByte()
-        header[6] = ((totalDataLen shr 16) and 0xff).toByte(); header[7] = ((totalDataLen shr 24) and 0xff).toByte()
-        header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
-        header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
-        header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
-        header[20] = 1; header[21] = 0; header[22] = 1; header[23] = 0
-        header[24] = (sampleRate and 0xff).toByte(); header[25] = ((sampleRate shr 8) and 0xff).toByte()
-        header[26] = ((sampleRate shr 16) and 0xff).toByte(); header[27] = ((sampleRate shr 24) and 0xff).toByte()
-        header[28] = (byteRate and 0xff).toByte(); header[29] = ((byteRate shr 8) and 0xff).toByte()
-        header[30] = ((byteRate shr 16) and 0xff).toByte(); header[31] = ((byteRate shr 24) and 0xff).toByte()
-        header[32] = 2; header[33] = 0; header[34] = 16; header[35] = 0
-        header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
-        header[40] = (audioBytes.size and 0xff).toByte(); header[41] = ((audioBytes.size shr 8) and 0xff).toByte()
-        header[42] = ((audioBytes.size shr 16) and 0xff).toByte(); header[43] = ((audioBytes.size shr 24) and 0xff).toByte()
+    // --- Audio Record Management ---
 
-        FileOutputStream(file).use { out ->
-            out.write(header)
-            out.write(audioBytes)
+    private fun initializeAudioRecord() {
+        Log.d(TAG, "AUDIO_RECORD: Initializing AudioRecord")
+        // Try different audio sources to find the best one
+        val sources = listOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.MIC
+        )
+        
+        for (source in sources) {
+            try {
+                val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+                val bufferSize = minBufferSize * BUFFER_SIZE_MULTIPLIER
+                
+                audioRecord = AudioRecord(source, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+                
+                if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+                    val sourceName = when (source) {
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION -> "VOICE_COMMUNICATION"
+                        MediaRecorder.AudioSource.MIC -> "MIC"
+                        else -> "UNKNOWN"
+                    }
+                    Log.d(TAG, "AUDIO_RECORD: Initialized with source=$sourceName, SampleRate=$SAMPLE_RATE, BufferSize=$bufferSize")
+                    return
+                } else {
+                    audioRecord?.release()
+                    audioRecord = null
+                }
+            } catch (e: Exception) {
+                val sourceName = when (source) {
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION -> "VOICE_COMMUNICATION"
+                    MediaRecorder.AudioSource.MIC -> "MIC"
+                    else -> "UNKNOWN"
+                }
+                Log.w(TAG, "AUDIO_RECORD: Failed with source=$sourceName - ${e.message}")
+                audioRecord?.release()
+                audioRecord = null
+            }
+        }
+        
+        if (audioRecord == null) {
+            Log.e(TAG, "AUDIO_RECORD: Failed to initialize with any source")
+            throw Exception("Failed to initialize AudioRecord with any source")
+        }
+    }
+
+    private fun enableAudioEffects() {
+        Log.d(TAG, "AUDIO_EFFECTS: Attempting to enable audio effects")
+        try {
+            // Automatic Gain Control
+            if (AutomaticGainControl.isAvailable()) {
+                agc = AutomaticGainControl.create(audioRecord?.audioSessionId ?: 0)
+                agc?.setEnabled(true)
+                Log.d(TAG, "AUDIO_EFFECTS: AGC enabled successfully")
+            } else {
+                Log.d(TAG, "AUDIO_EFFECTS: AGC not available on this device")
+            }
+            
+            // Noise Suppressor
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor = NoiseSuppressor.create(audioRecord?.audioSessionId ?: 0)
+                noiseSuppressor?.setEnabled(true)
+                Log.d(TAG, "AUDIO_EFFECTS: NoiseSuppressor enabled successfully")
+            } else {
+                Log.d(TAG, "AUDIO_EFFECTS: NoiseSuppressor not available on this device")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AUDIO_EFFECTS: Failed to enable effects - ${e.message}")
         }
     }
 
     private fun stopAudioRecord() {
-        recordingJob?.cancel()
-        recordingJob = null
+        agc?.release()
+        agc = null
+        noiseSuppressor?.release()
+        noiseSuppressor = null
+        
         try { audioRecord?.stop() } catch (_: Exception) {}
         try { audioRecord?.release() } catch (_: Exception) {}
         audioRecord = null
     }
 
-    // --- SpeechRecognizer ---
+    private fun stopAllAudio() {
+        stopWakeWordRecording()
+        stopAssistantRecording()
+        stopRecognizer()
+    }
+
+    // --- SpeechRecognizer (for DEAF_CAPTION, etc.) ---
 
     private fun startRecognizer(continuous: Boolean) {
         if (!hasMicPermission()) {
-            _results.tryEmit(VoiceResult.Error(-1, "RECORD_AUDIO not granted"))
+            _results.tryEmit(VoiceResult.Error(-1, "Permission denied"))
             return
         }
-        recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-            setRecognitionListener(buildListener(continuous))
-        }
+        
+        stopRecognizer()
+        
+        recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        recognizer?.setRecognitionListener(buildRecognizerListener(continuous))
+        
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (continuous) 8000L else 3000L)
         }
-        try { recognizer?.startListening(intent) } catch (e: Exception) {
-            _results.tryEmit(VoiceResult.Error(-1, "Failed to start: ${e.message}"))
+        
+        try {
+            recognizer?.startListening(intent)
+            Log.d(TAG, "RECOGNIZER: Started (continuous=$continuous)")
+        } catch (e: Exception) {
+            Log.e(TAG, "RECOGNIZER: Failed to start - ${e.message}")
+            _results.tryEmit(VoiceResult.Error(-1, e.message ?: "Failed to start"))
         }
     }
 
-    private fun buildListener(continuous: Boolean) = object : RecognitionListener {
+    private fun buildRecognizerListener(continuous: Boolean) = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
-
-        override fun onError(error: Int) {
-            val name = errorName(error)
-            Log.e(TAG, "SpeechRecognizer: onError code=$error ($name) state=${_state.value}")
-            _results.tryEmit(VoiceResult.Error(error, name))
-
-            if (continuous && _state.value == VoiceState.DEAF_CAPTION) {
-                scope.launch {
-                    delay(500)
-                    if (_state.value == VoiceState.DEAF_CAPTION) {
-                        stopAndDestroyRecognizer()
-                        delay(300)
-                        startRecognizer(continuous = true)
-                    }
-                }
-            } else {
-                scope.launch {
-                    delay(300)
-                    stopAndDestroyRecognizer()
-                    if (_state.value != VoiceState.IDLE && _state.value != VoiceState.TTS_PLAYING) {
-                        requestState(VoiceState.WAKEWORD, force = true)
-                    }
-                }
-            }
-        }
-
+        
         override fun onResults(results: Bundle?) {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim() ?: ""
-            Log.d(TAG, "SpeechRecognizer: onResults → \"$text\"")
-
-            // Always-on name detection — fires across ALL recognizer states
-            if (text.isNotEmpty()) checkForNameAndVibrate(text)
-
+            Log.d(TAG, "RECOGNIZER: onResults → '$text'")
+            
+            checkForNameAndVibrate(text)
+            
+            if (_state.value == VoiceState.NAME_CAPTURE && text.isNotEmpty()) {
+                Log.d(TAG, "NAME_CAPTURE: Saving '$text'")
+                secureKeyProvider.saveUserName(text)
+                userName = text
+                Log.d(TAG, "NAME_CAPTURE: Name saved and cached")
+            }
+            
             if (_state.value == VoiceState.DEAF_CAPTION) {
-                if (text.isNotEmpty()) _liveCaptions.value = text
-                _results.tryEmit(VoiceResult.Final(text))
-                scope.launch {
+                _liveCaptions.value = text
+            }
+            
+            _results.tryEmit(VoiceResult.Final(text))
+            
+            if (continuous && _state.value == VoiceState.DEAF_CAPTION) {
+                recognizerJob = scope.launch {
                     delay(200)
                     if (_state.value == VoiceState.DEAF_CAPTION) {
-                        stopAndDestroyRecognizer()
-                        delay(200)
                         startRecognizer(continuous = true)
                     }
                 }
             } else {
-                _results.tryEmit(VoiceResult.Final(text))
-                scope.launch {
+                recognizerJob = scope.launch {
                     delay(300)
-                    stopAndDestroyRecognizer()
+                    stopRecognizer()
                     if (_state.value != VoiceState.IDLE && _state.value != VoiceState.TTS_PLAYING) {
-                        requestState(VoiceState.WAKEWORD, force = true)
+                        requestState(VoiceState.WAKEWORD)
                     }
                 }
             }
         }
-
+        
         override fun onPartialResults(partialResults: Bundle?) {
-            val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim() ?: ""
-            if (text.isNotEmpty()) {
-                // Always-on name detection on partial results too
-                checkForNameAndVibrate(text)
-                if (_state.value == VoiceState.DEAF_CAPTION) _liveCaptions.value = text
-                _results.tryEmit(VoiceResult.Partial(text))
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val text = matches?.firstOrNull()?.trim() ?: ""
+            
+            checkForNameAndVibrate(text)
+            
+            if (_state.value == VoiceState.DEAF_CAPTION) {
+                _liveCaptions.value = text
+            }
+            
+            _results.tryEmit(VoiceResult.Partial(text))
+        }
+        
+        override fun onError(error: Int) {
+            val name = errorName(error)
+            Log.e(TAG, "RECOGNIZER: onError code=$error ($name)")
+            _results.tryEmit(VoiceResult.Error(error, name))
+            
+            recognizerJob = scope.launch {
+                delay(300)
+                stopRecognizer()
+                if (_state.value != VoiceState.IDLE && _state.value != VoiceState.TTS_PLAYING) {
+                    requestState(VoiceState.WAKEWORD)
+                }
             }
         }
     }
 
-    private fun stopAndDestroyRecognizer() {
+    private fun stopRecognizer() {
+        recognizerJob?.cancel()
+        recognizerJob = null
         try { recognizer?.stopListening() } catch (_: Exception) {}
         try { recognizer?.destroy() } catch (_: Exception) {}
         recognizer = null
     }
 
-    // --- Audio Focus ---
+    // --- TTS Callbacks ---
 
-    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        Log.d(TAG, "AUDIO_FOCUS change=$focusChange")
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                // Permanent audio focus loss (-1) -> Transition to IDLE
-                if (_state.value != VoiceState.IDLE) {
-                    Log.d(TAG, "Permanent audio focus loss (-1) -> Transitioning to IDLE")
-                    requestState(VoiceState.IDLE, force = true)
-                }
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // Transient focus loss (-2, -3) ignored to preserve active listening state
-                // This prevents Live Captions from being killed on screen touches or audio notifications
-                Log.d(TAG, "Transient focus loss ($focusChange) ignored to preserve active listening state")
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                Log.d(TAG, "Audio focus regained")
-            }
-        }
+    fun onTTSStarted() {
+        Log.d(TAG, "=== TTS_START ===")
+        isTtsSpeaking = true
+        muteWakeWordDuringTts = true
+        requestState(VoiceState.TTS_PLAYING, force = true)
     }
+
+    fun onTTSFinished() {
+        Log.d(TAG, "=== TTS_END ===")
+        isTtsSpeaking = false
+        muteWakeWordDuringTts = false
+        // After TTS, return to ASSISTANT_RECORDING for continuous conversation
+        // The conversation timeout will handle returning to WAKEWORD if no speech
+        Log.d(TAG, "TTS: Returning to ASSISTANT_RECORDING for next turn")
+        requestState(VoiceState.ASSISTANT_RECORDING, force = true)
+    }
+    
+    /**
+     * Interrupt TTS and immediately start assistant recording
+     * Called when user taps FAB during TTS
+     */
+    fun interruptTTS() {
+        Log.d(TAG, "=== TTS_INTERRUPT ===")
+        isTtsSpeaking = false
+        muteWakeWordDuringTts = false
+        requestState(VoiceState.ASSISTANT_RECORDING, force = true)
+    }
+
+    // --- Audio Focus ---
 
     private fun acquireAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -613,7 +1011,142 @@ class VoiceManager @Inject constructor(
         }
     }
 
-    private fun hasMicPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        Log.d(TAG, "AUDIO_FOCUS: change=$focusChange")
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                if (_state.value != VoiceState.IDLE) {
+                    Log.d(TAG, "AUDIO_FOCUS: Loss - returning to IDLE")
+                    requestState(VoiceState.IDLE, force = true)
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                Log.d(TAG, "AUDIO_FOCUS: Transient loss - ignoring")
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                Log.d(TAG, "AUDIO_FOCUS: Regained")
+            }
+        }
+    }
+
+    // --- Audio Processing ---
+
+    private fun calculateRMS(buffer: ShortArray): Float {
+        var sum = 0L
+        for (s in buffer) sum += s.toLong() * s.toLong()
+        return if (buffer.isNotEmpty()) kotlin.math.sqrt(sum.toDouble() / buffer.size).toFloat() else 0f
+    }
+
+    private fun normalizePCM(pcmData: List<ShortArray>): List<ShortArray> {
+        Log.d(TAG, "AUDIO_PROCESSING: Starting PCM normalization")
+        var maxAmplitude = 0f
+        for (chunk in pcmData) {
+            for (sample in chunk) {
+                val abs = kotlin.math.abs(sample.toFloat())
+                if (abs > maxAmplitude) maxAmplitude = abs
+            }
+        }
+        
+        Log.d(TAG, "AUDIO_PROCESSING: Max amplitude = $maxAmplitude")
+        
+        // Skip normalization if already sufficient volume
+        if (maxAmplitude > 20000f) {
+            Log.d(TAG, "AUDIO_PROCESSING: Sufficient volume, skipping normalization")
+            return pcmData
+        }
+        
+        // Skip if too quiet (indicates no speech)
+        if (maxAmplitude < 100f) {
+            Log.w(TAG, "AUDIO_PROCESSING: Too quiet, skipping normalization (maxAmplitude=$maxAmplitude)")
+            return pcmData
+        }
+        
+        val targetAmplitude = Short.MAX_VALUE * 0.8f
+        val normalizationFactor = targetAmplitude / maxAmplitude
+        
+        Log.d(TAG, "AUDIO_PROCESSING: Normalization factor = $normalizationFactor")
+        
+        if (normalizationFactor > 3.0f) {
+            Log.w(TAG, "AUDIO_PROCESSING: Weak input detected - normalization factor=$normalizationFactor (may indicate poor mic placement)")
+        }
+        
+        return pcmData.map { chunk ->
+            chunk.map { sample ->
+                val normalized = (sample * normalizationFactor).toInt()
+                normalized.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }.toShortArray()
+        }
+    }
+
+    private fun trimSilence(pcmData: List<ShortArray>): List<ShortArray> {
+        if (pcmData.isEmpty()) return pcmData
+        
+        val chunkRms = pcmData.map { calculateRMS(it) }
+        val avgRms = chunkRms.average().toFloat()
+        val silenceThreshold = avgRms * 0.3f
+        
+        var startChunk = 0
+        for (i in chunkRms.indices) {
+            if (chunkRms[i] > silenceThreshold) {
+                startChunk = i
+                break
+            }
+        }
+        
+        var endChunk = pcmData.size - 1
+        for (i in chunkRms.indices.reversed()) {
+            if (chunkRms[i] > silenceThreshold) {
+                endChunk = i
+                break
+            }
+        }
+        
+        return pcmData.subList(startChunk, endChunk + 1)
+    }
+
+    private fun saveAsWav(pcmData: List<ShortArray>, file: File) {
+        val totalShorts = pcmData.sumOf { it.size }
+        val byteBuffer = ByteBuffer.allocate(totalShorts * 2).order(ByteOrder.LITTLE_ENDIAN)
+        for (chunk in pcmData) {
+            for (s in chunk) byteBuffer.putShort(s)
+        }
+        val audioBytes = byteBuffer.array()
+        
+        val header = ByteArray(44)
+        val totalDataLen = audioBytes.size + 36
+        val sampleRate = SAMPLE_RATE.toLong()
+        val byteRate = sampleRate * 2
+        
+        header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
+        header[4] = (totalDataLen and 0xff).toByte(); header[5] = ((totalDataLen shr 8) and 0xff).toByte()
+        header[6] = ((totalDataLen shr 16) and 0xff).toByte(); header[7] = ((totalDataLen shr 24) and 0xff).toByte()
+        header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
+        header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
+        header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
+        header[20] = 1; header[21] = 0; header[22] = 1; header[23] = 0
+        header[24] = (sampleRate and 0xff).toByte(); header[25] = ((sampleRate shr 8) and 0xff).toByte()
+        header[26] = ((sampleRate shr 16) and 0xff).toByte(); header[27] = ((sampleRate shr 24) and 0xff).toByte()
+        header[28] = (byteRate and 0xff).toByte(); header[29] = ((byteRate shr 8) and 0xff).toByte()
+        header[30] = ((byteRate shr 16) and 0xff).toByte(); header[31] = ((byteRate shr 24) and 0xff).toByte()
+        header[32] = 2; header[33] = 0; header[34] = 16; header[35] = 0
+        header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
+        header[40] = (audioBytes.size and 0xff).toByte(); header[41] = ((audioBytes.size shr 8) and 0xff).toByte()
+        header[42] = ((audioBytes.size shr 16) and 0xff).toByte(); header[43] = ((audioBytes.size shr 24) and 0xff).toByte()
+        
+        FileOutputStream(file).use { out ->
+            out.write(header)
+            out.write(audioBytes)
+        }
+        
+        Log.d(TAG, "SAVE_WAV: Saved ${file.length()} bytes")
+    }
+
+    // --- Utility ---
+
+    private fun hasMicPermission() = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
 
     private fun errorName(code: Int) = when (code) {
         SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
@@ -626,5 +1159,13 @@ class VoiceManager @Inject constructor(
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY"
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS"
         else -> "ERROR_UNKNOWN_$code"
+    }
+
+    fun shutdown() {
+        Log.d(TAG, "=== SHUTDOWN ===")
+        stopAllAudio()
+        cancelConversationTimeout()
+        releaseAudioFocus()
+        requestState(VoiceState.IDLE, force = true)
     }
 }
