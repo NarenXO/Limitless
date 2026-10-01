@@ -129,34 +129,13 @@ fun SpeechHomeScreen(
     val database = remember(context) { PhraseUsageDatabase.getDatabase(context) }
     val engine   = remember(database) { PhrasePredictionEngine(database.phraseUsageDao()) }
 
-    // currentPhrases holds PackPhrase objects (with icon) after prediction ranking.
+    // currentPhrases holds PackPhrase objects with FIXED ORDER (no prediction reordering)
     var currentPhrases  by remember { mutableStateOf(currentPack.quickPhrases) }
     var isPredictedActive by remember { mutableStateOf(false) }
 
-    // -- Reload predictions whenever language changes --------------------------
-    LaunchedEffect(selectedLanguage) {
-        withContext(Dispatchers.IO) {
-            val pack = LanguagePacks.getPack(selectedLanguage)
-            val defaultTexts   = pack.quickPhrases.map { it.displayText }
-            val hasData        = engine.hasUsageData(selectedLanguage)
-            val predictedTexts = engine.getPredictedPhrases(defaultTexts, languageCode = selectedLanguage)
-
-            // Reorder pack phrases to match predicted order; fall back to Help icon if unknown
-            val iconMap = pack.quickPhrases.associate { it.displayText to it.icon }
-            val rankedCards = predictedTexts.map { text ->
-                PackPhrase(
-                    displayText  = text,
-                    spokenPhrase = text,
-                    icon         = iconMap[text] ?: Icons.Default.Help
-                )
-            }
-
-            withContext(Dispatchers.Main) {
-                currentPhrases    = rankedCards
-                isPredictedActive = hasData
-            }
-        }
-    }
+    // -- DISABLED: Prediction engine reordering to preserve stable phrase order --
+    // Phrases now maintain their original order from LanguagePacks at all times
+    // This prevents reordering on tab switches, app relaunch, or language changes
 
     // -- TextToSpeech lifecycle (single shared instance for the entire screen) --
     var ttsReady by remember { mutableStateOf(false) }
@@ -346,7 +325,7 @@ fun SpeechHomeScreen(
                 }
         ) {
 
-            // 1. Header & Prediction Subheader ---------------------------------
+            // 1. Header ---------------------------------------------------------
             Text(
                 text = currentPack.sectionHeaders.quickPhrases,
                 fontSize = 26.sp,
@@ -357,20 +336,6 @@ fun SpeechHomeScreen(
                     .fillMaxWidth()
                     .semantics { contentDescription = "${currentPack.sectionHeaders.quickPhrases} header" }
             )
-
-            if (isPredictedActive) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = currentPack.sectionHeaders.predictedForYou,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PersonaSpeech,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = currentPack.sectionHeaders.predictedForYou }
-                )
-            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -401,26 +366,9 @@ fun SpeechHomeScreen(
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         speakPhrase(card.spokenPhrase)
 
+                                        // Record usage but DO NOT reorder phrases - maintain stable order
                                         scope.launch(Dispatchers.IO) {
                                             engine.recordUsage(card.displayText, selectedLanguage)
-                                            val hasData = engine.hasUsageData(selectedLanguage)
-                                            val pack = LanguagePacks.getPack(selectedLanguage)
-                                            val defaultTexts = pack.quickPhrases.map { it.displayText }
-                                            val updatedTexts = engine.getPredictedPhrases(
-                                                defaultTexts, languageCode = selectedLanguage
-                                            )
-                                            val iconMap = pack.quickPhrases.associate { it.displayText to it.icon }
-                                            val updatedCards = updatedTexts.map { text ->
-                                                PackPhrase(
-                                                    displayText  = text,
-                                                    spokenPhrase = text,
-                                                    icon         = iconMap[text] ?: Icons.Default.Help
-                                                )
-                                            }
-                                            withContext(Dispatchers.Main) {
-                                                currentPhrases    = updatedCards
-                                                isPredictedActive = hasData
-                                            }
                                         }
                                     }
                                 )

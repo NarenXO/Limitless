@@ -249,6 +249,7 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
     }
 
     fun handleDescribeSurroundings() {
+        android.util.Log.d("BLIND_DESCRIBE", "BLIND_DESCRIBE_START")
         ttsManager.stop()
 
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -274,13 +275,14 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
+                    android.util.Log.d("BLIND_DESCRIBE", "BLIND_DESCRIBE_FRAME_CAPTURED")
                     scope.launch {
                         try {
                             val buffer = image.planes[0].buffer
                             val bytes = ByteArray(buffer.capacity())
                             buffer.get(bytes)
                             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
-                            
+
                             val matrix = Matrix()
                             matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
                             val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
@@ -298,14 +300,17 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                                     "\"Path status: PATH IS CLEAR for 2 meters straight ahead. Obstacles: A wooden chair is on your left. Objects seen: Laptop on desk, doorway in background.\""
                             val geminiClient = GeminiClient()
                             val result = geminiClient.queryGemini(prompt, base64Image)
-                            
+
                             val response = result.getOrNull() ?: "Failed to describe surroundings."
-                            
+                            android.util.Log.d("BLIND_DESCRIBE", "BLIND_DESCRIBE_API_SUCCESS: $response")
+
                             aiResponse = response
                             showResponseBanner = true
+                            android.util.Log.d("BLIND_DESCRIBE", "BLIND_DESCRIBE_TTS_START")
                             ttsManager.speak(response)
                             HapticVocabulary.play(context, "SUCCESS")
                         } catch (e: Exception) {
+                            android.util.Log.e("BLIND_DESCRIBE", "BLIND_DESCRIBE_API_FAIL", e)
                             ttsManager.speak("Failed to describe surroundings.")
                             showResponseBanner = false
                         } finally {
@@ -316,6 +321,7 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                     }
                 }
                 override fun onError(exception: ImageCaptureException) {
+                    android.util.Log.e("BLIND_DESCRIBE", "BLIND_DESCRIBE_CAPTURE_ERROR", exception)
                     analyzingJob.cancel()
                     isProcessingAI = false
                     showResponseBanner = false
