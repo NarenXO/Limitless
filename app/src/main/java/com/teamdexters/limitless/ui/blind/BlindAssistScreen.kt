@@ -36,6 +36,19 @@ import com.teamdexters.limitless.blind.BlindAIInvoker
 import com.teamdexters.limitless.blind.BlindCameraController
 import com.teamdexters.limitless.ui.components.HazelResponseBanner
 import com.teamdexters.limitless.ui.theme.*
+import com.teamdexters.limitless.blind.HapticVocabulary
+import com.teamdexters.limitless.assistant.cloud.GeminiClient
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -45,7 +58,7 @@ import kotlinx.coroutines.launch
  * Full-screen camera with translucent top bar, result banner, bottom action bar, and floating mic button.
  */
 @Composable
-fun BlindAssistScreen() {
+fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -76,6 +89,8 @@ fun BlindAssistScreen() {
     val cameraController = remember { BlindCameraController(context) }
     var isCameraPaused by remember { mutableStateOf(false) }
     var cameraStatus by remember { mutableStateOf("Camera Active") }
+
+    val imageCapture = remember { androidx.camera.core.ImageCapture.Builder().build() }
 
     // AI invocation state
     var aiResponse by remember { mutableStateOf("") }
@@ -124,54 +139,117 @@ fun BlindAssistScreen() {
         }
     }
 
-    // Trigger haptic feedback
-    fun triggerHaptic() {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vibratorManager?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
-
-        vibrator?.let {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                it.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                it.vibrate(150)
+    // Handle AI invocation with specific query
+    fun handleReadText() {
+        if (isProcessingAI) return
+        isProcessingAI = true
+        
+        imageCapture.takePicture(
+            ContextCompat.getMainExecutor(context),
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    try {
+                        val mediaImage = image.image
+                        if (mediaImage != null) {
+                            val inputImage = InputImage.fromMediaImage(mediaImage, image.imageInfo.rotationDegrees)
+                            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                            recognizer.process(inputImage)
+                                .addOnSuccessListener { visionText ->
+                                    val text = visionText.text
+                                    if (text.isNotBlank()) {
+                                        aiResponse = text
+                                        showResponseBanner = true
+                                        ttsManager.speak(text)
+                                        HapticVocabulary.play(context, "SUCCESS")
+                                    } else {
+                                        ttsManager.speak("No text detected.")
+                                    }
+                                    isProcessingAI = false
+                                }
+                                .addOnFailureListener { e ->
+                                    ttsManager.speak("Failed to read text.")
+                                    isProcessingAI = false
+                                }
+                        } else {
+                            isProcessingAI = false
+                        }
+                    } catch (e: Exception) {
+                        isProcessingAI = false
+                    } finally {
+                        image.close()
+                    }
+                }
+                override fun onError(exception: ImageCaptureException) {
+                    isProcessingAI = false
+                    ttsManager.speak("Failed to capture image.")
+                }
             }
-        }
+        )
+    }
+
+    fun handleDescribeSurroundings() {
+        if (isProcessingAI) return
+        isProcessingAI = true
+        aiResponse = "Analyzing scene..."
+        showResponseBanner = true
+
+        imageCapture.takePicture(
+            ContextCompat.getMainExecutor(context),
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    scope.launch {
+                        try {
+                            val buffer = image.planes[0].buffer
+                            val bytes = ByteArray(buffer.capacity())
+                            buffer.get(bytes)
+                            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                            
+                            val matrix = Matrix()
+                            matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
+                            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+                            val outputStream = ByteArrayOutputStream()
+                            rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                            val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+
+                            val prompt = "Describe this scene for a blind person. Mention key objects, people, and obstacles in 2 sentences."
+                            val geminiClient = GeminiClient()
+                            val result = geminiClient.queryGemini(prompt, base64Image)
+                            
+                            val response = result.getOrNull() ?: "Failed to describe surroundings."
+                            
+                            aiResponse = response
+                            showResponseBanner = true
+                            ttsManager.speak(response)
+                            HapticVocabulary.play(context, "SUCCESS")
+                            
+                            delay(8000)
+                            showResponseBanner = false
+                        } catch (e: Exception) {
+                            ttsManager.speak("Failed to describe surroundings.")
+                            showResponseBanner = false
+                        } finally {
+                            isProcessingAI = false
+                            image.close()
+                        }
+                    }
+                }
+                override fun onError(exception: ImageCaptureException) {
+                    isProcessingAI = false
+                    showResponseBanner = false
+                    ttsManager.speak("Failed to capture image.")
+                }
+            }
+        )
+    }
+
+    fun handleStartNavigation() {
+        ttsManager.speak("Navigating to mobility menu. Please select your destination to begin turn-by-turn guidance.")
+        navController.navigate("mobility-home")
     }
 
     // Handle AI invocation with specific query
-    fun handleAIInvocation(query: String) {
-        if (isProcessingAI) return
 
-        scope.launch {
-            isProcessingAI = true
-            try {
-                val response = BlindAIInvoker.invokeVisionAI(context, query)
-
-                aiResponse = response
-                showResponseBanner = true
-
-                // Speak response
-                ttsManager.speak(response)
-
-                // Trigger haptic feedback
-                triggerHaptic()
-
-                // Auto-hide banner after 8 seconds
-                delay(8000)
-                showResponseBanner = false
-            } catch (e: Exception) {
-                Toast.makeText(context, "AI invocation failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            } finally {
-                isProcessingAI = false
-            }
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -210,7 +288,8 @@ fun BlindAssistScreen() {
                                 lifecycleOwner,
                                 androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA,
                                 preview,
-                                imageAnalysis
+                                imageAnalysis,
+                                imageCapture
                             )
                         } catch (e: Exception) {
                             Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -314,46 +393,25 @@ fun BlindAssistScreen() {
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Describe button
-                        Button(
-                            onClick = { handleAIInvocation("describe surroundings") },
-                            modifier = Modifier
-                                .height(72.dp)
-                                .weight(1f)
-                                .padding(horizontal = 4.dp)
-                                .semantics {
-                                    contentDescription = "Describe surroundings button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "Describe",
-                                style = LimitlessTypography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
+                        if (isProcessingAI) {
+                            CircularProgressIndicator(color = PersonaBlind)
                         }
 
                         // Read Text button
                         Button(
-                            onClick = { handleAIInvocation("read text") },
+                            onClick = { handleReadText() },
                             modifier = Modifier
-                                .height(72.dp)
-                                .weight(1f)
-                                .padding(horizontal = 4.dp)
+                                .fillMaxWidth()
+                                .height(80.dp)
                                 .semantics {
-                                    contentDescription = "Read text button"
+                                    contentDescription = "Read Text button"
                                 },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PersonaBlind,
@@ -362,22 +420,44 @@ fun BlindAssistScreen() {
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "Read Text",
-                                style = LimitlessTypography.titleMedium,
+                                text = "📖 Read Text",
+                                style = LimitlessTypography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
+                                fontSize = 24.sp
+                            )
+                        }
+                        
+                        // Describe Surroundings button
+                        Button(
+                            onClick = { handleDescribeSurroundings() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp)
+                                .semantics {
+                                    contentDescription = "Describe Surroundings button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "👁️ Describe Surroundings",
+                                style = LimitlessTypography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp
                             )
                         }
 
-                        // Obstacles button
+                        // Start Navigation button
                         Button(
-                            onClick = { handleAIInvocation("detect obstacles") },
+                            onClick = { handleStartNavigation() },
                             modifier = Modifier
-                                .height(72.dp)
-                                .weight(1f)
-                                .padding(horizontal = 4.dp)
+                                .fillMaxWidth()
+                                .height(80.dp)
                                 .semantics {
-                                    contentDescription = "Detect obstacles button"
+                                    contentDescription = "Start Voice Navigation button"
                                 },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PersonaBlind,
@@ -386,67 +466,13 @@ fun BlindAssistScreen() {
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "Obstacles",
-                                style = LimitlessTypography.titleMedium,
+                                text = "🧭 Start Voice Navigation",
+                                style = LimitlessTypography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                        }
-
-                        // Navigate button
-                        Button(
-                            onClick = { handleAIInvocation("navigate to library") },
-                            modifier = Modifier
-                                .height(72.dp)
-                                .weight(1f)
-                                .padding(horizontal = 4.dp)
-                                .semantics {
-                                    contentDescription = "Navigate button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "Navigate",
-                                style = LimitlessTypography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
+                                fontSize = 24.sp
                             )
                         }
                     }
-                }
-            }
-
-            // Floating Mic FAB button (72dp height, PersonaBlind background)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.BottomEnd
-            ) {
-                FloatingActionButton(
-                    onClick = {
-                        // Cycle through test queries for Phase 3 offline fallback testing
-                        val query = testQueries[testQueryIndex]
-                        testQueryIndex = (testQueryIndex + 1) % testQueries.size
-                        handleAIInvocation(query)
-                    },
-                    modifier = Modifier
-                        .size(72.dp)
-                        .semantics {
-                            contentDescription = "Ask AI assistant with voice command"
-                        },
-                    containerColor = PersonaBlind,
-                    contentColor = TextPrimary
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp)
-                    )
                 }
             }
         } else {
