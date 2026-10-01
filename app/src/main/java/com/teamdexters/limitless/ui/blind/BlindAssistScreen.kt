@@ -301,7 +301,18 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             val geminiClient = GeminiClient()
                             val result = geminiClient.queryGemini(prompt, base64Image)
 
-                            val response = result.getOrNull() ?: "Failed to describe surroundings."
+                            val response = if (result.isSuccess) {
+                                result.getOrNull() ?: "Failed to describe surroundings."
+                            } else {
+                                // Handle API key configuration error gracefully
+                                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to describe surroundings."
+                                android.util.Log.e("BLIND_DESCRIBE", "BLIND_DESCRIBE_API_FAIL: $errorMsg")
+                                if (errorMsg.contains("API key is not configured")) {
+                                    "Gemini Vision API key is not configured in local.properties"
+                                } else {
+                                    "Failed to describe surroundings."
+                                }
+                            }
                             android.util.Log.d("BLIND_DESCRIBE", "BLIND_DESCRIBE_API_SUCCESS: $response")
 
                             aiResponse = response

@@ -26,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -123,7 +124,6 @@ class VoiceManager @Inject constructor(
     // State tracking
     private var transitionInProgress = false
     private var isTtsSpeaking = false
-    private var userName: String = "" // Cached name for haptic vocabulary
     private var muteWakeWordDuringTts = true // Mute wake word detection during TTS
     
     // Audio focus
@@ -133,13 +133,11 @@ class VoiceManager @Inject constructor(
     private var audioFocusRequest: AudioFocusRequest? = null
 
     init {
-        // Load user name once at initialization
-        loadUserName()
+        // Dynamic name lookup - no caching
     }
 
-    private fun loadUserName() {
-        userName = secureKeyProvider.getUserName()?.trim().orEmpty()
-        Log.d(TAG, "HAPTIC_INIT: Loaded user name: '$userName'")
+    private fun getUserName(): String {
+        return secureKeyProvider.getUserName()?.trim().orEmpty()
     }
 
     /**
@@ -528,9 +526,11 @@ class VoiceManager @Inject constructor(
                 
                 // Transition to processing state
                 requestState(VoiceState.ASSISTANT_PROCESSING)
-                
-                // Process audio
-                processAssistantAudio(pcmData, audioFile, timestamp)
+
+                // Process audio in NonCancellable context to prevent state teardown from cancelling network requests
+                withContext(NonCancellable) {
+                    processAssistantAudio(pcmData, audioFile, timestamp)
+                }
                 
             } catch (e: CancellationException) {
                 Log.d(TAG, "ASSISTANT[$timestamp]: Cancelled")
@@ -637,13 +637,14 @@ class VoiceManager @Inject constructor(
     // --- Name Detection (Continuous) ---
 
     private fun startNameMonitoring() {
-        if (userName.isEmpty()) {
+        val currentUserName = getUserName()
+        if (currentUserName.isEmpty()) {
             Log.d(TAG, "NAME_MONITORING: No user name configured, skipping")
             return
         }
-        
+
         Log.d(TAG, "=== NAME_MONITORING_START ===")
-        Log.d(TAG, "NAME_MONITORING: Monitoring for name '$userName'")
+        Log.d(TAG, "NAME_MONITORING: Monitoring for name '$currentUserName'")
         
         nameMonitoringRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
         if (nameMonitoringRecognizer == null) {
@@ -735,16 +736,17 @@ class VoiceManager @Inject constructor(
     }
 
     private fun checkForNameAndVibrate(transcript: String) {
-        if (userName.isEmpty() || transcript.isEmpty()) return
-        
+        val currentUserName = getUserName()
+        if (currentUserName.isEmpty() || transcript.isEmpty()) return
+
         // Fuzzy matching: ignore case, punctuation
         val cleanTranscript = transcript.lowercase().replace(Regex("[^a-z\\s]"), "")
-        val cleanName = userName.lowercase()
-        
+        val cleanName = currentUserName.lowercase()
+
         if (cleanTranscript.contains(cleanName)) {
             Log.d(TAG, "=== HAPTIC_MATCH ===")
-            Log.d(TAG, "HAPTIC: Name '$userName' detected in: '$transcript'")
-            hapticManager.playNameRhythm(userName)
+            Log.d(TAG, "HAPTIC: Name '$currentUserName' detected in: '$transcript'")
+            hapticManager.playNameRhythm(currentUserName)
         }
     }
 
@@ -888,8 +890,7 @@ class VoiceManager @Inject constructor(
             if (_state.value == VoiceState.NAME_CAPTURE && text.isNotEmpty()) {
                 Log.d(TAG, "NAME_CAPTURE: Saving '$text'")
                 secureKeyProvider.saveUserName(text)
-                userName = text
-                Log.d(TAG, "NAME_CAPTURE: Name saved and cached")
+                Log.d(TAG, "NAME_CAPTURE: Name saved to SharedPreferences")
             }
             
             if (_state.value == VoiceState.DEAF_CAPTION) {
