@@ -495,7 +495,7 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.2f)
-                        .background(PrimaryAccent.copy(alpha = 0.85f))
+                        .background(LimitlessPrimary.copy(alpha = 0.85f))
                         .border(3.dp, androidx.compose.ui.graphics.Color(0xFF1F1F1F))
                         .clickable { handleStartNavigation() },
                     contentAlignment = Alignment.Center
