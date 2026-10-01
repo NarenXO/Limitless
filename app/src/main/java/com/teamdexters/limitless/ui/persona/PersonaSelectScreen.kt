@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -527,8 +528,7 @@ private fun PersonaSelectionStage(
     ) {
         // Greeting heading
         Text(
-            text = if (capturedName == "there") "Choose your assist mode"
-                   else "Hello, $capturedName!",
+            text = "Hello, ${capturedName.ifBlank { "there" }}!",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
             color = PureBlack,
             textAlign = TextAlign.Center,
@@ -539,15 +539,14 @@ private fun PersonaSelectionStage(
 
         Text(
             text = "SELECT ASSIST MODE",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp,
+            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.5.sp),
             color = NeutralGray,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Row 1: Blind + Deaf
         Row(
@@ -577,7 +576,7 @@ private fun PersonaSelectionStage(
         ) {
             PersonaCard(
                 title = "SPEECH & COMMUNICATION",
-                icon = Icons.Default.QuestionAnswer,
+                icon = Icons.Default.RecordVoiceOver,
                 onClick = { onPersonaSelected("SPEECH") },
                 modifier = Modifier.weight(1f)
             )
@@ -650,7 +649,7 @@ private fun PersonaCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 130.dp) // Use min height so it expands if text wraps
+            .height(115.dp) // Fixed 115dp height so all 4 cards fit on screen at once
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = SoftWhite,   // #F5F5F5
@@ -662,7 +661,7 @@ private fun PersonaCard(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+                .padding(horizontal = 6.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -670,20 +669,20 @@ private fun PersonaCard(
                 imageVector = icon,
                 contentDescription = null,
                 tint = PureBlack,
-                modifier = Modifier.size(32.dp) // 32dp clean icon
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,          // 12sp scales cleanly on 2 lines
-                    lineHeight = 15.sp,        // Proper line height for multi-line text
-                    letterSpacing = 0.5.sp
+                    fontSize = 11.sp,           // 11sp ensures 2-line title fits comfortably
+                    lineHeight = 13.sp,         // Clean tight line spacing
+                    letterSpacing = 0.3.sp
                 ),
                 color = PureBlack,
                 textAlign = TextAlign.Center,
-                maxLines = 2,                  // ALLOW UP TO 2 LINES (NO TRUNCATION!)
+                maxLines = 2,                   // Allow up to 2 lines for long titles
                 overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth()
             )
