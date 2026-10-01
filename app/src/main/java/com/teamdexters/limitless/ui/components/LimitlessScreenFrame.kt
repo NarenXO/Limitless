@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.teamdexters.limitless.ui.theme.PureBlack
 import com.teamdexters.limitless.ui.theme.PureWhite
 import com.teamdexters.limitless.ui.theme.SubtleDivider
@@ -28,10 +29,13 @@ fun LimitlessScreenFrame(
             Column {
                 TopAppBar(
                     title = {
-                        Column {
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Text(
                                 text = title,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 22.sp
+                                ),
                                 color = PureBlack
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -54,7 +58,11 @@ fun LimitlessScreenFrame(
                             trailingIcon()
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = PureWhite)
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = PureWhite,
+                        scrolledContainerColor = PureWhite
+                    ),
+                    modifier = Modifier.statusBarsPadding()
                 )
                 Divider(color = SubtleDivider, thickness = 1.dp)
             }

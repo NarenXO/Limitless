@@ -12,9 +12,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import com.teamdexters.limitless.ui.theme.PureBlack
+import com.teamdexters.limitless.ui.theme.PureWhite
+import com.teamdexters.limitless.ui.theme.SoftWhite
+import com.teamdexters.limitless.ui.theme.NeutralGray
+import com.teamdexters.limitless.ui.theme.LightGray
+import com.teamdexters.limitless.ui.theme.SubtleDivider
 import coil.compose.AsyncImage
 
 import androidx.compose.runtime.LaunchedEffect
@@ -35,8 +42,8 @@ fun LocationDetailScreen(
     val scoreEntity by viewModel.selectedScore.collectAsState()
 
     if (scoreEntity == null) {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F1EE)), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color(0xFFF791A9))
+        Box(modifier = Modifier.fillMaxSize().background(PureWhite), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = PureBlack)
         }
         return
     }
@@ -52,7 +59,7 @@ fun LocationDetailScreen(
     val timestamp = scoreEntity?.timestamp ?: 0L
     val coordinates = "Not recorded"
     Scaffold(
-        containerColor = Color(0xFFF7F1EE)
+        containerColor = PureWhite
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -65,14 +72,14 @@ fun LocationDetailScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .background(Color(0xFFE0F2F4)),
+                    .background(SoftWhite),
                 contentAlignment = Alignment.Center
             ) {
                 if (photoUri.isNullOrEmpty()) {
                     Icon(
                         imageVector = Icons.Default.Image,
                         contentDescription = "No photo available",
-                        tint = Color.Gray,
+                        tint = NeutralGray,
                         modifier = Modifier.size(64.dp)
                     )
                 } else {
@@ -95,7 +102,7 @@ fun LocationDetailScreen(
                         text = locationTitle,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1F1F1F),
+                        color = PureBlack,
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -105,43 +112,63 @@ fun LocationDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Overall Score Display
-                val scoreColor = when {
-                    overallScore <= 40 -> Color(0xFFF791A9)
-                    overallScore <= 70 -> Color(0xFFDDDD7B)
-                    else -> Color(0xFFBAD6DA)
-                }
-                
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2F4)),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = SoftWhite,
+                        contentColor = PureBlack
+                    ),
+                    border = BorderStroke(1.dp, SubtleDivider),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .background(scoreColor, CircleShape),
-                            contentAlignment = Alignment.Center
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "ACCESSIBILITY SCORE",
+                            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = NeutralGray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "$overallScore",
-                                style = MaterialTheme.typography.displayMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1F1F1F)
+                                text = "$overallScore / 100",
+                                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 36.sp),
+                                fontWeight = FontWeight.Black,
+                                color = PureBlack
                             )
+                            // Score Pill Badge
+                            Surface(
+                                color = PureBlack,
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(
+                                    text = if (overallScore >= 70) "HIGHLY ACCESSIBLE" else "OBSTACLES DETECTED",
+                                    color = PureWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Accessibility Score", style = MaterialTheme.typography.titleMedium, color = Color(0xFF1F1F1F))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Progress Bar: PureBlack fill on LightGray track
+                        LinearProgressIndicator(
+                            progress = overallScore / 100f,
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = PureBlack,
+                            trackColor = LightGray
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Breakdown Section
-                Text("Analysis Breakdown", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1F1F1F))
+                Text("Analysis Breakdown", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PureBlack)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 BreakdownRow("Object Detection", objectScore, 100f)
@@ -152,11 +179,11 @@ fun LocationDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Photo Evidence Details
-                Text("Scan Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1F1F1F))
+                Text("Scan Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PureBlack)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Coordinates: $coordinates", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
+                Text("Coordinates: $coordinates", style = MaterialTheme.typography.bodyMedium, color = PureBlack)
                 val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
-                Text("Time: $dateStr", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
+                Text("Time: $dateStr", style = MaterialTheme.typography.bodyMedium, color = PureBlack)
             }
         }
     }
@@ -169,15 +196,15 @@ fun BreakdownRow(label: String, value: Float, max: Float) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
-            Text("${value.toInt()}/${max.toInt()}", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF1F1F1F))
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = PureBlack)
+            Text("${value.toInt()}/${max.toInt()}", style = MaterialTheme.typography.bodyMedium, color = PureBlack)
         }
         Spacer(modifier = Modifier.height(4.dp))
         LinearProgressIndicator(
             progress = value / max,
             modifier = Modifier.fillMaxWidth().height(8.dp),
-            color = Color(0xFFF791A9),
-            trackColor = Color(0xFFFFDBDF)
+            color = PureBlack,
+            trackColor = LightGray
         )
     }
 }
