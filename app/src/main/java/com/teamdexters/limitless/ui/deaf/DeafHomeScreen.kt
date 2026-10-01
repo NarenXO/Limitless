@@ -114,17 +114,23 @@ fun DeafHomeScreen(
         },
         containerColor = LimitlessBackground,
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    viewModel.stopListening()
-                },
-                containerColor = PersonaDeaf,
-                modifier = Modifier.padding(16.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                Icon(
-                    imageVector = Icons.Default.MicOff,
-                    contentDescription = "Stop Captions"
-                )
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.stopListening()
+                    },
+                    containerColor = PersonaDeaf
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MicOff,
+                        contentDescription = "Stop Captions"
+                    )
+                }
             }
         }
     ) { innerPadding ->

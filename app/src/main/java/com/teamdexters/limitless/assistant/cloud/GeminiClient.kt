@@ -42,16 +42,17 @@ class GeminiClient(
      */
     suspend fun queryGemini(prompt: String, base64Image: String? = null): Result<String> = withContext(Dispatchers.IO) {
         Log.d("LIMITLESS_TRACE", "[Gemini] Question received: $prompt")
-        
+
         val actualKey = this@GeminiClient.apiKey.trim()
         Log.d("LIMITLESS_TRACE", "[Gemini] Key is empty: ${actualKey.isEmpty()}")
-        
+
         val finalKey = if (actualKey.isEmpty() || actualKey == "YOUR_GEMINI_API_KEY_HERE" || actualKey == "null") {
-            "AIzaSy-dummy-working-key" // Fallback public key
+            Log.w("LIMITLESS_TRACE", "[Gemini] No valid Gemini API key configured")
+            return@withContext Result.failure(Exception("Gemini Vision API key is not configured in local.properties"))
         } else {
             actualKey
         }
-        
+
         Log.d("LIMITLESS_TRACE", "[Gemini] Final key length: ${finalKey.length}")
 
         try {
