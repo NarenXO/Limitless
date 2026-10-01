@@ -20,6 +20,7 @@ import com.teamdexters.limitless.assistant.cloud.GroqWhisperClient
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.haptics.HapticManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -282,10 +283,17 @@ class VoiceManager @Inject constructor(
                             if (consecutiveSpeechFrames in 5..25) {
                                 postSpeechSilenceFrames++
                                 if (postSpeechSilenceFrames >= 2) {
-                                    Log.d(TAG, "Wake word confirmed! Duration=${consecutiveSpeechFrames * 64}ms, RMS=$rms, ZCR=$zcr")
-                                    withContext(Dispatchers.Main) { 
-                                        requestState(VoiceState.VOICE_ASSISTANT)
-                                        shouldExit = true
+                                    // ADDITIONAL CHECK: Require minimum RMS of 3500.0f to prevent ambient noise triggers
+                                    if (rms >= 3500.0f) {
+                                        Log.d(TAG, "Wake word confirmed! Duration=${consecutiveSpeechFrames * 64}ms, RMS=$rms, ZCR=$zcr")
+                                        withContext(Dispatchers.Main) { 
+                                            requestState(VoiceState.VOICE_ASSISTANT)
+                                            shouldExit = true
+                                        }
+                                    } else {
+                                        Log.d(TAG, "Speech detected but RMS too low for wake word: $rms (min required: 3500.0)")
+                                        consecutiveSpeechFrames = 0
+                                        postSpeechSilenceFrames = 0
                                     }
                                 }
                             } else {
@@ -295,6 +303,9 @@ class VoiceManager @Inject constructor(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                // Normal lifecycle event - log at debug level
+                Log.d(TAG, "Wake word recording cancelled (normal lifecycle event)")
             } catch (e: Exception) {
                 Log.e(TAG, "WAKEWORD exception: ${e.message}")
             } finally {
@@ -322,8 +333,9 @@ class VoiceManager @Inject constructor(
                 val pcmData = mutableListOf<ShortArray>()
                 var silenceFrames = 0
                 val buffer = ShortArray(1024)
+                val maxRecordingFrames = 250 // ~4 seconds at 16kHz
 
-                while (isActive && _state.value == VoiceState.VOICE_ASSISTANT) {
+                while (isActive && _state.value == VoiceState.VOICE_ASSISTANT && pcmData.size < maxRecordingFrames) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (read > 0) {
                         val chunk = buffer.copyOf(read)
@@ -360,6 +372,12 @@ class VoiceManager @Inject constructor(
                         _results.tryEmit(VoiceResult.Error(-1, "Whisper failed"))
                         requestState(VoiceState.WAKEWORD, force = true)
                     }
+                }
+            } catch (e: CancellationException) {
+                // Normal lifecycle event - log at debug level as specified
+                Log.d(TAG, "Assistant recording cancelled (normal lifecycle event)")
+                withContext(Dispatchers.Main) {
+                    requestState(VoiceState.WAKEWORD, force = true)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Assistant recording exception: ${e.message}")
@@ -542,27 +560,24 @@ class VoiceManager @Inject constructor(
 
     // --- Audio Focus ---
 
-    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
-        Log.d(TAG, "AUDIO_FOCUS change=$change")
-        when (change) {
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        Log.d(TAG, "AUDIO_FOCUS change=$focusChange")
+        when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
-                requestState(VoiceState.IDLE, force = true)
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // Phone call, navigation audio, etc. — pause voice engine
+                // Permanent audio focus loss (-1) -> Transition to IDLE
                 if (_state.value != VoiceState.IDLE) {
-                    previousState = _state.value
+                    Log.d(TAG, "Permanent audio focus loss (-1) -> Transitioning to IDLE")
                     requestState(VoiceState.IDLE, force = true)
                 }
             }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // Transient focus loss (-2, -3) ignored to preserve active listening state
+                // This prevents Live Captions from being killed on screen touches or audio notifications
+                Log.d(TAG, "Transient focus loss ($focusChange) ignored to preserve active listening state")
+            }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                // Restore state after transient audio focus loss
-                if (_state.value == VoiceState.IDLE && previousState != VoiceState.IDLE) {
-                    val restore = previousState
-                    previousState = VoiceState.IDLE
-                    requestState(restore, force = true)
-                }
+                Log.d(TAG, "Audio focus regained")
             }
         }
     }
