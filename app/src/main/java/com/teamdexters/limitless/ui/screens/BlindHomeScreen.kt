@@ -207,22 +207,15 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                 
                 scope.launch {
                     try {
-                        if (query.contains("read") || query.contains("text") || query.contains("sign") || query.contains("book")) {
-                            delay(700)
-                            val text = ocrManager.recognizeText(frame, latestRotation)
-                            if (!text.isNullOrBlank()) {
-                                resultText = "Text reads: $text"
-                            } else {
-                                resultText = "No readable text found. Please hold the document steady directly in front of the camera."
-                            }
-                        } else if (query.contains("describe") || query.contains("surroundings") || query.contains("where") || query.contains("path")) {
+                        val q = query.lowercase().trim()
+                        
+                        if (q.contains("describe") || q.contains("surround") || q.contains("around") || q.contains("where") || q.contains("look") || q.contains("front") || q.contains("path") || q.contains("clear") || q.contains("obstacle") || q.contains("ahead")) {
                             val features = pathFeatureDetector.detectPathFeatures(frame)
                             val objects = objectDetector.detectObjects(frame, latestRotation)
                             
                             val pathStatus = if (features.isNotEmpty()) "BLOCKED" else "CLEAR"
                             val objectList = objects.joinToString(", ") { it.label }
                             
-                            // Optional Gemini query if network is up
                             val prompt = "You are a high-accuracy mobility guide for a blind person. Analyze this photo in detail.\nProvide a clear, categorized 3-part spatial report:\n1. PATH CLEARANCE: State exact path safety (e.g. \"Path is clear for 2 meters straight ahead\" or \"Path is blocked by a table 1 meter ahead\").\n2. NEAREST OBSTACLES: List hazardous obstacles on left, right, and center with estimated distances.\n3. CATEGORIZED OBJECTS: List visible furniture, doors, ramps, and devices."
                             val geminiResult = withTimeoutOrNull(5000) { geminiClient.queryGemini(prompt) }
                             if (geminiResult != null && geminiResult.isSuccess) {
@@ -235,15 +228,23 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                             } else {
                                 resultText = "Path status: $pathStatus. Obstacles: ${if (features.isNotEmpty()) features.joinToString(", ") { it.label } else "None"}. Objects: ${if (objectList.isNotEmpty()) objectList else "None"}."
                             }
-                        } else if (query.contains("object") || query.contains("see") || query.contains("find") || query.contains("laptop")) {
+                        } else if (q.contains("read") || q.contains("text") || q.contains("sign") || q.contains("word") || q.contains("paper") || q.contains("book") || q.contains("letter") || q.contains("written")) {
+                            delay(700)
+                            val text = ocrManager.recognizeText(frame, latestRotation)
+                            if (!text.isNullOrBlank()) {
+                                resultText = "Text reads: $text"
+                            } else {
+                                resultText = "No readable text found. Please hold the document steady directly in front of the camera."
+                            }
+                        } else if (q.contains("object") || q.contains("item") || q.contains("thing") || q.contains("laptop") || q.contains("pc") || q.contains("chair") || q.contains("table") || q.contains("desk") || q.contains("door")) {
                             val objects = objectDetector.detectObjects(frame, latestRotation)
                             val objectList = objects.joinToString(", ") { "${it.label} (${(it.confidence*100).toInt()}%)" }
                             resultText = "Objects detected: ${if (objectList.isNotEmpty()) objectList else "None detected"}"
-                        } else if (query.contains("color")) {
+                        } else if (q.contains("color") || q.contains("colour") || q.contains("shade") || q.contains("hue")) {
                             val colorName = colorDetector.detectColorAtCenter(frame)
                             resultText = "Color in front of camera is $colorName."
                         } else {
-                            resultText = "I can help you read text, describe surroundings, detect objects, or find colors. What would you like to do?"
+                            resultText = "I can help you describe surroundings, read text, detect objects, or find colors. Please ask again or tap a chip below."
                         }
                         
                         ttsManager.stop()
@@ -274,7 +275,7 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
     }
 
     LaunchedEffect(Unit) {
-        ttsManager.speak("Blind Assist active. What would you like me to do? Say: Describe surroundings, Read text, Detect objects, or Find color.") {
+        ttsManager.speak("Blind Assist active. Say: Describe surroundings, Read text, Detect objects, or Find color. Or tap any chip in the center card.") {
             try {
                 val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -360,14 +361,15 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
             }
             
             // CENTER OF THE PAGE — BIG HIGH-CONTRAST RESPONSE CARD
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.fillMaxSize().padding(bottom = 120.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth(0.88f)
-                        .height(260.dp)
+                        .height(300.dp)
                         .border(3.dp, PersonaBlind, RoundedCornerShape(16.dp)),
                     colors = CardDefaults.cardColors(containerColor = SurfaceTint),
                     shape = RoundedCornerShape(16.dp)
@@ -403,7 +405,7 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                             )
                         } else {
                             Text(
-                                text = "🎙️ Listening...\n\nSpeak any query:\n• 'Describe surroundings'\n• 'Read text'\n• 'Detect objects'\n• 'Find color'",
+                                text = "🎙️ Listening...\n\nSpeak any query:\n• 'Describe surroundings'\n• 'Read text'\n• 'Detect objects'\n• 'Find color'\n\nOr tap a chip below",
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 18.sp,
@@ -412,13 +414,121 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Quick Tap Chips
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(0.88f)
+                ) {
+                    Button(
+                        onClick = { 
+                            ttsManager.stop()
+                            val frame = latestFrame
+                            if (frame != null) {
+                                isProcessing = true
+                                resultText = ""
+                                scope.launch {
+                                    try {
+                                        val features = pathFeatureDetector.detectPathFeatures(frame)
+                                        val objects = objectDetector.detectObjects(frame, latestRotation)
+                                        
+                                        val pathStatus = if (features.isNotEmpty()) "BLOCKED" else "CLEAR"
+                                        val objectList = objects.joinToString(", ") { it.label }
+                                        
+                                        val prompt = "You are a high-accuracy mobility guide for a blind person. Analyze this photo in detail.\nProvide a clear, categorized 3-part spatial report:\n1. PATH CLEARANCE: State exact path safety (e.g. \"Path is clear for 2 meters straight ahead\" or \"Path is blocked by a table 1 meter ahead\").\n2. NEAREST OBSTACLES: List hazardous obstacles on left, right, and center with estimated distances.\n3. CATEGORIZED OBJECTS: List visible furniture, doors, ramps, and devices."
+                                        val geminiResult = withTimeoutOrNull(5000) { geminiClient.queryGemini(prompt) }
+                                        if (geminiResult != null && geminiResult.isSuccess) {
+                                            val desc = geminiResult.getOrNull() ?: ""
+                                            if (desc.isNotBlank()) {
+                                                resultText = desc
+                                            } else {
+                                                resultText = "Path status: $pathStatus. Obstacles: ${if (features.isNotEmpty()) features.joinToString(", ") { it.label } else "None"}. Objects: ${if (objectList.isNotEmpty()) objectList else "None"}."
+                                            }
+                                        } else {
+                                            resultText = "Path status: $pathStatus. Obstacles: ${if (features.isNotEmpty()) features.joinToString(", ") { it.label } else "None"}. Objects: ${if (objectList.isNotEmpty()) objectList else "None"}."
+                                        }
+                                        
+                                        try {
+                                            val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                                vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                            } else {
+                                                vibrator.vibrate(200)
+                                            }
+                                        } catch(e: Exception) {}
+                                        ttsManager.speak(resultText)
+                                        
+                                        launch {
+                                            delay(8000)
+                                            resultText = ""
+                                        }
+                                    } catch (e: Exception) {
+                                        resultText = "Error processing request"
+                                        ttsManager.speak(resultText)
+                                        launch { delay(8000); resultText = "" }
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PersonaBlind, contentColor = TextPrimary),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Describe", fontWeight = FontWeight.Bold) }
+                    
+                    Button(
+                        onClick = { 
+                            ttsManager.stop()
+                            val frame = latestFrame
+                            if (frame != null) {
+                                isProcessing = true
+                                resultText = ""
+                                scope.launch {
+                                    try {
+                                        delay(700)
+                                        val text = ocrManager.recognizeText(frame, latestRotation)
+                                        if (!text.isNullOrBlank()) {
+                                            resultText = "Text reads: $text"
+                                        } else {
+                                            resultText = "No readable text found."
+                                        }
+                                        try {
+                                            val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                                vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                            } else {
+                                                vibrator.vibrate(200)
+                                            }
+                                        } catch(e: Exception) {}
+                                        ttsManager.speak(resultText)
+                                        
+                                        launch {
+                                            delay(8000)
+                                            resultText = ""
+                                        }
+                                    } catch (e: Exception) {
+                                        resultText = "Error processing request"
+                                        ttsManager.speak(resultText)
+                                        launch { delay(8000); resultText = "" }
+                                    } finally {
+                                        isProcessing = false
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PersonaBlind, contentColor = TextPrimary),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Read Text", fontWeight = FontWeight.Bold) }
+                }
             }
 
             // BOTTOM SECTION — SINGLE VOICE ASSISTANT MIC FAB
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 48.dp),
+                    .padding(bottom = 24.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -437,12 +547,13 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                     ) {
                         Text("🎙️", fontSize = 32.sp)
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "🎙️ Tap to Speak to Hazel",
+                        text = "Tap to Speak to Hazel",
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        modifier = Modifier.background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f), RoundedCornerShape(4.dp)).padding(4.dp)
                     )
                 }
             }
