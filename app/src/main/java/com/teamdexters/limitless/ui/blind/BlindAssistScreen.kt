@@ -149,30 +149,38 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
                     try {
-                        val mediaImage = image.image
-                        if (mediaImage != null) {
-                            val inputImage = InputImage.fromMediaImage(mediaImage, image.imageInfo.rotationDegrees)
-                            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                            recognizer.process(inputImage)
-                                .addOnSuccessListener { visionText ->
-                                    val text = visionText.text
-                                    if (text.isNotBlank()) {
-                                        aiResponse = text
-                                        showResponseBanner = true
-                                        ttsManager.speak(text)
-                                        HapticVocabulary.play(context, "SUCCESS")
-                                    } else {
-                                        ttsManager.speak("No text detected.")
+                        val buffer = image.planes[0].buffer
+                        val bytes = ByteArray(buffer.capacity())
+                        buffer.get(bytes)
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                        
+                        val matrix = Matrix()
+                        matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
+                        val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                        
+                        val inputImage = InputImage.fromBitmap(rotatedBitmap, 0)
+                        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                        recognizer.process(inputImage)
+                            .addOnSuccessListener { visionText ->
+                                val text = visionText.text
+                                if (text.isNotBlank()) {
+                                    aiResponse = text
+                                    showResponseBanner = true
+                                    ttsManager.speak(text)
+                                    HapticVocabulary.play(context, "SUCCESS")
+                                    scope.launch {
+                                        delay(maxOf(3000L, text.length * 60L))
+                                        showResponseBanner = false
                                     }
-                                    isProcessingAI = false
+                                } else {
+                                    ttsManager.speak("No text detected.")
                                 }
-                                .addOnFailureListener { e ->
-                                    ttsManager.speak("Failed to read text.")
-                                    isProcessingAI = false
-                                }
-                        } else {
-                            isProcessingAI = false
-                        }
+                                isProcessingAI = false
+                            }
+                            .addOnFailureListener { e ->
+                                ttsManager.speak("Failed to read text.")
+                                isProcessingAI = false
+                            }
                     } catch (e: Exception) {
                         isProcessingAI = false
                     } finally {
@@ -212,7 +220,13 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
                             val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
-                            val prompt = "Describe this scene for a blind person. Mention key objects, people, and obstacles in 2 sentences."
+                            val prompt = "You are an AI navigation guide for a blind person. Analyze this camera frame for physical navigation and spatial awareness.\n" +
+                                    "Respond in 1-2 SHORT, DIRECT sentences following this exact structure:\n" +
+                                    "1) Free space status: State if the walking path straight ahead is CLEAR or BLOCKED, and for how many meters.\n" +
+                                    "2) Specific obstacles: Name specific objects and their position (left, right, or straight ahead).\n" +
+                                    "Example 1: \"Path is clear for 2 meters straight ahead. A wooden chair is on your left, and a table is 1 meter ahead.\"\n" +
+                                    "Example 2: \"Path is blocked. A closed door is directly in front of you, and a backpack is on the floor to your right.\"\n" +
+                                    "Do NOT give generic answers like 'dark object' or 'indoor scene'. Be precise about free space and obstacles."
                             val geminiClient = GeminiClient()
                             val result = geminiClient.queryGemini(prompt, base64Image)
                             
@@ -223,7 +237,7 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             ttsManager.speak(response)
                             HapticVocabulary.play(context, "SUCCESS")
                             
-                            delay(8000)
+                            delay(maxOf(3000L, response.length * 60L))
                             showResponseBanner = false
                         } catch (e: Exception) {
                             ttsManager.speak("Failed to describe surroundings.")
