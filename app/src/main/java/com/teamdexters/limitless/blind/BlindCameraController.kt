@@ -33,6 +33,7 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
     private var isCameraPaused = false
     private var sensorManager: SensorManager? = null
     private var proximitySensor: Sensor? = null
+    var onLuminanceCalculated: ((Int) -> Unit)? = null
 
     /**
      * Initialize proximity sensor listener.
@@ -95,6 +96,24 @@ class BlindCameraController(private val context: Context) : SensorEventListener 
             if (bitmap != null) {
                 // Update the singleton with the latest frame
                 CameraFrameManager.updateLatestFrame(bitmap, imageProxy.imageInfo.rotationDegrees)
+
+                // Calculate luminance by subsampling 1/10th of pixels for speed
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                var sum = 0L
+                var count = 0
+                for (i in pixels.indices step 10) {
+                    val pixel = pixels[i]
+                    val r = (pixel shr 16) and 0xFF
+                    val g = (pixel shr 8) and 0xFF
+                    val b = pixel and 0xFF
+                    sum += (0.2126 * r + 0.7152 * g + 0.0722 * b).toLong()
+                    count++
+                }
+                if (count > 0) {
+                    val avgLuminance = (sum / count).toInt()
+                    onLuminanceCalculated?.invoke(avgLuminance)
+                }
 
                 Log.d(TAG, "BlindCamera: Frame sampled at 1 FPS. Paused=$isCameraPaused, Size=${bitmap.width}x${bitmap.height}")
             }

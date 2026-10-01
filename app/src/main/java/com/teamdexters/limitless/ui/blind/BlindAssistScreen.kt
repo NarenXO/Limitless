@@ -14,6 +14,8 @@ import androidx.camera.view.PreviewView
 import androidx.camera.lifecycle.ProcessCameraProvider
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -117,6 +119,14 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
         ttsManager.initialize { success ->
             if (!success) {
                 Toast.makeText(context, "Text-to-speech initialization failed", Toast.LENGTH_SHORT).show()
+            } else {
+                ttsManager.speak("Blind Assist active. Tap the top half of your screen to Read Text. Tap the center to Describe Surroundings and Path Safety. Tap the bottom to Start Voice Navigation.")
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    vibrator.vibrate(150)
+                }
             }
         }
     }
@@ -150,10 +160,25 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
     // Handle AI invocation with specific query
     fun handleReadText() {
         ttsManager.stop()
+        
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            vibrator.vibrate(50)
+        }
+
         aiResponse = "Processing..."
         showResponseBanner = true
         if (isProcessingAI) return
         isProcessingAI = true
+        
+        ttsManager.speak("Reading text...")
+
+        val analyzingJob = scope.launch {
+            delay(3000L)
+            ttsManager.speak("Still analyzing, please hold phone steady...")
+        }
         
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
@@ -210,10 +235,12 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                     } catch (e: Exception) {
                         isProcessingAI = false
                     } finally {
+                        analyzingJob.cancel()
                         image.close()
                     }
                 }
                 override fun onError(exception: ImageCaptureException) {
+                    analyzingJob.cancel()
                     isProcessingAI = false
                     ttsManager.speak("Failed to capture image.")
                 }
@@ -223,10 +250,25 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
 
     fun handleDescribeSurroundings() {
         ttsManager.stop()
+
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            vibrator.vibrate(50)
+        }
+
         aiResponse = "Processing..."
         showResponseBanner = true
         if (isProcessingAI) return
         isProcessingAI = true
+
+        ttsManager.speak("Analyzing surroundings...")
+
+        val analyzingJob = scope.launch {
+            delay(3000L)
+            ttsManager.speak("Still analyzing, please hold phone steady...")
+        }
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
@@ -267,12 +309,14 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             ttsManager.speak("Failed to describe surroundings.")
                             showResponseBanner = false
                         } finally {
+                            analyzingJob.cancel()
                             isProcessingAI = false
                             image.close()
                         }
                     }
                 }
                 override fun onError(exception: ImageCaptureException) {
+                    analyzingJob.cancel()
                     isProcessingAI = false
                     showResponseBanner = false
                     ttsManager.speak("Failed to capture image.")
@@ -324,9 +368,17 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
 
     fun handleStartNavigation() {
         ttsManager.stop()
+        
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            vibrator.vibrate(50)
+        }
+
         aiResponse = "Starting navigation..."
         showResponseBanner = true
-        ttsManager.speak("Navigating to mobility menu. Please select your destination to begin turn-by-turn guidance.")
+        ttsManager.speak("Opening accessible navigation menu.")
         navController.navigate("mobility-home")
     }
 
@@ -366,13 +418,25 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                         // Bind to lifecycle
                         try {
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
+                        val camera = cameraProvider.bindToLifecycle(
                                 lifecycleOwner,
                                 androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA,
                                 preview,
                                 imageAnalysis,
                                 imageCapture
                             )
+
+                            cameraController.onLuminanceCalculated = { luminance ->
+                                try {
+                                    if (luminance < 35) {
+                                        camera.cameraControl.enableTorch(true)
+                                    } else {
+                                        camera.cameraControl.enableTorch(false)
+                                    }
+                                } catch (e: Exception) {
+                                    // Torch not available or failed
+                                }
+                            }
                         } catch (e: Exception) {
                             Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
@@ -380,69 +444,71 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                 }
             )
 
-            // Top Bar: Translucent SurfaceTint pill with title + camera status + proximity indicator
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .align(Alignment.TopCenter),
-                contentAlignment = Alignment.Center
+            // 3-Zone Touch Layout Overlay
+            Column(
+                modifier = Modifier.fillMaxSize()
             ) {
-                Surface(
-                    color = SurfaceTint.copy(alpha = 0.8f),
-                    shape = RoundedCornerShape(24.dp),
+                // Top Zone (40%) - Read Text
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
+                        .weight(0.4f)
+                        .background(PersonaBlind.copy(alpha = 0.85f))
+                        .border(3.dp, androidx.compose.ui.graphics.Color(0xFF1F1F1F))
+                        .clickable { handleReadText() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Title
-                        Text(
-                            text = "Blind Assist",
-                            style = LimitlessTypography.titleMedium,
+                    Text(
+                        text = "1. READ TEXT ALOUD (Tap Top)",
+                        style = LimitlessTypography.titleLarge.copy(
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            modifier = Modifier.semantics {
-                                contentDescription = "Blind Assist screen title"
-                            }
-                        )
+                            color = androidx.compose.ui.graphics.Color(0xFF1F1F1F)
+                        ),
+                        modifier = Modifier.semantics { contentDescription = "Read Text Aloud button, tap top of screen" }
+                    )
+                }
+                
+                // Center Zone (40%) - Describe Surroundings
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.4f)
+                        .background(SurfaceTint.copy(alpha = 0.85f))
+                        .border(3.dp, androidx.compose.ui.graphics.Color(0xFF1F1F1F))
+                        .clickable { handleDescribeSurroundings() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "2. DESCRIBE SURROUNDINGS & PATH (Tap Center)",
+                        style = LimitlessTypography.titleLarge.copy(
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFF1F1F1F)
+                        ),
+                        modifier = Modifier.semantics { contentDescription = "Describe Surroundings and Path Safety button, tap center of screen" }
+                    )
+                }
 
-                        // Camera status
-                        Text(
-                            text = cameraStatus,
-                            style = LimitlessTypography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary,
-                            modifier = Modifier.semantics {
-                                contentDescription = "Camera status: $cameraStatus"
-                            }
-                        )
-
-                        // Proximity pause indicator chip
-                        if (isCameraPaused) {
-                            Surface(
-                                color = HighlightBox,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.semantics {
-                                    contentDescription = "Camera paused because proximity sensor is covered"
-                                }
-                            ) {
-                                Text(
-                                    text = "Proximity Covered",
-                                    style = LimitlessTypography.labelMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = TextPrimary,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
+                // Bottom Zone (20%) - Start Navigation
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.2f)
+                        .background(PrimaryAccent.copy(alpha = 0.85f))
+                        .border(3.dp, androidx.compose.ui.graphics.Color(0xFF1F1F1F))
+                        .clickable { handleStartNavigation() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "3. START VOICE NAVIGATION (Tap Bottom)",
+                        style = LimitlessTypography.titleLarge.copy(
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color.White
+                        ),
+                        modifier = Modifier.semantics { contentDescription = "Start Voice Navigation button, tap bottom of screen" }
+                    )
                 }
             }
 
@@ -459,126 +525,6 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                     onDismiss = { showResponseBanner = false },
                     modifier = Modifier.padding(16.dp)
                 )
-            }
-
-            // Floating semi-transparent bottom action bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-            ) {
-                Surface(
-                    color = SurfaceTint.copy(alpha = 0.8f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (isProcessingAI) {
-                            CircularProgressIndicator(color = PersonaBlind)
-                        }
-
-                        // Read Text button
-                        Button(
-                            onClick = { handleReadText() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp)
-                                .semantics {
-                                    contentDescription = "Read Text button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "📖 Read Text",
-                                style = LimitlessTypography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp
-                            )
-                        }
-                        
-                        // Detect Color button
-                        Button(
-                            onClick = { handleDetectColor() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp)
-                                .semantics {
-                                    contentDescription = "Detect Color button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "🎨 Detect Color",
-                                style = LimitlessTypography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp
-                            )
-                        }
-                        
-                        // Describe Surroundings button
-                        Button(
-                            onClick = { handleDescribeSurroundings() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp)
-                                .semantics {
-                                    contentDescription = "Describe Surroundings button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "👁️ Describe Surroundings",
-                                style = LimitlessTypography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp
-                            )
-                        }
-
-                        // Start Navigation button
-                        Button(
-                            onClick = { handleStartNavigation() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp)
-                                .semantics {
-                                    contentDescription = "Start Voice Navigation button"
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PersonaBlind,
-                                contentColor = TextPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "🧭 Start Voice Navigation",
-                                style = LimitlessTypography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp
-                            )
-                        }
-                    }
-                }
             }
         } else {
             // Permission denied message
