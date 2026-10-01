@@ -20,7 +20,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class GroqChatClient @Inject constructor(
-    private val secureKeyProvider: SecureKeyProvider
+    val secureKeyProvider: SecureKeyProvider
 ) {
     companion object {
         private const val TAG = "GroqChat"

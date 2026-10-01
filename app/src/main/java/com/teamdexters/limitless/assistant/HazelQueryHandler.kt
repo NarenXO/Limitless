@@ -4,6 +4,7 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import com.teamdexters.limitless.BuildConfig
+import com.teamdexters.limitless.assistant.cloud.GroqChatClient
 import com.teamdexters.limitless.assistant.cloud.GeminiClient
 import com.teamdexters.limitless.util.NetworkStatus
 import com.teamdexters.limitless.util.NetworkStatusProvider
@@ -14,7 +15,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 /**
- * Handles unmatched [HazelIntent.GeneralQuery] inputs by attempting optional Gemini cloud queries
+ * Handles unmatched [HazelIntent.GeneralQuery] inputs by attempting optional Groq cloud queries
  * when online, or falling back gracefully to offline accessibility responses when offline.
  *
  * Uses [NetworkStatusTracker] for reactive, cached network checks instead of performing a
@@ -25,6 +26,7 @@ import java.util.Locale
  */
 class HazelQueryHandler(
     private val context: Context,
+    private val groqChatClient: GroqChatClient,
     private val geminiClient: GeminiClient,
     private val networkStatusTracker: NetworkStatusProvider? = null
 ) {
@@ -55,16 +57,16 @@ class HazelQueryHandler(
             Log.d("LIMITLESS_TRACE", "Speech:\n$rawQuery\n↓\nIntent:\nGeneralQuery\n↓\nCloud LLM")
             val responseText = try {
                 if (isNetworkAvailable() && isApiKeyPresent()) {
-                    val result = geminiClient.queryGemini(rawQuery)
-                    result.getOrElse { e -> 
-                        Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
-                        getOfflineResponse(rawQuery) 
+                    val result = groqChatClient.chatCompletion(rawQuery)
+                    result.getOrElse { e ->
+                        Log.e("LIMITLESS_TRACE", "Groq query failed: ${e.localizedMessage}", e)
+                        getOfflineResponse(rawQuery)
                     }
                 } else {
                     getOfflineResponse(rawQuery)
                 }
             } catch (e: Exception) {
-                Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
+                Log.e("LIMITLESS_TRACE", "Groq query failed: ${e.localizedMessage}", e)
                 getOfflineResponse(rawQuery)
             }
 
@@ -112,9 +114,16 @@ class HazelQueryHandler(
     }
 
     /**
-     * Checks whether a valid BuildConfig.GEMINI_API_KEY is configured.
+     * Checks whether a valid Groq API key is configured.
      */
     fun isApiKeyPresent(): Boolean {
+        return groqChatClient.secureKeyProvider.getGroqApiKey().isNotEmpty()
+    }
+
+    /**
+     * Checks whether a valid Gemini API key is configured (for vision queries).
+     */
+    fun isGeminiApiKeyPresent(): Boolean {
         return !geminiClient.secureKeyProvider.getGeminiKey().isNullOrEmpty()
     }
 
@@ -126,16 +135,16 @@ class HazelQueryHandler(
     ) {
         scope.launch {
             val isOnline = isNetworkAvailable()
-            
-            val responseText = if (isOnline && isApiKeyPresent()) {
+
+            val responseText = if (isOnline && isGeminiApiKeyPresent()) {
                 val latestFrame = com.teamdexters.limitless.assistant.vision.CameraFrameManager.getFrame()
                 if (latestFrame != null) {
                     val base64Image = bitmapToBase64(latestFrame)
                     try {
                         val result = geminiClient.queryGemini(query, base64Image)
-                        result.getOrElse { e -> 
+                        result.getOrElse { e ->
                             Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)
-                            getOfflineResponse(query) 
+                            getOfflineResponse(query)
                         }
                     } catch (e: Exception) {
                         Log.e("LIMITLESS_TRACE", "Gemini query failed: ${e.localizedMessage}", e)

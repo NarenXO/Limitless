@@ -227,9 +227,11 @@ fun HazelAssistantWrapper(
 
     // Hazel query handler with network status tracker integration
     val queryHandler = remember(networkStatusTracker) {
+        val groqChatClient = com.teamdexters.limitless.assistant.cloud.GroqChatClient(secureKeyProvider)
         val geminiClient = com.teamdexters.limitless.assistant.cloud.GeminiClient(secureKeyProvider)
         HazelQueryHandler(
             context = context,
+            groqChatClient = groqChatClient,
             geminiClient = geminiClient,
             networkStatusTracker = networkStatusTracker
         )
