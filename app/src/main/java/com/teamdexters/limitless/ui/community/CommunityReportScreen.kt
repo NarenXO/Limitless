@@ -183,7 +183,7 @@ fun CommunityReportScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 androidx.compose.foundation.lazy.LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {

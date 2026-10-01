@@ -10,49 +10,61 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.teamdexters.limitless.ui.theme.*
+import com.teamdexters.limitless.ui.theme.PureBlack
+import com.teamdexters.limitless.ui.theme.PureWhite
+import com.teamdexters.limitless.ui.theme.SubtleDivider
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LimitlessScreenFrame(
     title: String,
     onBack: (() -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit
 ) {
     Scaffold(
         containerColor = PureWhite,
         topBar = {
-            Column(modifier = Modifier.padding(top = 80.dp).background(PureWhite)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PureBlack)
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                            color = PureBlack
+                        )
+                    },
+                    navigationIcon = {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Go back",
+                                    tint = PureBlack
+                                )
+                            }
                         }
-                    }
-                    Text(
-                        text = title, 
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black), 
-                        color = PureBlack
-                    )
-                }
+                    },
+                    actions = {
+                        if (trailingIcon != null) {
+                            trailingIcon()
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = PureWhite)
+                )
                 Divider(color = SubtleDivider, thickness = 1.dp)
             }
-        },
-        bottomBar = {
-            Spacer(modifier = Modifier.height(56.dp).fillMaxWidth().background(PureWhite))
         }
+        // NO dummy bottomBar Spacer — Scaffold manages inset padding natively.
     ) { innerPadding ->
-        // Use Alignment.TopStart so content starts immediately below the header
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(PureWhite),
-            contentAlignment = Alignment.TopStart 
+            contentAlignment = Alignment.TopStart
         ) {
-            content(PaddingValues(16.dp))
+            content(PaddingValues(horizontal = 16.dp, vertical = 12.dp))
         }
     }
 }

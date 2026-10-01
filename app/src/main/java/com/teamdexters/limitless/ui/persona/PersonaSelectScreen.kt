@@ -24,14 +24,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +39,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -403,11 +402,10 @@ fun PersonaSelectScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(PureWhite)
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 16.dp)
+            .padding(top = 32.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-
         AnimatedContent(
             targetState = isNameStage,
             transitionSpec = {
@@ -515,94 +513,87 @@ private fun PersonaSelectionStage(
     onPersonaSelected: (String) -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.Top
     ) {
         // Greeting heading
         Text(
             text = if (capturedName == "there") "Choose your assist mode"
-                   else "Hello, $capturedName",
-            fontWeight = FontWeight.Black,
-            fontSize = 30.sp,
+                   else "Hello, $capturedName!",
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
             color = PureBlack,
             textAlign = TextAlign.Center,
-            letterSpacing = (-0.5).sp,
-            modifier = Modifier.semantics { heading() }
-        )
-
-        Text(
-            text = "TAP A MODE OR SPEAK YOUR CHOICE",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            color = NeutralGray,
-            textAlign = TextAlign.Center
+            modifier = Modifier.fillMaxWidth().semantics { heading() }
         )
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Text(
+            text = "SELECT ASSIST MODE",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp,
+            color = NeutralGray,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Row 1: Blind + Deaf  — compact 130dp height
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                PersonaCard(
-                    title = "BLIND\n& LOW-VISION",
-                    color = PersonaBlind,
-                    icon = Icons.Default.Visibility,
-                    onClick = { onPersonaSelected("BLIND") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.85f)
-                )
-            }
-            item {
-                PersonaCard(
-                    title = "DEAF\n& HARD-OF-HEARING",
-                    color = PersonaDeaf,
-                    icon = Icons.Default.Hearing,
-                    onClick = { onPersonaSelected("DEAF") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.85f)
-                )
-            }
-            item {
-                PersonaCard(
-                    title = "SPEECH\nIMPAIRED",
-                    color = PersonaSpeech,
-                    icon = Icons.Default.QuestionAnswer,
-                    onClick = { onPersonaSelected("SPEECH") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.85f)
-                )
-            }
-            item {
-                PersonaCard(
-                    title = "MOBILITY\n& WHEELCHAIR",
-                    color = PersonaMobility,
-                    icon = Icons.Default.Accessible,
-                    onClick = { onPersonaSelected("MOBILITY") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.85f)
-                )
-            }
+            PersonaCard(
+                title = "BLIND\n& LOW-VISION",
+                color = PersonaBlind,
+                icon = Icons.Default.Visibility,
+                onClick = { onPersonaSelected("BLIND") },
+                modifier = Modifier.weight(1f).height(130.dp)
+            )
+            PersonaCard(
+                title = "DEAF\n& HARD-OF-HEARING",
+                color = PersonaDeaf,
+                icon = Icons.Default.Hearing,
+                onClick = { onPersonaSelected("DEAF") },
+                modifier = Modifier.weight(1f).height(130.dp)
+            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Row 2: Speech + Mobility — compact 130dp height
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            PersonaCard(
+                title = "SPEECH\nIMPAIRED",
+                color = PersonaSpeech,
+                icon = Icons.Default.QuestionAnswer,
+                onClick = { onPersonaSelected("SPEECH") },
+                modifier = Modifier.weight(1f).height(130.dp)
+            )
+            PersonaCard(
+                title = "MOBILITY\n& WHEELCHAIR",
+                color = PersonaMobility,
+                icon = Icons.Default.Accessible,
+                onClick = { onPersonaSelected("MOBILITY") },
+                modifier = Modifier.weight(1f).height(130.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Mic status indicator
         MicStatusIndicator(isListening = isListening, hint = listeningHint, onMicTap = onMicTap)
     }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared sub-components

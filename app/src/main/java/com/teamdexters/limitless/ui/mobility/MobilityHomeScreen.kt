@@ -244,6 +244,7 @@ fun MobilityHomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(innerPadding)
             .verticalScroll(scrollState),
         verticalArrangement = Arrangement.Top
     ) {
