@@ -29,15 +29,31 @@ object OfflineTextReader {
      */
     suspend fun readText(bitmap: Bitmap): String {
         return try {
-            val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+            // Center Crop 80% ROI
+            val cropWidth = (bitmap.width * 0.8).toInt()
+            val cropHeight = (bitmap.height * 0.8).toInt()
+            val cropX = (bitmap.width - cropWidth) / 2
+            val cropY = (bitmap.height - cropHeight) / 2
+            val croppedBitmap = Bitmap.createBitmap(bitmap, cropX, cropY, cropWidth, cropHeight)
+            
+            val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(croppedBitmap, 0)
             val result = processImage(inputImage)
 
-            if (result.text.isBlank()) {
-                Log.d(TAG, "OfflineTextReader: No text detected")
-                "I don't see any readable text in this view."
-            } else {
-                Log.d(TAG, "OfflineTextReader: Extracted text: ${result.text.take(50)}...")
+            if (result.text.isNotBlank()) {
+                Log.d(TAG, "OfflineTextReader: Extracted text (cropped): ${result.text.take(50)}...")
                 "The text says: ${result.text.trim()}"
+            } else {
+                // Fallback to full image
+                val fullInputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+                val fullResult = processImage(fullInputImage)
+                
+                if (fullResult.text.isNotBlank()) {
+                    Log.d(TAG, "OfflineTextReader: Extracted text (full): ${fullResult.text.take(50)}...")
+                    "The text says: ${fullResult.text.trim()}"
+                } else {
+                    Log.d(TAG, "OfflineTextReader: No text detected")
+                    "I don't see any readable text in this view."
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "OfflineTextReader: Error reading text", e)

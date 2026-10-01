@@ -247,13 +247,13 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
                             val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
-                            val prompt = "You are an AI navigation guide for a blind person. Analyze this camera frame for physical navigation and spatial awareness.\n" +
-                                    "Respond in 1-2 SHORT, DIRECT sentences following this exact structure:\n" +
-                                    "1) Free space status: State if the walking path straight ahead is CLEAR or BLOCKED, and for how many meters.\n" +
-                                    "2) Specific obstacles: Name specific objects and their position (left, right, or straight ahead).\n" +
-                                    "Example 1: \"Path is clear for 2 meters straight ahead. A wooden chair is on your left, and a table is 1 meter ahead.\"\n" +
-                                    "Example 2: \"Path is blocked. A closed door is directly in front of you, and a backpack is on the floor to your right.\"\n" +
-                                    "Do NOT give generic answers like 'dark object' or 'indoor scene'. Be precise about free space and obstacles."
+                            val prompt = "You are an AI mobility assistant for a blind person. Analyze this photo for navigation safety.\n" +
+                                    "Respond in EXACTLY 3 short sentences using this format:\n" +
+                                    "1. PATH STATUS: State clearly if the walking path straight ahead is 'PATH IS CLEAR' or 'PATH IS BLOCKED BY AN OBSTACLE'.\n" +
+                                    "2. OBSTACLES: Name specific obstacles directly in front of or near the user (e.g. 'A chair is 1 meter ahead', 'Stairs ahead', 'A table is on your left').\n" +
+                                    "3. OBJECTS: List other visible key objects in the room.\n" +
+                                    "EXAMPLE:\n" +
+                                    "\"Path status: PATH IS CLEAR for 2 meters straight ahead. Obstacles: A wooden chair is on your left. Objects seen: Laptop on desk, doorway in background.\""
                             val geminiClient = GeminiClient()
                             val result = geminiClient.queryGemini(prompt, base64Image)
                             

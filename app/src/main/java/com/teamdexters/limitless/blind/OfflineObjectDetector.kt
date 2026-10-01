@@ -95,19 +95,20 @@ object OfflineObjectDetector {
             // Build spatial sentence
             val sentenceParts = mutableListOf<String>()
 
+            val aheadObjects = spatialBuckets["ahead"]
+            val pathStatus = if (aheadObjects.isNullOrEmpty()) {
+                "Path is clear ahead."
+            } else {
+                val objectNames = aheadObjects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
+                val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
+                "Path is blocked by $objectText ahead."
+            }
+
             spatialBuckets["left"]?.let { objects ->
                 if (objects.isNotEmpty()) {
                     val objectNames = objects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
                     val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
                     sentenceParts.add("$objectText on your left")
-                }
-            }
-
-            spatialBuckets["ahead"]?.let { objects ->
-                if (objects.isNotEmpty()) {
-                    val objectNames = objects.take(2).map { it.categories.firstOrNull()?.label ?: "object" }
-                    val objectText = if (objectNames.size == 1) objectNames[0] else "${objectNames.joinToString(" and ")}"
-                    sentenceParts.add("$objectText ahead")
                 }
             }
 
@@ -119,11 +120,13 @@ object OfflineObjectDetector {
                 }
             }
 
-            if (sentenceParts.isEmpty()) {
-                return "I don't see any distinct objects in front of you."
+            val finalSentence = if (sentenceParts.isEmpty()) {
+                pathStatus
+            } else {
+                "$pathStatus Also, there is ${sentenceParts.joinToString(", ")}."
             }
-
-            "There is ${sentenceParts.joinToString(", ")}."
+            
+            finalSentence
         } catch (e: Exception) {
             Log.e(TAG, "OfflineObjectDetector: Detection error", e)
             "I don't see any distinct objects in front of you."
@@ -155,11 +158,11 @@ object OfflineObjectDetector {
             }
 
             if (obstacles.isEmpty()) {
-                return "I don't see any obstacles in front of you."
+                return "Path is clear. I don't see any obstacles in front of you."
             }
 
             val obstacleNames = obstacles.take(3).map { it.categories.firstOrNull()?.label ?: "obstacle" }
-            "There is ${obstacleNames.joinToString(", ")} in front of you."
+            "Path is blocked. There is ${obstacleNames.joinToString(" and ")} in front of you."
         } catch (e: Exception) {
             Log.e(TAG, "OfflineObjectDetector: Obstacle detection error", e)
             "I don't see any obstacles in front of you."
