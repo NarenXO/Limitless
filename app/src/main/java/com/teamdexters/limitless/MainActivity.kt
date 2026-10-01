@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import javax.inject.Inject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,8 +72,6 @@ import com.teamdexters.limitless.ui.theme.LimitlessTheme
 import com.teamdexters.limitless.ui.theme.TextPrimary
 import com.teamdexters.limitless.util.NetworkStatusTracker
 import com.teamdexters.limitless.util.PowerTriggerBus
-import com.teamdexters.limitless.data.local.dao.MappedRoomDao
-import com.teamdexters.limitless.data.local.dao.RoomConnectionDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -92,12 +91,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider
-
-    @Inject
-    lateinit var mappedRoomDao: MappedRoomDao
-
-    @Inject
-    lateinit var roomConnectionDao: RoomConnectionDao
 
     /**
      * Tracks whether the user has granted RECORD_AUDIO at runtime.
@@ -151,8 +144,6 @@ class MainActivity : ComponentActivity() {
                     micGranted = micGranted.value,
                     voiceManager = voiceManager,
                     secureKeyProvider = secureKeyProvider,
-                    mappedRoomDao = mappedRoomDao,
-                    roomConnectionDao = roomConnectionDao,
                     hazelActionDispatcher = hazelActionDispatcher
                 )
             }
@@ -219,8 +210,6 @@ fun HazelAssistantWrapper(
     micGranted: Boolean,
     voiceManager: com.teamdexters.limitless.core.audio.VoiceManager,
     secureKeyProvider: com.teamdexters.limitless.config.SecureKeyProvider,
-    mappedRoomDao: MappedRoomDao,
-    roomConnectionDao: RoomConnectionDao,
     hazelActionDispatcher: com.teamdexters.limitless.hazel.HazelActionDispatcher
 ) {
     val navController = rememberNavController()
