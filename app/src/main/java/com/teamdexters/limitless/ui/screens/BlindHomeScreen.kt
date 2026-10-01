@@ -222,10 +222,10 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                             val pathStatus = if (features.isNotEmpty()) "BLOCKED" else "CLEAR"
                             val objectList = objects.joinToString(", ") { it.label }
                             
-                            resultText = "Path status: $pathStatus. Obstacles: ${if (features.isNotEmpty()) features.joinToString(", ") { it.type } else "None"}. Objects: ${if (objectList.isNotEmpty()) objectList else "None"}."
+                            resultText = "Path status: $pathStatus. Obstacles: ${if (features.isNotEmpty()) features.joinToString(", ") { it.label } else "None"}. Objects: ${if (objectList.isNotEmpty()) objectList else "None"}."
                             
                             // Optional Gemini query if network is up
-                            val prompt = "Describe this scene. Detected path features: ${features.joinToString(", "){it.type}}, objects: $objectList. Format: Path status: [CLEAR/BLOCKED]. Obstacles: [NAME OBSTACLES]. Objects: [KEY OBJECTS]."
+                            val prompt = "Describe this scene. Detected path features: ${features.joinToString(", "){it.label}}, objects: $objectList. Format: Path status: [CLEAR/BLOCKED]. Obstacles: [NAME OBSTACLES]. Objects: [KEY OBJECTS]."
                             val geminiResult = withTimeoutOrNull(5000) { geminiClient.queryGemini(prompt) }
                             if (geminiResult != null && geminiResult.isSuccess) {
                                 val desc = geminiResult.getOrNull() ?: ""
@@ -243,7 +243,14 @@ fun BlindHomeScreen(onBack: () -> Unit = {}) {
                         }
                         
                         ttsManager.stop()
-                        vibrationHelper.vibrate(200)
+                        try {
+                            val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                vibrator.vibrate(200)
+                            }
+                        } catch(e: Exception) {}
                         ttsManager.speak(resultText)
                         
                         launch {
