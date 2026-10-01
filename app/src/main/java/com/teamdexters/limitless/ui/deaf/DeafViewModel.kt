@@ -3,13 +3,12 @@ package com.teamdexters.limitless.ui.deaf
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.core.audio.VoiceManager
-import com.teamdexters.limitless.core.audio.VoiceState
 import com.teamdexters.limitless.core.safety.LimitlessSmsManager
-import com.teamdexters.limitless.haptics.NameHapticManager
-import com.teamdexters.limitless.hazel.HazelActionDispatcher
+import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.core.hazel.HazelCommand
+import com.teamdexters.limitless.haptics.HapticManager
+import com.teamdexters.limitless.hazel.HazelActionDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,28 +19,25 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DeafViewModel @Inject constructor(
-    private val voiceManager: VoiceManager,
     private val secureKeyProvider: SecureKeyProvider,
     private val hazelActionDispatcher: HazelActionDispatcher,
-    private val nameHapticManager: NameHapticManager,
+    private val hapticManager: HapticManager,
+    private val voiceManager: VoiceManager,
     private val limitlessSmsManager: LimitlessSmsManager
 ) : ViewModel() {
 
+    private val _liveCaptions = MutableStateFlow("")
+    val liveCaptions: StateFlow<String> = _liveCaptions.asStateFlow()
+
     private val _detectedAlerts = MutableStateFlow<List<String>>(emptyList())
     val detectedAlerts: StateFlow<List<String>> = _detectedAlerts.asStateFlow()
-
-    private val _decibelLevel = MutableStateFlow(0f)
-    val decibelLevel: StateFlow<Float> = _decibelLevel.asStateFlow()
 
     private val _sosCountdown = MutableStateFlow<Int?>(null)
     val sosCountdown: StateFlow<Int?> = _sosCountdown.asStateFlow()
 
     private val userName: String by lazy {
-        secureKeyProvider.getUserName() ?: "User"
+        secureKeyProvider.getUserName()
     }
-
-    // Expose VoiceManager's live captions
-    val liveCaptions = voiceManager.liveCaptions
 
     init {
         viewModelScope.launch {
@@ -55,37 +51,27 @@ class DeafViewModel @Inject constructor(
             }
         }
 
-        // Monitor VoiceManager results for name detection
+        // Monitor VoiceManager live captions
         viewModelScope.launch {
-            voiceManager.results.collect { result ->
-                when (result) {
-                    is com.teamdexters.limitless.core.audio.VoiceResult.Partial -> {
-                        checkForNameAndVibrate(result.text)
-                    }
-                    is com.teamdexters.limitless.core.audio.VoiceResult.Final -> {
-                        checkForNameAndVibrate(result.text)
-                    }
-                    else -> {}
-                }
+            voiceManager.liveCaptions.collect { text ->
+                _liveCaptions.value = text
+                processRecognizedText(text)
             }
         }
     }
 
     fun startListening() {
         Log.d("DEAF_MODE", "Requesting DEAF_CAPTION state")
-        voiceManager.requestState(VoiceState.DEAF_CAPTION)
+        voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.DEAF_CAPTION)
     }
 
-    fun stopListening() {
-        Log.d("DEAF_MODE", "Requesting IDLE state (stop captions)")
-        voiceManager.requestState(VoiceState.IDLE)
-    }
-
-    private fun checkForNameAndVibrate(text: String) {
-        if (text.contains(userName, ignoreCase = true)) {
-            Log.d("DEAF_MODE", "Name Detected: [$userName] -> Triggering NameHapticManager")
-            nameHapticManager.playNameRhythm(userName)
-            addAlert("Someone said your name: $userName")
+    private fun processRecognizedText(text: String) {
+        viewModelScope.launch(Dispatchers.Default) {
+            if (text.contains(userName, ignoreCase = true)) {
+                Log.d("LIMITLESS_TRACE", "DeafCore -> Name Detected: [$userName] -> Triggering Identity Haptic")
+                hapticManager.playNameCallPattern()
+                addAlert("Someone said your name: $userName")
+            }
         }
     }
 
@@ -99,10 +85,15 @@ class DeafViewModel @Inject constructor(
         }
     }
 
+    fun stopListening() {
+        Log.d("DEAF_MODE", "Requesting IDLE state (stop captions)")
+        voiceManager.requestState(com.teamdexters.limitless.core.audio.VoiceState.IDLE)
+    }
+
     fun triggerSOS() {
         if (_sosCountdown.value != null) return
         _sosCountdown.value = 5
-        nameHapticManager.playSOSLoopPattern()
+        hapticManager.playSOSLoopPattern()
         addAlert("SOS Triggered")
         viewModelScope.launch {
             for (i in 4 downTo 0) {
@@ -113,19 +104,19 @@ class DeafViewModel @Inject constructor(
             if (_sosCountdown.value == 0) {
                 _sosCountdown.value = null
                 limitlessSmsManager.sendEmergencySOS(userName, "911")
-                nameHapticManager.stop()
+                hapticManager.stop()
             }
         }
     }
 
     fun cancelSOS() {
         _sosCountdown.value = null
-        nameHapticManager.stop()
+        hapticManager.stop()
         addAlert("SOS Cancelled")
     }
 
     fun dismissSOS() {
-        nameHapticManager.stop()
+        hapticManager.stop()
     }
 
     override fun onCleared() {

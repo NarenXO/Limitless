@@ -1,10 +1,11 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.dagger.hilt.android")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -23,8 +24,13 @@ android {
             useSupportLibrary = true
         }
 
-        val geminiKey = project.findProperty("GEMINI_API_KEY") as? String ?: ""
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+        val properties = Properties()
+        val localProperties = project.rootProject.file("local.properties")
+        if (localProperties.exists()) {
+            properties.load(localProperties.inputStream())
+        }
+        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY", "")}\"")
+        buildConfigField("String", "GROQ_API_KEY", "\"${properties.getProperty("GROQ_API_KEY", "")}\"")
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -32,7 +38,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -113,9 +120,6 @@ dependencies {
     // Google ML Kit Image Labeling for Object Detection
     implementation("com.google.mlkit:image-labeling:17.0.7")
     
-    // Google ML Kit Face Detection
-    implementation("com.google.mlkit:face-detection:16.1.6")
-    
     // Google ML Kit Barcode Scanning
     // TODO(Naren): confirm ML Kit Barcode dependency is acceptable — same SDK family as existing ML Kit OCR.
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
@@ -137,14 +141,10 @@ dependencies {
     
     // TensorFlow Lite & ONNX Runtime
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.4")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
     implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-task-audio:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    
-    // MediaPipe
-    implementation("com.google.mediapipe:tasks-vision:0.10.14")
     
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
@@ -161,14 +161,11 @@ dependencies {
     // Accompanist Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     
-    // AndroidX Security (for EncryptedSharedPreferences)
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    
     // Google Play Services Location
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
-    // Palette for Offline Color Detection
-    implementation("androidx.palette:palette:1.0.0")
+    // Security Crypto
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     
     // Testing
     testImplementation("junit:junit:4.13.2")
@@ -178,10 +175,4 @@ dependencies {
     // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    // Supabase & Serialization
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.0-rc-1"))
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-    implementation("io.ktor:ktor-client-android:3.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }

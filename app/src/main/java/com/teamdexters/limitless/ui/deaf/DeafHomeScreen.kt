@@ -21,11 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -44,8 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.teamdexters.limitless.ui.theme.LimitlessBackground
-import com.teamdexters.limitless.ui.theme.PersonaDeaf
 import com.teamdexters.limitless.ui.theme.TextPrimary
 
 @Composable
@@ -55,15 +50,12 @@ fun DeafHomeScreen(
 ) {
     val liveCaptions by viewModel.liveCaptions.collectAsState()
     val detectedAlerts by viewModel.detectedAlerts.collectAsState()
-    val decibelLevel by viewModel.decibelLevel.collectAsState()
     val sosCountdown by viewModel.sosCountdown.collectAsState()
 
-    // Auto-start captions when screen opens
     LaunchedEffect(Unit) {
         viewModel.startListening()
     }
 
-    // Stop captions when screen is disposed
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopListening()
@@ -112,27 +104,7 @@ fun DeafHomeScreen(
                 }
             }
         },
-        containerColor = LimitlessBackground,
-        floatingActionButton = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                FloatingActionButton(
-                    onClick = {
-                        viewModel.stopListening()
-                    },
-                    containerColor = PersonaDeaf
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MicOff,
-                        contentDescription = "Stop Captions"
-                    )
-                }
-            }
-        }
+        containerColor = Color(0xFFF7F1EE)
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -141,14 +113,38 @@ fun DeafHomeScreen(
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Top: "Sound Status" card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFBAD6DA)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Monitoring Environment...",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Live Caption Area
+            // Center: Live Caption Area
             Text(
                 text = "Live Captions",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = TextPrimary,
+                color = Color.Black,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -157,7 +153,7 @@ fun DeafHomeScreen(
                     .fillMaxWidth()
                     .weight(1f),
                 shape = RoundedCornerShape(24.dp),
-                color = com.teamdexters.limitless.ui.theme.SurfaceTint
+                color = Color(0xFFE0F2F4)
             ) {
                 Box(
                     modifier = Modifier
@@ -167,7 +163,7 @@ fun DeafHomeScreen(
                 ) {
                     Text(
                         text = liveCaptions.ifEmpty { "Listening for speech..." },
-                        color = TextPrimary,
+                        color = Color(0xFF1F1F1F),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -176,12 +172,12 @@ fun DeafHomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Detected Alerts
+            // Bottom: Detected Alerts
             Text(
                 text = "Detected Alerts",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = TextPrimary,
+                color = Color.Black,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -195,13 +191,13 @@ fun DeafHomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = com.teamdexters.limitless.ui.theme.HighlightBox),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             text = alert,
                             modifier = Modifier.padding(16.dp),
-                            color = TextPrimary,
+                            color = Color(0xFF1F1F1F),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -215,14 +211,14 @@ fun DeafHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = com.teamdexters.limitless.ui.theme.HighlightBox),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFFDBDF)),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
                     text = "EMERGENCY SOS",
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
-                    color = TextPrimary
+                    color = Color(0xFF1F1F1F)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -233,7 +229,7 @@ fun DeafHomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(PersonaDeaf.copy(alpha = 0.9f))
+                    .background(Color(0xFFBAD6DA).copy(alpha = 0.9f))
                     .zIndex(200f),
                 contentAlignment = Alignment.Center
             ) {
