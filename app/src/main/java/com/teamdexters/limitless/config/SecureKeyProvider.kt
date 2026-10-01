@@ -43,10 +43,27 @@ class SecureKeyProvider @Inject constructor(
     }
 
     fun saveUserName(name: String) {
-        sharedPreferences.edit().putString("USER_NAME", name).apply()
+        sharedPreferences.edit().putString("USER_NAME", name).commit()
+        android.util.Log.d("LIMITLESS_TRACE", "SecureKeyProvider: Saved user name: '$name'")
     }
 
-    fun getUserName(): String? {
-        return sharedPreferences.getString("USER_NAME", null)
+    fun getUserName(): String {
+        var name = sharedPreferences.getString("USER_NAME", null)
+        // Fallback to default name if not set
+        if (name.isNullOrEmpty()) {
+            android.util.Log.w("LIMITLESS_TRACE", "SecureKeyProvider: USER_NAME not configured, using fallback 'Naren'")
+            name = "Naren"
+        }
+        android.util.Log.d("LIMITLESS_TRACE", "SecureKeyProvider: Retrieved user name: '$name'")
+        return name
+    }
+
+    fun getGroqApiKey(): String {
+        var key = sharedPreferences.getString("GROQ_API_KEY", null)
+        if (key.isNullOrEmpty()) {
+            key = BuildConfig.GROQ_API_KEY
+        }
+        android.util.Log.d("LIMITLESS_TRACE", "SecureKeyProvider: Groq key present length=${key.length}")
+        return key
     }
 }

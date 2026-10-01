@@ -1,7 +1,6 @@
 package com.teamdexters.limitless.ui.deaf
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,18 +35,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.teamdexters.limitless.core.audio.SoundCategory
-import com.teamdexters.limitless.ui.theme.LimitlessBackground
 import com.teamdexters.limitless.ui.theme.TextPrimary
 
 @Composable
@@ -58,8 +50,6 @@ fun DeafHomeScreen(
 ) {
     val liveCaptions by viewModel.liveCaptions.collectAsState()
     val detectedAlerts by viewModel.detectedAlerts.collectAsState()
-    val currentCategory by viewModel.currentSoundCategory.collectAsState()
-    val decibelLevel by viewModel.decibelLevel.collectAsState()
     val sosCountdown by viewModel.sosCountdown.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -123,35 +113,7 @@ fun DeafHomeScreen(
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            
-            // Environmental Indicator Chips
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val categories = listOf(
-                    SoundCategory.EMERGENCY to "Emergency",
-                    SoundCategory.HOME to "Home",
-                    SoundCategory.HUMAN to "Human"
-                )
-                items(categories) { (cat, label) ->
-                    val isLit = currentCategory == cat
-                    val bgColor = if (isLit) Color(0xFFBAD6DA) else Color.LightGray
-                    Surface(
-                        color = bgColor,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = label,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = if (isLit) Color.Black else Color.DarkGray,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Top: "Sound Status" card & Dynamic Waveform
+            // Top: "Sound Status" card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -166,29 +128,6 @@ fun DeafHomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    // Dynamic Visualizer (replaces static mic icon)
-                    Canvas(modifier = Modifier.size(48.dp, 32.dp)) {
-                        val barCount = 5
-                        val spacing = 4.dp.toPx()
-                        val barWidth = (size.width - spacing * (barCount - 1)) / barCount
-                        
-                        // Scale height based on decibel level (which is RMS in dB, usually varies wildly, let's normalize roughly)
-                        // This is a simple visual representation
-                        for (i in 0 until barCount) {
-                            val baseHeight = size.height * 0.2f
-                            val dynamicHeight = (baseHeight + (decibelLevel * (i + 1) * 0.1f)).coerceIn(baseHeight, size.height)
-                            
-                            val startX = i * (barWidth + spacing)
-                            val startY = (size.height - dynamicHeight) / 2
-                            drawRoundRect(
-                                color = Color.Black,
-                                topLeft = Offset(startX, startY),
-                                size = Size(barWidth, dynamicHeight),
-                                cornerRadius = CornerRadius(2.dp.toPx())
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "Monitoring Environment...",
                         fontWeight = FontWeight.Bold,

@@ -30,6 +30,7 @@ android {
             properties.load(localProperties.inputStream())
         }
         buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY", "")}\"")
+        buildConfigField("String", "GROQ_API_KEY", "\"${properties.getProperty("GROQ_API_KEY", "")}\"")
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
