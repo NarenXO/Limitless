@@ -47,6 +47,6 @@ class SecureKeyProvider @Inject constructor(
     }
 
     fun getUserName(): String? {
-        return sharedPreferences.getString("USER_NAME", "Naren")
+        return sharedPreferences.getString("USER_NAME", null)
     }
 }
