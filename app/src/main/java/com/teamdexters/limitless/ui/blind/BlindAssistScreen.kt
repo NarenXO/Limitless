@@ -90,7 +90,7 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
     var isCameraPaused by remember { mutableStateOf(false) }
     var cameraStatus by remember { mutableStateOf("Camera Active") }
 
-    val imageCapture = remember { androidx.camera.core.ImageCapture.Builder().build() }
+    val imageCapture = remember { androidx.camera.core.ImageCapture.Builder().setCaptureMode(androidx.camera.core.ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
 
     // AI invocation state
     var aiResponse by remember { mutableStateOf("") }
@@ -139,8 +139,19 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
         }
     }
 
+    // Auto-Dismiss Result Box
+    LaunchedEffect(aiResponse) {
+        if (aiResponse.isNotEmpty() && aiResponse != "Processing...") {
+            delay(4000L + (aiResponse.length * 60L)) // 4s + reading time
+            showResponseBanner = false
+        }
+    }
+
     // Handle AI invocation with specific query
     fun handleReadText() {
+        ttsManager.stop()
+        aiResponse = "Processing..."
+        showResponseBanner = true
         if (isProcessingAI) return
         isProcessingAI = true
         
@@ -158,22 +169,37 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                         matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
                         val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
                         
-                        val inputImage = InputImage.fromBitmap(rotatedBitmap, 0)
+                        // Center Crop 80% ROI
+                        val cropWidth = (rotatedBitmap.width * 0.8).toInt()
+                        val cropHeight = (rotatedBitmap.height * 0.8).toInt()
+                        val cropX = (rotatedBitmap.width - cropWidth) / 2
+                        val cropY = (rotatedBitmap.height - cropHeight) / 2
+                        val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, cropX, cropY, cropWidth, cropHeight)
+                        
+                        val inputImage = InputImage.fromBitmap(croppedBitmap, 0)
                         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                         recognizer.process(inputImage)
                             .addOnSuccessListener { visionText ->
                                 val text = visionText.text
                                 if (text.isNotBlank()) {
-                                    aiResponse = text
-                                    showResponseBanner = true
-                                    ttsManager.speak(text)
+                                    aiResponse = "Text reads: $text"
+                                    ttsManager.speak("Text reads: $text")
                                     HapticVocabulary.play(context, "SUCCESS")
-                                    scope.launch {
-                                        delay(maxOf(3000L, text.length * 60L))
-                                        showResponseBanner = false
-                                    }
                                 } else {
-                                    ttsManager.speak("No text detected.")
+                                    // Fallback to full image
+                                    val fullInputImage = InputImage.fromBitmap(rotatedBitmap, 0)
+                                    recognizer.process(fullInputImage)
+                                        .addOnSuccessListener { fullVisionText ->
+                                            val fullText = fullVisionText.text
+                                            if (fullText.isNotBlank()) {
+                                                aiResponse = "Text reads: $fullText"
+                                                ttsManager.speak("Text reads: $fullText")
+                                                HapticVocabulary.play(context, "SUCCESS")
+                                            } else {
+                                                aiResponse = "No readable text found."
+                                                ttsManager.speak("No readable text found. Please hold the document steady in good lighting.")
+                                            }
+                                        }
                                 }
                                 isProcessingAI = false
                             }
@@ -196,10 +222,11 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
     }
 
     fun handleDescribeSurroundings() {
+        ttsManager.stop()
+        aiResponse = "Processing..."
+        showResponseBanner = true
         if (isProcessingAI) return
         isProcessingAI = true
-        aiResponse = "Analyzing scene..."
-        showResponseBanner = true
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
@@ -236,9 +263,6 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                             showResponseBanner = true
                             ttsManager.speak(response)
                             HapticVocabulary.play(context, "SUCCESS")
-                            
-                            delay(maxOf(3000L, response.length * 60L))
-                            showResponseBanner = false
                         } catch (e: Exception) {
                             ttsManager.speak("Failed to describe surroundings.")
                             showResponseBanner = false
@@ -257,7 +281,51 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
         )
     }
 
+    fun handleDetectColor() {
+        ttsManager.stop()
+        aiResponse = "Processing..."
+        showResponseBanner = true
+        if (isProcessingAI) return
+        isProcessingAI = true
+
+        imageCapture.takePicture(
+            ContextCompat.getMainExecutor(context),
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    try {
+                        val buffer = image.planes[0].buffer
+                        val bytes = ByteArray(buffer.capacity())
+                        buffer.get(bytes)
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                        
+                        val matrix = Matrix()
+                        matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
+                        val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                        
+                        val color = com.teamdexters.limitless.blind.OfflineColorDetector.detectAccurateColor(rotatedBitmap)
+                        
+                        aiResponse = "Color detected: $color"
+                        ttsManager.speak(aiResponse)
+                        HapticVocabulary.play(context, "SUCCESS")
+                    } catch (e: Exception) {
+                        ttsManager.speak("Failed to detect color.")
+                    } finally {
+                        isProcessingAI = false
+                        image.close()
+                    }
+                }
+                override fun onError(exception: ImageCaptureException) {
+                    isProcessingAI = false
+                    ttsManager.speak("Failed to capture image.")
+                }
+            }
+        )
+    }
+
     fun handleStartNavigation() {
+        ttsManager.stop()
+        aiResponse = "Starting navigation..."
+        showResponseBanner = true
         ttsManager.speak("Navigating to mobility menu. Please select your destination to begin turn-by-turn guidance.")
         navController.navigate("mobility-home")
     }
@@ -435,6 +503,29 @@ fun BlindAssistScreen(navController: androidx.navigation.NavHostController) {
                         ) {
                             Text(
                                 text = "📖 Read Text",
+                                style = LimitlessTypography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp
+                            )
+                        }
+                        
+                        // Detect Color button
+                        Button(
+                            onClick = { handleDetectColor() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp)
+                                .semantics {
+                                    contentDescription = "Detect Color button"
+                                },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PersonaBlind,
+                                contentColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "🎨 Detect Color",
                                 style = LimitlessTypography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 24.sp

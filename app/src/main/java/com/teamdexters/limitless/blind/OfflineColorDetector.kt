@@ -1,119 +1,74 @@
 package com.teamdexters.limitless.blind
 
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.util.Log
-import androidx.palette.graphics.Palette
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
-/**
- * Offline color detector using Android Palette.
- * Extracts dominant color and maps to named colors.
- */
 object OfflineColorDetector {
+    fun detectAccurateColor(bitmap: Bitmap): String {
+        val centerX = bitmap.width / 2
+        val centerY = bitmap.height / 2
+        val sampleRadius = 25 // 50x50 grid
 
-    private const val TAG = "LIMITLESS_TRACE"
+        var totalR = 0L
+        var totalG = 0L
+        var totalB = 0L
+        var pixelCount = 0
 
-    /**
-     * Detect the dominant color in the center region of the bitmap.
-     * @param bitmap The image to analyze
-     * @return Named color description
-     */
-    suspend fun detectColor(bitmap: Bitmap): String {
-        return try {
-            // Extract center region for color analysis
-            val centerX = bitmap.width / 2
-            val centerY = bitmap.height / 2
-            val sampleSize = min(bitmap.width, bitmap.height) / 4
-            val sampleX = max(0, centerX - sampleSize / 2)
-            val sampleY = max(0, centerY - sampleSize / 2)
-            val sampleWidth = min(sampleSize, bitmap.width - sampleX)
-            val sampleHeight = min(sampleSize, bitmap.height - sampleY)
+        val startX = (centerX - sampleRadius).coerceAtLeast(0)
+        val endX = (centerX + sampleRadius).coerceAtMost(bitmap.width - 1)
+        val startY = (centerY - sampleRadius).coerceAtLeast(0)
+        val endY = (centerY + sampleRadius).coerceAtMost(bitmap.height - 1)
 
-            val sampledBitmap = Bitmap.createBitmap(
-                bitmap,
-                sampleX,
-                sampleY,
-                sampleWidth,
-                sampleHeight
-            )
-
-            // Generate palette from sampled region
-            val palette = Palette.from(sampledBitmap).generate()
-
-            // Get dominant swatch
-            val dominantSwatch = palette.dominantSwatch
-                ?: palette.mutedSwatch
-                ?: palette.vibrantSwatch
-
-            if (dominantSwatch != null) {
-                val rgb = dominantSwatch.rgb
-                val colorName = mapRgbToColorName(rgb)
-                Log.d(TAG, "OfflineColorDetector: Detected color=$colorName RGB=$rgb")
-                "The dominant color in front of you is $colorName."
-            } else {
-                Log.d(TAG, "OfflineColorDetector: No dominant color found")
-                "I cannot determine the dominant color in this view."
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "OfflineColorDetector: Error detecting color", e)
-            "I cannot determine the dominant color in this view."
-        }
-    }
-
-    /**
-     * Map RGB values to named colors using HSV analysis.
-     * @param rgb The RGB color value
-     * @return Named color string
-     */
-    private fun mapRgbToColorName(rgb: Int): String {
-        val red = Color.red(rgb)
-        val green = Color.green(rgb)
-        val blue = Color.blue(rgb)
-
-        // Convert RGB to HSV
-        val hsv = FloatArray(3)
-        Color.RGBToHSV(red, green, blue, hsv)
-        val hue = hsv[0]
-        val saturation = hsv[1]
-        val value = hsv[2]
-
-        // Check for grayscale colors first
-        if (saturation < 0.15f) {
-            return when {
-                value < 0.15f -> "black"
-                value > 0.85f -> "white"
-                else -> "gray"
+        for (x in startX..endX) {
+            for (y in startY..endY) {
+                val pixel = bitmap.getPixel(x, y)
+                totalR += (pixel shr 16 and 0xFF)
+                totalG += (pixel shr 8 and 0xFF)
+                totalB += (pixel and 0xFF)
+                pixelCount++
             }
         }
 
-        // Map hue to color name
-        val colorName = when {
-            hue < 15f || hue >= 345f -> "red"
-            hue < 45f -> "orange"
-            hue < 75f -> "yellow"
-            hue < 150f -> "green"
-            hue < 195f -> "cyan"
-            hue < 255f -> "blue"
-            hue < 285f -> "purple"
-            hue < 330f -> "pink"
-            else -> "red"
-        }
+        if (pixelCount == 0) return "Unknown Color"
 
-        // Special cases for brown and other colors
-        if (colorName == "orange" && saturation < 0.4f && value < 0.6f) {
-            return "brown"
-        }
+        val avgR = (totalR / pixelCount).toInt()
+        val avgG = (totalG / pixelCount).toInt()
+        val avgB = (totalB / pixelCount).toInt()
 
-        return colorName
+        return mapRgbToHumanColor(avgR, avgG, avgB)
     }
 
-    /**
-     * Release resources.
-     */
+    private fun mapRgbToHumanColor(r: Int, g: Int, b: Int): String {
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        
+        if (max - min < 20) {
+            if (max > 200) return "White"
+            if (max < 50) return "Black"
+            return "Grey"
+        }
+        
+        if (max == r) {
+            if (g > 150 && b < 100) return "Yellow"
+            if (g > 50 && b < 50) return "Orange"
+            if (b > 150 && g < 100) return "Magenta"
+            return "Red"
+        }
+        
+        if (max == g) {
+            if (b > 150) return "Cyan"
+            if (r > 150) return "Yellow-Green"
+            return "Green"
+        }
+        
+        if (r > 150) return "Purple"
+        return "Blue"
+    }
+
+    fun detectColor(bitmap: Bitmap): String {
+        return detectAccurateColor(bitmap)
+    }
+
     fun release() {
-        Log.d(TAG, "OfflineColorDetector: Released")
+        // No-op
     }
 }
