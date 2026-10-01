@@ -20,6 +20,7 @@ import com.teamdexters.limitless.assistant.cloud.GroqWhisperClient
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.haptics.HapticManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -123,10 +124,12 @@ class VoiceManager @Inject constructor(
      */
     private fun checkForNameAndVibrate(transcript: String) {
         val name = currentUserName
-        if (name.length < 2) return
-        if (transcript.contains(name, ignoreCase = true)) {
-            Log.d("LIMITLESS_TRACE", "Haptic Vocabulary -> Name detected: '$name'")
-            hapticManager.playNameRhythm(name)
+        Log.d(TAG, "Checking speech '$transcript' against target name '$name'")
+        if (name.isNotEmpty() && transcript.isNotEmpty()) {
+            if (transcript.lowercase().contains(name.lowercase())) {
+                Log.d("LIMITLESS_TRACE", "Haptic name match found for '$name' in speech: '$transcript'")
+                hapticManager.playNameRhythm(name)
+            }
         }
     }
 
@@ -172,8 +175,8 @@ class VoiceManager @Inject constructor(
 
     fun onTTSFinished() {
         Log.d(TAG, "TTS END")
-        val restore = if (previousState == VoiceState.TTS_PLAYING) VoiceState.WAKEWORD else previousState
-        requestState(restore, force = true)
+        // After TTS completes, always return to WAKEWORD state
+        requestState(VoiceState.WAKEWORD, force = true)
     }
 
     fun shutdown() {
@@ -259,17 +262,21 @@ class VoiceManager @Inject constructor(
                 var postSpeechSilenceFrames = 0
                 var shouldExit = false
                 val buffer = ShortArray(1024)
+                val startTime = System.currentTimeMillis()
 
                 while (isActive && _state.value == VoiceState.WAKEWORD && !shouldExit) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (read > 0) {
                         val rms = calculateRMS(buffer)
                         val zcr = calculateZCR(buffer, read)
+                        val durationMs = System.currentTimeMillis() - startTime
 
                         // Dynamically adapt to ambient noise floor
                         ambientRms = (0.95f * ambientRms + 0.05f * rms).coerceIn(50.0f, 1000.0f)
                         val dynamicThreshold = (ambientRms * 2.2f).coerceIn(350.0f, 1200.0f)
-                        val isSpeechFrame = rms > dynamicThreshold && zcr in 25..260
+                        
+                        // Multi-parameter wake word validation: RMS >= 450.0, ZCR in 20..450, duration in 300..2500ms
+                        val isSpeechFrame = rms >= 450.0f && zcr in 20..450 && durationMs in 300..2500
 
                         if (isSpeechFrame) {
                             consecutiveSpeechFrames++
@@ -283,17 +290,10 @@ class VoiceManager @Inject constructor(
                             if (consecutiveSpeechFrames in 5..25) {
                                 postSpeechSilenceFrames++
                                 if (postSpeechSilenceFrames >= 2) {
-                                    // ADDITIONAL CHECK: Require minimum RMS of 3500.0f to prevent ambient noise triggers
-                                    if (rms >= 3500.0f) {
-                                        Log.d(TAG, "Wake word confirmed! Duration=${consecutiveSpeechFrames * 64}ms, RMS=$rms, ZCR=$zcr")
-                                        withContext(Dispatchers.Main) { 
-                                            requestState(VoiceState.VOICE_ASSISTANT)
-                                            shouldExit = true
-                                        }
-                                    } else {
-                                        Log.d(TAG, "Speech detected but RMS too low for wake word: $rms (min required: 3500.0)")
-                                        consecutiveSpeechFrames = 0
-                                        postSpeechSilenceFrames = 0
+                                    Log.d(TAG, "Valid wake word speech detected (RMS=$rms, ZCR=$zcr, Duration=${durationMs}ms). Requesting VOICE_ASSISTANT.")
+                                    withContext(Dispatchers.Main) { 
+                                        requestState(VoiceState.VOICE_ASSISTANT)
+                                        shouldExit = true
                                     }
                                 }
                             } else {
@@ -353,24 +353,28 @@ class VoiceManager @Inject constructor(
                 }
                 stopAudioRecord()
 
-                Log.d(TAG, "WHISPER_START")
-                saveAsWav(pcmData, audioFile)
-                val result = groqWhisperClient.transcribeAudio(audioFile)
+                // Execute Whisper STT -> Groq LLM -> TTS pipeline with NonCancellable to prevent cancellation
+                withContext(NonCancellable) {
+                    Log.d(TAG, "WHISPER_START")
+                    saveAsWav(pcmData, audioFile)
+                    val result = groqWhisperClient.transcribeAudio(audioFile)
 
-                if (result.isSuccess) {
-                    val text = result.getOrNull() ?: ""
-                    Log.d(TAG, "WHISPER_STOP success text_len=${text.length}")
-                    // Check for user's name in assistant transcript too
-                    if (text.isNotEmpty()) checkForNameAndVibrate(text)
-                    withContext(Dispatchers.Main) {
-                        _results.tryEmit(VoiceResult.Final(text))
-                        requestState(VoiceState.WAKEWORD, force = true)
-                    }
-                } else {
-                    Log.e(TAG, "WHISPER_STOP error: ${result.exceptionOrNull()?.message}")
-                    withContext(Dispatchers.Main) {
-                        _results.tryEmit(VoiceResult.Error(-1, "Whisper failed"))
-                        requestState(VoiceState.WAKEWORD, force = true)
+                    if (result.isSuccess) {
+                        val text = result.getOrNull() ?: ""
+                        Log.d(TAG, "WHISPER_STOP success text_len=${text.length}")
+                        // Check for user's name in assistant transcript too
+                        if (text.isNotEmpty()) checkForNameAndVibrate(text)
+                        withContext(Dispatchers.Main) {
+                            _results.tryEmit(VoiceResult.Final(text))
+                            // Request TTS to speak the response
+                            onTTSStarted()
+                        }
+                    } else {
+                        Log.e(TAG, "WHISPER_STOP error: ${result.exceptionOrNull()?.message}")
+                        withContext(Dispatchers.Main) {
+                            _results.tryEmit(VoiceResult.Error(-1, "Whisper failed"))
+                            requestState(VoiceState.WAKEWORD, force = true)
+                        }
                     }
                 }
             } catch (e: CancellationException) {
