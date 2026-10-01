@@ -35,11 +35,11 @@ class GroqWhisperClient @Inject constructor(
             return@withContext Result.failure(Exception("Audio file is missing or empty"))
         }
 
-        val key = secureKeyProvider.getGeminiKey()?.trim()
-        Log.d(TAG, "WHISPER: API key present: ${!key.isNullOrEmpty()}")
-        Log.d(TAG, "WHISPER: API key valid: ${key?.startsWith("gsk_") == true}")
+        val key = secureKeyProvider.getGroqApiKey().trim()
+        Log.d(TAG, "WHISPER: API key present: ${key.isNotEmpty()}")
+        Log.d(TAG, "WHISPER: API key valid: ${key.startsWith("gsk_")}")
         
-        if (key.isNullOrEmpty() || !key.startsWith("gsk_")) {
+        if (key.isEmpty() || !key.startsWith("gsk_")) {
             Log.e(TAG, "WHISPER: FAILURE - Groq key missing or invalid")
             return@withContext Result.failure(Exception("Invalid Groq Key"))
         }

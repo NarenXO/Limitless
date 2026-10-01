@@ -19,6 +19,7 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.teamdexters.limitless.assistant.cloud.GroqWhisperClient
+import com.teamdexters.limitless.assistant.cloud.GroqChatClient
 import com.teamdexters.limitless.config.SecureKeyProvider
 import com.teamdexters.limitless.haptics.HapticManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -63,10 +64,15 @@ sealed class VoiceResult {
     data class Error(val code: Int, val message: String) : VoiceResult()
 }
 
+interface TtsCallback {
+    fun speak(text: String)
+}
+
 @Singleton
 class VoiceManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val groqWhisperClient: GroqWhisperClient,
+    private val groqChatClient: GroqChatClient,
     private val secureKeyProvider: SecureKeyProvider,
     private val hapticManager: HapticManager
 ) {
@@ -125,6 +131,7 @@ class VoiceManager @Inject constructor(
     private var isTtsSpeaking = false
     private var userName: String = "" // Cached name for haptic vocabulary
     private var muteWakeWordDuringTts = true // Mute wake word detection during TTS
+    private var ttsCallback: TtsCallback? = null // Callback for TTS integration
     
     // Audio focus
     private val audioManager by lazy {
@@ -305,14 +312,14 @@ class VoiceManager @Inject constructor(
                     if (read > 0) {
                         val rms = calculateRMS(buffer)
                         
-                        // Speech detection
-                        if (rms > 450f) {
+                        // Speech detection - only when not muted by TTS
+                        if (rms > 450f && !isTtsSpeaking && !muteWakeWordDuringTts) {
                             lastSpeechTime = System.currentTimeMillis()
                             
                             // Use SpeechRecognizer for actual wake word detection
                             // This is more accurate than audio analysis
                             withContext(Dispatchers.Main) {
-                                if (_state.value == VoiceState.WAKEWORD) {
+                                if (_state.value == VoiceState.WAKEWORD && !isTtsSpeaking) {
                                     triggerWakeWordRecognition()
                                 }
                             }
@@ -458,8 +465,9 @@ class VoiceManager @Inject constructor(
         
         stopAllAudio()
         
-        // Start continuous name monitoring
-        startNameMonitoring()
+        // NOTE: Do NOT start name monitoring during ASSISTANT_RECORDING
+        // It causes microphone hardware contention with AudioRecord
+        // Name monitoring is only for DEAF_CAPTION mode
         
         recordingJob = scope.launch(Dispatchers.IO) {
             val timestamp = System.currentTimeMillis()
@@ -566,29 +574,56 @@ class VoiceManager @Inject constructor(
             // Transcribe with Whisper
             Log.d(TAG, "=== WHISPER_START ===")
             val whisperStart = System.currentTimeMillis()
-            val result = groqWhisperClient.transcribeAudio(audioFile)
+            val whisperResult = groqWhisperClient.transcribeAudio(audioFile)
             val whisperDuration = System.currentTimeMillis() - whisperStart
             
-            if (result.isSuccess) {
+            if (whisperResult.isSuccess) {
                 Log.d(TAG, "=== WHISPER_SUCCESS ===")
                 Log.d(TAG, "WHISPER: Completed in ${whisperDuration}ms")
-                val text = result.getOrNull()?.trim() ?: ""
-                Log.d(TAG, "WHISPER: Transcription: '$text'")
+                val transcription = whisperResult.getOrNull()?.trim() ?: ""
+                Log.d(TAG, "WHISPER: Transcription: '$transcription'")
                 
-                if (text.isNotEmpty()) {
+                if (transcription.isNotEmpty()) {
                     // Emit final result
-                    _results.tryEmit(VoiceResult.Final(text))
+                    _results.tryEmit(VoiceResult.Final(transcription))
                     
                     // Check for name in transcript
-                    checkForNameAndVibrate(text)
+                    checkForNameAndVibrate(transcription)
                     
-                    // Reset conversation timeout for next turn
-                    resetConversationTimeout()
+                    // Check for system commands via HazelActionDispatcher
+                    // If it's a system command, don't send to LLM
+                    val isSystemCommand = checkForSystemCommand(transcription)
                     
-                    // Return to recording for continuous conversation
-                    Log.d(TAG, "=== RETURN_TO_ASSISTANT ===")
-                    Log.d(TAG, "ASSISTANT: Returning to ASSISTANT_RECORDING for next turn")
-                    requestState(VoiceState.ASSISTANT_RECORDING)
+                    if (!isSystemCommand) {
+                        // Send to Groq LLM for chat completion
+                        Log.d(TAG, "=== GROQ_CHAT_START ===")
+                        val chatStart = System.currentTimeMillis()
+                        val chatResult = groqChatClient.chatCompletion(transcription)
+                        val chatDuration = System.currentTimeMillis() - chatStart
+                        
+                        if (chatResult.isSuccess) {
+                            Log.d(TAG, "=== GROQ_CHAT_SUCCESS ===")
+                            Log.d(TAG, "CHAT: Completed in ${chatDuration}ms")
+                            val response = chatResult.getOrNull()?.trim() ?: ""
+                            Log.d(TAG, "CHAT: Response: '$response'")
+                            
+                            if (response.isNotEmpty()) {
+                                // Speak the response via TTS
+                                speakResponse(response)
+                            } else {
+                                Log.w(TAG, "CHAT: Empty response - returning to recording")
+                                requestState(VoiceState.ASSISTANT_RECORDING)
+                            }
+                        } else {
+                            Log.e(TAG, "=== GROQ_CHAT_FAILURE ===")
+                            Log.e(TAG, "CHAT: Failed - returning to recording")
+                            requestState(VoiceState.ASSISTANT_RECORDING)
+                        }
+                    } else {
+                        // System command handled, return to recording
+                        Log.d(TAG, "ASSISTANT: System command handled - returning to recording")
+                        requestState(VoiceState.ASSISTANT_RECORDING)
+                    }
                 } else {
                     Log.w(TAG, "WHISPER: Empty transcription - restarting")
                     requestState(VoiceState.ASSISTANT_RECORDING)
@@ -746,6 +781,41 @@ class VoiceManager @Inject constructor(
             Log.d(TAG, "HAPTIC: Name '$userName' detected in: '$transcript'")
             hapticManager.playNameRhythm(userName)
         }
+    }
+
+    private fun checkForSystemCommand(transcript: String): Boolean {
+        // Check if the transcript matches a system command
+        // This is a simplified check - in production, integrate with HazelActionDispatcher
+        val lowerText = transcript.lowercase()
+        val systemCommands = listOf(
+            "sos", "help", "emergency",
+            "open camera", "camera", "take photo",
+            "scan text", "read text", "read label",
+            "navigate", "navigation", "maps",
+            "flashlight"
+        )
+        
+        val isCommand = systemCommands.any { lowerText.contains(it) }
+        if (isCommand) {
+            Log.d(TAG, "ASSISTANT: System command detected: '$transcript'")
+        }
+        return isCommand
+    }
+
+    private fun speakResponse(text: String) {
+        Log.d(TAG, "=== TTS_SPEAK ===")
+        Log.d(TAG, "TTS: Speaking: '$text'")
+        
+        // Use the TTS callback if available
+        ttsCallback?.speak(text)
+        
+        // If no callback is set, emit the text for external handling
+        _results.tryEmit(VoiceResult.Final(text))
+    }
+
+    fun setTtsCallback(callback: TtsCallback?) {
+        ttsCallback = callback
+        Log.d(TAG, "TTS: Callback ${if (callback != null) "set" else "cleared"}")
     }
 
     // --- Audio Record Management ---
@@ -965,10 +1035,9 @@ class VoiceManager @Inject constructor(
         Log.d(TAG, "=== TTS_END ===")
         isTtsSpeaking = false
         muteWakeWordDuringTts = false
-        // After TTS, return to ASSISTANT_RECORDING for continuous conversation
-        // The conversation timeout will handle returning to WAKEWORD if no speech
-        Log.d(TAG, "TTS: Returning to ASSISTANT_RECORDING for next turn")
-        requestState(VoiceState.ASSISTANT_RECORDING, force = true)
+        // After TTS, return to WAKEWORD for wake-word detection
+        Log.d(TAG, "TTS: Returning to WAKEWORD for wake-word detection")
+        requestState(VoiceState.WAKEWORD, force = true)
     }
     
     /**
@@ -980,6 +1049,16 @@ class VoiceManager @Inject constructor(
         isTtsSpeaking = false
         muteWakeWordDuringTts = false
         requestState(VoiceState.ASSISTANT_RECORDING, force = true)
+    }
+
+    /**
+     * Stop TTS and reset flags
+     * Called when TTS is stopped externally
+     */
+    fun stopTts() {
+        Log.d(TAG, "=== TTS_STOP ===")
+        isTtsSpeaking = false
+        muteWakeWordDuringTts = false
     }
 
     // --- Audio Focus ---

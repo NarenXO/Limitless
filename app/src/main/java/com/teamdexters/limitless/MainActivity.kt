@@ -258,9 +258,8 @@ fun HazelAssistantWrapper(
                         android.util.Log.d("VoiceManager", "=== TTS_END ===")
                         android.util.Log.d("VoiceManager", "TTS: utteranceId=$utteranceId")
                         voiceManager.onTTSFinished()
-                        // VoiceManager handles state transition to ASSISTANT_RECORDING for continuous conversation
-                        // Overlay stays visible based on VoiceManager state
-                        android.util.Log.d("LIMITLESS_TRACE", "TTS completion - VoiceManager will return to ASSISTANT_RECORDING")
+                        // VoiceManager handles state transition to WAKEWORD after TTS
+                        android.util.Log.d("LIMITLESS_TRACE", "TTS completion - VoiceManager will return to WAKEWORD")
                     }
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
@@ -268,16 +267,26 @@ fun HazelAssistantWrapper(
                         android.util.Log.d("VoiceManager", "TTS: utteranceId=$utteranceId")
                         voiceManager.onTTSFinished()
                         // VoiceManager handles state transition even on error
-                        android.util.Log.d("LIMITLESS_TRACE", "TTS error - VoiceManager will return to ASSISTANT_RECORDING")
+                        android.util.Log.d("LIMITLESS_TRACE", "TTS error - VoiceManager will return to WAKEWORD")
                     }
                 })
                 ttsRef = ttsInstance
+                
+                // Set TTS callback for VoiceManager to speak Groq LLM responses
+                voiceManager.setTtsCallback(object : com.teamdexters.limitless.core.audio.TtsCallback {
+                    override fun speak(text: String) {
+                        android.util.Log.d("VoiceManager", "TTS_CALLBACK: Speaking Groq response: '$text'")
+                        ttsInstance?.language = Locale.US
+                        ttsInstance?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "groq_response")
+                    }
+                })
             }
         }
         onDispose {
             ttsInstance?.stop()
             ttsInstance?.shutdown()
             ttsRef = null
+            voiceManager.setTtsCallback(null)
         }
     }
 
@@ -303,6 +312,37 @@ fun HazelAssistantWrapper(
                 }
                 else -> {
                     isHazelListening = false
+                }
+            }
+        }
+    }
+
+    // Collect VoiceManager results to display Groq LLM responses
+    LaunchedEffect(Unit) {
+        voiceManager.results.collect { result ->
+            when (result) {
+                is com.teamdexters.limitless.core.audio.VoiceResult.Final -> {
+                    android.util.Log.d("VoiceManager", "VoiceResult.Final: '${result.text}'")
+                    // Display in response banner
+                    responseBannerText = result.text
+                    isBannerVisible = true
+                    // Auto-hide after 5 seconds
+                    coroutineScope.launch {
+                        delay(5000L)
+                        isBannerVisible = false
+                    }
+                }
+                is com.teamdexters.limitless.core.audio.VoiceResult.Partial -> {
+                    // Could show partial results in real-time if needed
+                }
+                is com.teamdexters.limitless.core.audio.VoiceResult.Error -> {
+                    android.util.Log.e("VoiceManager", "VoiceResult.Error: ${result.message}")
+                    responseBannerText = "Error: ${result.message}"
+                    isBannerVisible = true
+                    coroutineScope.launch {
+                        delay(3000L)
+                        isBannerVisible = false
+                    }
                 }
             }
         }
